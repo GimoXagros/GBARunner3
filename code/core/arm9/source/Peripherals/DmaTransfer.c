@@ -411,7 +411,7 @@ ITCM_CODE void dma_dmaSound(u32 channel)
     u32 control = dmaIoBase->control;
     u32 src = dma_state.channels[channel].curSrc;
     int srcStep = getSrcStep(control);
-    if (src >= 0x02000000)
+    if (__builtin_expect(src >= 0x02000000, true))
     {
         dma_state.channels[channel].curSrc += srcStep * 16;
         u32 dst = dma_state.channels[channel].curDst;
@@ -422,7 +422,7 @@ ITCM_CODE void dma_dmaSound(u32 channel)
     dc_drainWriteBuffer();
 
     triggerDmaIrqIfEnabled(channel, control);
-    if (!(control & GBA_DMA_CONTROL_REPEAT))
+    if (__builtin_expect(!(control & GBA_DMA_CONTROL_REPEAT), false))
     {
         dmaIoBase->control = control & ~GBA_DMA_CONTROL_ENABLED;
         dma_state.dmaFlags &= ~DMA_FLAG_SOUND(channel);
