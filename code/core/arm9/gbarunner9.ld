@@ -222,6 +222,7 @@ SECTIONS
 		KEEP (ThumbStore.o(.itcm))
 		KEEP (ThumbLdmStm.o(.itcm))
 		KEEP (ThumbLoadPc.o(.itcm))
+		KEEP (VMUndefinedMrs.o(.itcm))
 		. = 0x2000;
 		KEEP (ThumbGetRnRm.o(.itcm))
 		KEEP (ArmLoadStoreShortRd.o(.itcm))
@@ -230,7 +231,6 @@ SECTIONS
 		KEEP (VMUndefinedMsr.o(.itcm))
 		KEEP (JitArmUndefinedBx.o(.itcm))
 		KEEP (JitArmUndefinedLdrPcImm.o(.itcm))
-		KEEP (EmuIrqs.o(.itcm))
 		. = 0x3000;
 		KEEP (ThumbGetRn.o(.itcm))
 		*(.itcm)
