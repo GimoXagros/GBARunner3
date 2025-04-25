@@ -6,7 +6,7 @@
 #include <libtwl/gfx/gfxBackground.h>
 #include <libtwl/sys/sysPower.h>
 #include "DsDefinitions.h"
-#include "ColorLut.h"
+#include "GbaColorCorrection/ColorLut.h"
 #include "SystemIpc.h"
 #include "GbaDisplayConfigurationService.h"
 
