@@ -1,106 +1,129 @@
 #include "common.h"
-#include <algorithm>
-#include <cmath>
+#include "ColorProfiles.h"
 #include "ColorLut.h"
+#include "GammaLut.h"
 
-// based on https://gist.github.com/profi200/bfa7be60b3eecb8c43f59000f626c743
+// Based on https://gist.github.com/profi200/bfa7be60b3eecb8c43f59000f626c743
 
-#define TARGET_GAMMA  (2.f)
-#define DISPLAY_GAMMA (2.f)
-#define DARKEN_SCREEN (0.5f)
-#define LUMINANCE     (0.93f) // 0.99f for mGBA.
+u16 gColorLut[COLOR_LUT_SIZE]; // Dinamically generated color LUT
 
-// https://stackoverflow.com/a/62699172
-template <typename T, std::size_t N, typename Generator>
-static constexpr std::array<T, N> makeArray(Generator fn)
+const ColorProfile* gCurrentPreset = &AGB_001; // Initialize the color matrix preset, default is AGB_001
+
+// Scale from 5 bits to 8 bits (0–255)
+static u8 rgb5ToRgb8(u8 val5)
 {
-    std::array<T, N> table = {};
-    for (std::size_t i = 0; i != N; ++i) {
-        table[i] = fn(i);
-    }
-    return table;
+    return (val5 * 255) / 31;
 }
 
-static constexpr u32 rgb8ToRgb5(u32 value8)
+// Convert RGB8 to RGB5
+static u32 rgb8ToRgb5(u32 value8)
 {
-    u32 value5 = (value8 * 63 + 255) / (255 * 2);
-    if (value5 > 31)
-        return 31;
-    return value5;
+    return (value8 * 31 + 127) / 255; // More precise and commonly used for rgb8 → rgb5
 }
 
-static constexpr u32 rgb8ToRgb6(u32 value8)
+// Convert RGB8 to RGB6 (for the 6-bit green)
+static u32 rgb8ToRgb6(u32 value8)
 {
     return (value8 * 63 + 128) / 255;
 }
 
-static constexpr u16 calculateColor(const u16 i)
+// Simple and optimal clamping
+static u8 clamp255(int val) 
 {
-    double r = (double)(i & 0x1F) / 31;
-    double g = (double)((i >> 5) & 0x1F) / 31;
-    double b = (double)((i >> 10) & 0x1F) / 31;
-
-    // Convert to linear gamma.
-    r = std::pow(r, TARGET_GAMMA + DARKEN_SCREEN);
-    g = std::pow(g, TARGET_GAMMA + DARKEN_SCREEN);
-    b = std::pow(b, TARGET_GAMMA + DARKEN_SCREEN);
-
-    // Luminance.
-    r = std::clamp(r * LUMINANCE, 0.0, 1.0);
-    g = std::clamp(g * LUMINANCE, 0.0, 1.0);
-    b = std::clamp(b * LUMINANCE, 0.0, 1.0);
-
-    /*
-    *               Input
-    *                [r]
-    *                [g]
-    *                [b]
-    *
-    * Correction    Output
-    * [ r][gr][br]   [r]
-    * [rg][ g][bg]   [g]
-    * [rb][gb][ b]   [b]
-    */
-#if 1
-    // libretro.
-    // 0.800, 0.275, -0.075,
-    // 0.135, 0.640,  0.225,
-    // 0.195, 0.155,  0.650
-    double newR = 0.8 * r + 0.275 * g + -0.075 * b;
-    double newG = 0.135 * r + 0.64 * g + 0.225 * b;
-    double newB = 0.195 * r + 0.155 * g + 0.65 * b;
-    // Assuming no alpha channel in original calculation.
-#else
-    // mGBA.
-    // 0.84, 0.18, 0.00,
-    // 0.09, 0.67, 0.26,
-    // 0.15, 0.10, 0.73
-    double newR = 0.84 * r + 0.18 * g + 0.0 * b;
-    double newG = 0.09 * r + 0.67 * g + 0.26 * b;
-    double newB = 0.15 * r + 0.10 * g + 0.73 * b;
-    // Assuming no alpha channel in original calculation.
-#endif
-
-    if (newR < 0)
-        newR = 0;
-    if (newG < 0)
-        newG = 0;
-    if (newB < 0)
-        newB = 0;  
-
-    // Convert to display gamma.
-    newR = std::pow(newR, 1.0 / DISPLAY_GAMMA);
-    newG = std::pow(newG, 1.0 / DISPLAY_GAMMA);
-    newB = std::pow(newB, 1.0 / DISPLAY_GAMMA);
-
-    // Denormalize, clamp and convert to RGB8.
-    u32 outR = rgb8ToRgb5(std::clamp<int>(newR * 255, 0, 255));
-    u32 outG = rgb8ToRgb6(std::clamp<int>(newG * 255, 0, 255));
-    u32 outB = rgb8ToRgb5(std::clamp<int>(newB * 255, 0, 255));
-    return (outB << 10) | ((outG >> 1) << 5) | (outR) | (outG << 15);
+    return val < 0 
+    ? 0 : (val > 255 ? 255 : val);
 }
 
-std::array<u16, COLOR_LUT_SIZE> gColorLut = makeArray<u16, COLOR_LUT_SIZE>(calculateColor);
+// Apply Luminance from the selected color profile (0–100 values)
+static u8 applyLuminance(u8 val, int luminance)
+{
+    return clamp255((val * luminance) / 100);
+}
+
+// Apply correction matrix from selected color profile
+static void applyColorMatrix(const int matrix[3][3], u8 r, u8 g, u8 b, u8& outR, u8& outG, u8& outB)
+{
+    // Assuming no alpha channel in original calculation.
+    int newR = (matrix[0][0] * r + matrix[0][1] * g + matrix[0][2] * b) / 1000;
+    int newG = (matrix[1][0] * r + matrix[1][1] * g + matrix[1][2] * b) / 1000;
+    int newB = (matrix[2][0] * r + matrix[2][1] * g + matrix[2][2] * b) / 1000;
+
+    outR = clamp255(newR);
+    outG = clamp255(newG);
+    outB = clamp255(newB);
+}
+
+// Convert corrected RGB8 channels to RGB555 values (with the extra green bit)
+static u16 packToRGB5(u8 r, u8 g, u8 b)
+{
+    u16 r5 = rgb8ToRgb5(r);
+    u16 g6 = rgb8ToRgb6(g); // 6-bit green
+    u16 b5 = rgb8ToRgb5(b);
+
+    return (b5 << 10) | ((g6 >> 1) << 5) | r5 | (g6 << 15); // bit 15 = extra green bit
+}
+
+// Main Function
+static u16 applyColorCorrection(const u16 rgb5)
+{
+    if (!gCurrentPreset) 
+        return rgb5; // fallback
+
+    // Extract RGB chanels
+    u8 r5, g5, b5;
+    r5 = (rgb5 & 0x1F);
+    g5 = (rgb5 >> 5) & 0x1F;
+    b5 = (rgb5 >> 10) & 0x1F;
+
+    u8 r8 = rgb5ToRgb8(r5);
+    u8 g8 = rgb5ToRgb8(g5);
+    u8 b8 = rgb5ToRgb8(b5);
+
+    // Convert to linear gamma (encode)
+    u8 rLin = applyGamma(r8, true);
+    u8 gLin = applyGamma(g8, true);
+    u8 bLin = applyGamma(b8, true);
+
+    // Apply luminance
+    int luminance = gCurrentPreset->luminance;
+    rLin = applyLuminance(rLin, luminance);
+    gLin = applyLuminance(gLin, luminance);
+    bLin = applyLuminance(bLin, luminance);
+
+    // Apply color correction
+    u8 outR, outG, outB;
+    applyColorMatrix(gCurrentPreset->matrix, rLin, gLin, bLin, outR, outG, outB);
+
+    // Convert to display gamma (decode).
+    outR = applyGamma(outR, false);
+    outG = applyGamma(outG, false);
+    outB = applyGamma(outB, false);
+
+    // Denormalize and convert to RGB8.
+    return packToRGB5(outR, outG, outB);
+}
+
+// Generate LUT using current color preset and gamma
+void clut_generateColorLut()
+{
+    // Set gamma decode curve from config (0 = 0.1, ..., 9 = 1.0. e.g., index 4 = 0.5 gamma)
+    // TODO: Read this from the .json file
+    int gamma_index = 2;
+    setDisplayGammaIndex(gamma_index);
+    
+    for (u32 i = 0; i < COLOR_LUT_SIZE; ++i)
+    {
+        gColorLut[i] = applyColorCorrection(i);
+        
+    }
+}
+
+// To start color calculation using the selected color profile
+void clut_initColorCorrection(const ColorProfile* preset)
+{
+    gCurrentPreset = preset;
+    clut_generateColorLut();
+}
 
 void clut_disableColorCorrection()
 {
