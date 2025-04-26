@@ -34,6 +34,16 @@
 
 #define ENUM_STRING_GBA_COLOR_CORRECTION_NONE       "none"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_AGB_001    "agb001"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_AGS_101    "ags101"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_OXY_001    "oxy001"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001    "ndsPhat"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_USG_001    "ndsLite"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000   "pspPhat"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS    "nsoIps"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED   "nsoOled"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_VBA        "vba"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NOCASH     "noGBA"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_MGBA       "mGba"
 
 #define ENUM_STRING_GBA_BORDER_IMAGE_NONE           "none"
 #define ENUM_STRING_GBA_BORDER_IMAGE_DEFAULT        "default"
@@ -66,6 +76,26 @@ static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, Gba
         gbaColorCorrection = GbaColorCorrection::None;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_AGB_001))
         gbaColorCorrection = GbaColorCorrection::Agb001;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_AGS_101))
+        gbaColorCorrection = GbaColorCorrection::Ags101;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_OXY_001))
+        gbaColorCorrection = GbaColorCorrection::Oxy001;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001))
+        gbaColorCorrection = GbaColorCorrection::NdsPhat;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_USG_001))
+        gbaColorCorrection = GbaColorCorrection::NdsLite;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000))
+        gbaColorCorrection = GbaColorCorrection::PspPhat;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS))
+        gbaColorCorrection = GbaColorCorrection::NsoIps;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED))
+        gbaColorCorrection = GbaColorCorrection::NsoOled;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_VBA))
+        gbaColorCorrection = GbaColorCorrection::Vba;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NOCASH))
+        gbaColorCorrection = GbaColorCorrection::NoGBA;
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_MGBA))
+        gbaColorCorrection = GbaColorCorrection::mGba;
     else
         return false;
 

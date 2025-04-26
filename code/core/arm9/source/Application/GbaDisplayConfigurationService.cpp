@@ -6,7 +6,7 @@
 #include <libtwl/gfx/gfxBackground.h>
 #include <libtwl/sys/sysPower.h>
 #include "DsDefinitions.h"
-#include "GbaColorCorrection/ColorLut.h"
+#include "GbaColorCorrection/ColorProfiles.h"
 #include "SystemIpc.h"
 #include "GbaDisplayConfigurationService.h"
 
@@ -125,9 +125,44 @@ void GbaDisplayConfigurationService::SetupGbaScreen(const DisplaySettings& displ
 
 void GbaDisplayConfigurationService::SetupColorCorrection(const DisplaySettings& displaySettings)
 {
-    if (displaySettings.gbaColorCorrection == GbaColorCorrection::None)
+    switch (displaySettings.gbaColorCorrection)
     {
-        clut_disableColorCorrection();
+        case GbaColorCorrection::Agb001:
+            clut_initColorCorrection(&AGB_001);
+            break;
+        case GbaColorCorrection::Ags101:
+            clut_initColorCorrection(&AGS_101);
+            break;
+        case GbaColorCorrection::Oxy001:
+            clut_initColorCorrection(&OXY_001);
+            break;
+        case GbaColorCorrection::NdsPhat:
+            clut_initColorCorrection(&NDS_Phat_W);
+            break;
+        case GbaColorCorrection::NdsLite:
+            clut_initColorCorrection(&NDS_Lite);
+            break;
+        case GbaColorCorrection::PspPhat:
+            clut_initColorCorrection(&PSP_Phat);
+            break;
+        case GbaColorCorrection::NsoIps:
+            clut_initColorCorrection(&IPS_NSO);
+            break;
+        case GbaColorCorrection::NsoOled:
+            clut_initColorCorrection(&OLED_NSO);
+            break;
+        case GbaColorCorrection::Vba:
+            clut_initColorCorrection(&VBA);
+            break;
+        case GbaColorCorrection::NoGBA:
+            clut_initColorCorrection(&NoGBA);
+            break;
+        case GbaColorCorrection::mGba:
+            clut_initColorCorrection(&mGBA);
+            break;
+        case GbaColorCorrection::None:
+            clut_disableColorCorrection();
+            break;
     }
 }
 
