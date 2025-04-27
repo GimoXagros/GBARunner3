@@ -7,6 +7,7 @@
 #include <libtwl/sys/sysPower.h>
 #include "DsDefinitions.h"
 #include "GbaColorCorrection/ColorLut.h"
+#include "GbaColorCorrection/GammaLut.h"
 #include "SystemIpc.h"
 #include "GbaDisplayConfigurationService.h"
 
@@ -166,6 +167,11 @@ void GbaDisplayConfigurationService::SetupColorCorrection(const DisplaySettings&
     }
 }
 
+void GbaDisplayConfigurationService::SetupDisplayGamma(const DisplaySettings& displaySettings)
+{
+    setDisplayGammaIndex(displaySettings.gbaDisplayGamma);
+}
+
 void GbaDisplayConfigurationService::SetupGbaScreenBrightness(const DisplaySettings& displaySettings)
 {
     if (displaySettings.enableCenterAndMask)
@@ -183,6 +189,7 @@ void GbaDisplayConfigurationService::SetupGbaScreenBrightness(const DisplaySetti
 void GbaDisplayConfigurationService::ApplyDisplaySettings(const DisplaySettings& displaySettings)
 {
     SetupGbaScreen(displaySettings);
+    SetupDisplayGamma(displaySettings);
     SetupColorCorrection(displaySettings);
     SetupGbaScreenBrightness(displaySettings);
 }

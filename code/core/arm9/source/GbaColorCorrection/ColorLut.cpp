@@ -105,15 +105,9 @@ static u16 applyColorCorrection(const u16 rgb5)
 // Generate LUT using current color preset and gamma
 void clut_generateColorLut()
 {
-    // Set gamma decode curve from config (0 = 0.1, ..., 9 = 1.0. e.g., index 4 = 0.5 gamma)
-    // TODO: Read this from the .json file
-    int gamma_index = 2;
-    setDisplayGammaIndex(gamma_index);
-    
     for (u32 i = 0; i < COLOR_LUT_SIZE; ++i)
     {
         gColorLut[i] = applyColorCorrection(i);
-        
     }
 }
 

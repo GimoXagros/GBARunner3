@@ -11,6 +11,7 @@
 #define KEY_DISPLAY_SETTINGS                        "displaySettings"
 #define KEY_DISPLAY_SETTINGS_GBA_SCREEN             "gbaScreen"
 #define KEY_DISPLAY_SETTINGS_GBA_COLOR_CORRECTION   "gbaColorCorrection"
+#define KEY_DISPLAY_SETTINGS_GBA_DISPLAY_GAMMA      "gbaDisplayGamma"
 #define KEY_DISPLAY_SETTINGS_GBA_SCREEN_BRIGHTNESS  "gbaScreenBrightness"
 #define KEY_DISPLAY_SETTINGS_ENABLE_CENTER_AND_MASK "enableCenterAndMask"
 #define KEY_DISPLAY_SETTINGS_CENTER_OFFSET_X        "centerOffsetX"
@@ -146,6 +147,11 @@ static void readDisplaySettings(const JsonObjectConst& json, DisplaySettings& di
 
     tryParseGbaScreen(json[KEY_DISPLAY_SETTINGS_GBA_SCREEN], displaySettings.gbaScreen);
     tryParseGbaColorCorrection(json[KEY_DISPLAY_SETTINGS_GBA_COLOR_CORRECTION], displaySettings.gbaColorCorrection);
+    if (json[KEY_DISPLAY_SETTINGS_GBA_DISPLAY_GAMMA].is<int>())
+    {
+        displaySettings.gbaDisplayGamma = std::clamp(json[KEY_DISPLAY_SETTINGS_GBA_DISPLAY_GAMMA].as<int>(),
+            DISPLAY_SETTINGS_GBA_DISPLAY_GAMMA_MIN, DISPLAY_SETTINGS_GBA_DISPLAY_GAMMA_MAX);
+    }
     if (json[KEY_DISPLAY_SETTINGS_GBA_SCREEN_BRIGHTNESS].is<int>())
     {
         displaySettings.gbaScreenBrightness = std::clamp(json[KEY_DISPLAY_SETTINGS_GBA_SCREEN_BRIGHTNESS].as<int>(),

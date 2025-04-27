@@ -43,7 +43,7 @@ constexpr std::array<std::array<u8, GAMMA_TABLE_SIZE>, GAMMA_STEPS> precomputed_
 }();
 
 // Runtime table pointer, default is Gamma Step 2 = 0.5
-inline const u8* gamma_decode_table = precomputed_decode_tables[2].data(); // default to gamma 0.5 (index 2)
+inline const u8* gamma_decode_table = precomputed_decode_tables[0].data(); // default to gamma 0.5 (index 2)
 
 // Assign gamma from precomputed gamma decode tables:
 // Index 0 = gamma 0.5f,
@@ -51,7 +51,7 @@ inline const u8* gamma_decode_table = precomputed_decode_tables[2].data(); // de
 // Index 2 = gamma 0.7f,
 // Index 3 = gamma 0.8f,
 // Index 4 = gamma 0.9f
-// Default 2
+// Default 0
 void setDisplayGammaIndex(int index) 
 {
     if (index < 0) index = 0;
