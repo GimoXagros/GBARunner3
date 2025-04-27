@@ -1,16 +1,142 @@
 #pragma once
 #include "ColorLut.h"
 
-struct ColorProfile;
+struct ColorProfile {
+    int matrix[3][3]; // coeficients multiplied by 1000
+    int luminance;    // multiplier *100, ie. 93
+};
 
-extern const ColorProfile AGB_001;
-extern const ColorProfile AGS_101;
-extern const ColorProfile OXY_001;
-extern const ColorProfile NDS_Phat_W;
-extern const ColorProfile NDS_Lite;
-extern const ColorProfile PSP_Phat;
-extern const ColorProfile IPS_NSO;
-extern const ColorProfile OLED_NSO;
-extern const ColorProfile VBA;
-extern const ColorProfile NoGBA;
-extern const ColorProfile mGBA;
+// libretro shader values. Credits: hunterk and Pokefan531.
+// Last updated 2025-12-03.
+
+// const ColorProfile PRESET_NAME = 
+//{
+//    {
+//        { [r], [gr], [br] },
+//        { [rg], [g], [bg] },
+//        { [rb], [gb], [b] }
+//    },
+//    luminance
+//};
+
+// libretro GBA AGB-001 color (sRGB).
+const ColorProfile AGB_001 = 
+{
+    {
+        { 905, 195, -100 },
+        { 100, 650, 250 },
+        { 158, 143, 700 }
+    },
+    91
+};
+
+// libretro GBA SP (AGS-101) color (sRGB).
+const ColorProfile AGS_101 = 
+{
+    {
+        { 960, 110, -70 },
+        { 33, 890, 78 },
+        { 1, -30, 1029 }
+    },
+    94
+};
+
+// libretro GB micro OXY-001 color (sRGB).
+const ColorProfile OXY_001 = 
+{
+    {
+        { 803, 310, -113 },
+        { 100, 688, 213 },
+        { 123, 113, 765 }
+    },
+    90
+};
+
+//// libretro NDS Phat NTR-001 color (sRGB).
+const ColorProfile NDS_Phat_W = 
+{
+    {
+        { 835, 270, -105 },
+        { 100, 638, 263 },
+        { 105, 175, 720 }
+    },
+    91
+};
+
+// libretro NDS lite USG-001 color (sRGB).
+const ColorProfile NDS_Lite = 
+{
+    {
+        { 930, 140, -70 },
+        { 25, 900, 75 },
+        { 8, -30, 1022 }
+    },
+    94
+};
+
+// libretro PSP 1000 color (sRGB).
+const ColorProfile PSP_Phat = 
+{
+    {
+        { 835, 160, -130 },
+        { 43, 745, 155 },
+        { 23, 15, 963 }
+    },
+    99
+};
+
+// libretro Nintendo Switch GBA Classics color (sRGB).
+const ColorProfile IPS_NSO = 
+{
+    {
+        { 865, 123, 13 },
+        { 58, 925, 13 },
+        { 58, 123, 820 }
+    },
+    100
+};
+
+// libretro Nintendo Switch GBA Classics Oled color (sRGB).
+const ColorProfile OLED_NSO = 
+{
+    {
+        { 1540, -480, -60 },
+        { -45, 1063, -18 },
+        { -23, -75, 1103 }
+    },
+    100
+};
+
+// libretro Visual Boy Advance color.
+const ColorProfile VBA = 
+{
+    {
+        { 730, 270, 0 },
+        { 85, 675, 240 },
+        { 85, 240, 675 }
+    },
+    100
+};
+
+// libretro No$GBA full color.
+const ColorProfile NoGBA = 
+{
+    {
+        { 730, 270, 0 },
+        { 83, 678, 240 },
+        { 83, 240, 678 }
+    },
+    100
+};
+
+// libretro mGBA GBA shader color.
+const ColorProfile mGBA = 
+{
+    {
+        { 840, 180, 0 },
+        { 90, 670, 260 },
+        { 150, 100, 730 }
+    },
+    99
+};
+
