@@ -9,38 +9,38 @@ u16 gColorLut[COLOR_LUT_SIZE]; // Dinamically generated color LUT
 const ColorProfile* gCurrentPreset = &AGB_001; // Initialize the color matrix preset, default is AGB_001
 
 // Scale from 5 bits to 8 bits (0–255)
-static u8 rgb5ToRgb8(u8 val5)
+inline u8 rgb5ToRgb8(u8 val5)
 {
     return (val5 * 255) / 31;
 }
 
 // Convert RGB8 to RGB5
-static u32 rgb8ToRgb5(u32 value8)
+inline u32 rgb8ToRgb5(u32 value8)
 {
     return (value8 * 31 + 127) / 255; // More precise and commonly used for rgb8 → rgb5
 }
 
 // Convert RGB8 to RGB6 (for the 6-bit green)
-static u32 rgb8ToRgb6(u32 value8)
+inline u32 rgb8ToRgb6(u32 value8)
 {
     return (value8 * 63 + 128) / 255;
 }
 
 // Simple and optimal clamping
-static u8 clamp255(int val) 
+inline u8 clamp255(int val) 
 {
     return val < 0 
     ? 0 : (val > 255 ? 255 : val);
 }
 
 // Apply Luminance from the selected color profile (0–100 values)
-static u8 applyLuminance(u8 val, int luminance)
+inline u8 applyLuminance(u8 val, int luminance)
 {
     return clamp255((val * luminance) / 100);
 }
 
 // Apply correction matrix from selected color profile
-static void applyColorMatrix(const int matrix[3][3], u8 r, u8 g, u8 b, u8& outR, u8& outG, u8& outB)
+inline void applyColorMatrix(const int matrix[3][3], u8 r, u8 g, u8 b, u8& outR, u8& outG, u8& outB)
 {
     // Assuming no alpha channel in original calculation.
     int newR = (matrix[0][0] * r + matrix[0][1] * g + matrix[0][2] * b) / 1000;
@@ -53,7 +53,7 @@ static void applyColorMatrix(const int matrix[3][3], u8 r, u8 g, u8 b, u8& outR,
 }
 
 // Convert corrected RGB8 channels to RGB555 values (with the extra green bit)
-static u16 packToRGB5(u8 r, u8 g, u8 b)
+inline u16 packToRGB5(u8 r, u8 g, u8 b)
 {
     u16 r5 = rgb8ToRgb5(r);
     u16 g6 = rgb8ToRgb6(g); // 6-bit green
