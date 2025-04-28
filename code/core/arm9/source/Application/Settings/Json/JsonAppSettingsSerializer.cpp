@@ -37,14 +37,14 @@
 #define ENUM_STRING_GBA_COLOR_CORRECTION_AGB_001    "agb001"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_AGS_101    "ags101"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_OXY_001    "oxy001"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001    "ndsPhat"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_USG_001    "ndsLite"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000   "pspPhat"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS    "nsoIps"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED   "nsoOled"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_VBA        "vba"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_NOCASH     "noGBA"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_MGBA       "mGba"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001    "ntr001"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_USG_001    "usg001"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000   "psp01g"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS    "nswIps"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED   "nswOle"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_VBA        "vbaEmu"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_NOCASH     "noCash"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_MGBA       "mGba01"
 
 #define ENUM_STRING_GBA_BORDER_IMAGE_NONE           "none"
 #define ENUM_STRING_GBA_BORDER_IMAGE_DEFAULT        "default"
@@ -82,21 +82,21 @@ static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, Gba
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_OXY_001))
         gbaColorCorrection = GbaColorCorrection::Oxy001;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001))
-        gbaColorCorrection = GbaColorCorrection::NdsPhat;
+        gbaColorCorrection = GbaColorCorrection::Ntr001;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_USG_001))
-        gbaColorCorrection = GbaColorCorrection::NdsLite;
+        gbaColorCorrection = GbaColorCorrection::Usg001;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000))
-        gbaColorCorrection = GbaColorCorrection::PspPhat;
+        gbaColorCorrection = GbaColorCorrection::PspO1g;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS))
-        gbaColorCorrection = GbaColorCorrection::NsoIps;
+        gbaColorCorrection = GbaColorCorrection::NswIps;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED))
-        gbaColorCorrection = GbaColorCorrection::NsoOled;
+        gbaColorCorrection = GbaColorCorrection::NswOle;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_VBA))
-        gbaColorCorrection = GbaColorCorrection::Vba;
+        gbaColorCorrection = GbaColorCorrection::VbaEmu;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NOCASH))
-        gbaColorCorrection = GbaColorCorrection::NoGBA;
+        gbaColorCorrection = GbaColorCorrection::NoCash;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_MGBA))
-        gbaColorCorrection = GbaColorCorrection::mGba;
+        gbaColorCorrection = GbaColorCorrection::mGba01;
     else
         return false;
 

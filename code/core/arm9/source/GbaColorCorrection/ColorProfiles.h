@@ -1,9 +1,10 @@
 #pragma once
 #include "ColorLut.h"
 
-struct ColorProfile {
+struct ColorProfile
+{
     int matrix[3][3]; // coeficients multiplied by 1000
-    int luminance;    // multiplier *100, ie. 93
+    int luminance;    // multiplier *100, i.g. 93
 };
 
 // libretro shader values. Credits: hunterk and Pokefan531.
@@ -20,7 +21,7 @@ struct ColorProfile {
 //};
 
 // libretro GBA AGB-001 color (sRGB).
-const ColorProfile AGB_001 = 
+constexpr inline ColorProfile Agb001 =
 {
     {
         { 905, 195, -100 },
@@ -31,7 +32,7 @@ const ColorProfile AGB_001 =
 };
 
 // libretro GBA SP (AGS-101) color (sRGB).
-const ColorProfile AGS_101 = 
+constexpr inline ColorProfile Ags101 =
 {
     {
         { 960, 110, -70 },
@@ -42,7 +43,7 @@ const ColorProfile AGS_101 =
 };
 
 // libretro GB micro OXY-001 color (sRGB).
-const ColorProfile OXY_001 = 
+constexpr inline ColorProfile Oxy001 =
 {
     {
         { 803, 310, -113 },
@@ -53,7 +54,7 @@ const ColorProfile OXY_001 =
 };
 
 //// libretro NDS Phat NTR-001 color (sRGB).
-const ColorProfile NDS_Phat_W = 
+constexpr inline ColorProfile Ntr001 =
 {
     {
         { 835, 270, -105 },
@@ -64,7 +65,7 @@ const ColorProfile NDS_Phat_W =
 };
 
 // libretro NDS lite USG-001 color (sRGB).
-const ColorProfile NDS_Lite = 
+constexpr inline ColorProfile Usg001 =
 {
     {
         { 930, 140, -70 },
@@ -75,7 +76,7 @@ const ColorProfile NDS_Lite =
 };
 
 // libretro PSP 1000 color (sRGB).
-const ColorProfile PSP_Phat = 
+constexpr inline ColorProfile PspO1g =
 {
     {
         { 835, 160, -130 },
@@ -86,7 +87,7 @@ const ColorProfile PSP_Phat =
 };
 
 // libretro Nintendo Switch GBA Classics color (sRGB).
-const ColorProfile IPS_NSO = 
+constexpr inline ColorProfile NswIps =
 {
     {
         { 865, 123, 13 },
@@ -97,7 +98,7 @@ const ColorProfile IPS_NSO =
 };
 
 // libretro Nintendo Switch GBA Classics Oled color (sRGB).
-const ColorProfile OLED_NSO = 
+constexpr inline ColorProfile NswOle =
 {
     {
         { 1540, -480, -60 },
@@ -108,7 +109,7 @@ const ColorProfile OLED_NSO =
 };
 
 // libretro Visual Boy Advance color.
-const ColorProfile VBA = 
+constexpr inline ColorProfile VbaEmu =
 {
     {
         { 730, 270, 0 },
@@ -119,7 +120,7 @@ const ColorProfile VBA =
 };
 
 // libretro No$GBA full color.
-const ColorProfile NoGBA = 
+constexpr inline ColorProfile NoCash =
 {
     {
         { 730, 270, 0 },
@@ -130,7 +131,7 @@ const ColorProfile NoGBA =
 };
 
 // libretro mGBA GBA shader color.
-const ColorProfile mGBA = 
+constexpr inline ColorProfile mGba01 =
 {
     {
         { 840, 180, 0 },
@@ -140,3 +141,18 @@ const ColorProfile mGBA =
     99
 };
 
+constexpr const ColorProfile* colorProfileLut[] =
+{
+    /* GbaColorCorrection::None     */ nullptr,
+    /* GbaColorCorrection::Agb001   */ &Agb001,
+    /* GbaColorCorrection::Ags101   */ &Ags101,
+    /* GbaColorCorrection::Oxy001   */ &Oxy001,
+    /* GbaColorCorrection::Ntr001   */ &Ntr001,
+    /* GbaColorCorrection::Usg001   */ &Usg001,
+    /* GbaColorCorrection::PspO1g   */ &PspO1g,
+    /* GbaColorCorrection::NswIps   */ &NswIps,
+    /* GbaColorCorrection::NswOle   */ &NswOle,
+    /* GbaColorCorrection::VbaEmu   */ &VbaEmu,
+    /* GbaColorCorrection::NoCash   */ &NoCash,
+    /* GbaColorCorrection::mGba01   */ &mGba01
+};

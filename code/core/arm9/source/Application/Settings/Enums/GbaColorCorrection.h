@@ -9,33 +9,33 @@ enum class GbaColorCorrection
     /// @brief Color correction is applied that resembles the AGB-001 GBA screen.
     Agb001,
 
-    /// @brief Color correction is applied that resembles the AGS-101 GBA SP screen.
+    /// @brief Color correction is applied that resembles the AGS-101 GBA SP Bright screen.
     Ags101,
 
     /// @brief Color correction is applied that resembles the OXY-001 GB micro screen.
     Oxy001,
 
     /// @brief Color correction is applied that resembles the NTR-001 NDS Phat screen.
-    NdsPhat,
+    Ntr001,
 
-    /// @brief Color correction is applied that resembles the NTR-001 NDS Phat screen.
-    NdsLite,
+    /// @brief Color correction is applied that resembles the USG-001 NDS Lite screen.
+    Usg001,
 
-    /// @brief Color correction is applied that resembles the PSP-1000 screen.
-    PspPhat,
+    /// @brief Color correction is applied that resembles the PSP-01g screen.
+    PspO1g,
 
-    /// @brief Color correction is applied that resembles the Nintendo Switch Classics GBA shadder.
-    NsoIps,
+    /// @brief Color correction is applied that resembles the Nintendo Switch Classics GBA shader.
+    NswIps,
 
-    /// @brief Color correction is applied that resembles the Nintendo Switch Classics GBA shadder in OLED screen.
-    NsoOled,
+    /// @brief Color correction is applied that resembles the Nintendo Switch Classics GBA shader in OLED screen.
+    NswOle,
 
-    /// @brief Color correction is applied that resembles the VisualBoy Advance shadder.
-    Vba,
+    /// @brief Color correction is applied that resembles the VisualBoy Advance shader.
+    VbaEmu,
 
-    /// @brief Color correction is applied that resembles the No$GBA Shadder.
-    NoGBA,
+    /// @brief Color correction is applied that resembles the No$GBA shader.
+    NoCash,
 
-    /// @brief Color correction is applied that resembles the mGBA Shadder.
-    mGba
+    /// @brief Color correction is applied that resembles the mGBA default shader.
+    mGba01
 };

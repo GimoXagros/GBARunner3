@@ -6,7 +6,7 @@
 
 u16 gColorLut[COLOR_LUT_SIZE]; // Dinamically generated color LUT
 
-const ColorProfile* gCurrentPreset = &AGB_001; // Initialize the color matrix preset, default is AGB_001
+const ColorProfile* gCurrentPreset = &Agb001; // Initialize the color matrix preset, default is AGB_001
 
 // Scale from 5 bits to 8 bits (0–255)
 inline u8 rgb5ToRgb8(u8 val5)
