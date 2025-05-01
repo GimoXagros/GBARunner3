@@ -39,7 +39,7 @@
 #define ENUM_STRING_GBA_COLOR_CORRECTION_OXY_001    "oxy001"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_NTR_001    "ntr001"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_USG_001    "usg001"
-#define ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000   "psp01g"
+#define ENUM_STRING_GBA_COLOR_CORRECTION_PSP_01G    "psp01g"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS    "nswIps"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_NSO_OLED   "nswOle"
 #define ENUM_STRING_GBA_COLOR_CORRECTION_VBA        "vbaEmu"
@@ -85,7 +85,7 @@ static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, Gba
         gbaColorCorrection = GbaColorCorrection::Ntr001;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_USG_001))
         gbaColorCorrection = GbaColorCorrection::Usg001;
-    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_PSP_1000))
+    else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_PSP_01G))
         gbaColorCorrection = GbaColorCorrection::PspO1g;
     else if (!strcasecmp(gbaColorCorrectionString, ENUM_STRING_GBA_COLOR_CORRECTION_NSO_IPS))
         gbaColorCorrection = GbaColorCorrection::NswIps;
