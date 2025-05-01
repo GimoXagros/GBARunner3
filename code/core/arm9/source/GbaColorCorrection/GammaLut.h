@@ -1,4 +1,5 @@
 #pragma once
 
 void setDisplayGammaIndex(int index);
-u8 applyGamma(u8 value, bool encode);
+u8 encodeGamma(u8 value);
+u8 decodeGamma(u8 value);

@@ -79,9 +79,9 @@ static u16 applyColorCorrection(const u16 rgb5)
     u8 b8 = rgb5ToRgb8(b5);
 
     // Convert to linear gamma (encode)
-    u8 rLin = applyGamma(r8, true);
-    u8 gLin = applyGamma(g8, true);
-    u8 bLin = applyGamma(b8, true);
+    u8 rLin = encodeGamma(r8);
+    u8 gLin = encodeGamma(g8);
+    u8 bLin = encodeGamma(b8);
 
     // Apply luminance
     int luminance = gCurrentPreset->luminance;
@@ -94,9 +94,9 @@ static u16 applyColorCorrection(const u16 rgb5)
     applyColorMatrix(gCurrentPreset->matrix, rLin, gLin, bLin, outR, outG, outB);
 
     // Convert to display gamma (decode).
-    outR = applyGamma(outR, false);
-    outG = applyGamma(outG, false);
-    outB = applyGamma(outB, false);
+    outR = decodeGamma(outR);
+    outG = decodeGamma(outG);
+    outB = decodeGamma(outB);
 
     // Denormalize and convert to RGB8.
     return packToRGB5(outR, outG, outB);
