@@ -502,10 +502,10 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     dc_flushRange(gGbaBios, sizeof(gGbaBios));
     ic_invalidateAll();
     setupWramInstructionCache();
+    setupMainRamInstructionCache();
     setupIWramDataCache();
     setupEWramDataCache();
-    setupMainRamInstructionCache();
-
+  
     rtos_setIrqMask(RTOS_IRQ_VBLANK);
     rtos_ackIrqMask(~0u);
     REG_IME = 1;
