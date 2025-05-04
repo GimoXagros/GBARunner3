@@ -5,6 +5,9 @@
 class RunSettings
 {
 public:
+    /// @brief Specifies whether the JIT should be enabled. It must be enabled by default.
+    bool16 enableJit = true;
+
     /// @brief Specifies the rom addresses of instructions that should be patched by the JIT.
     std::unique_ptr<u32[]> jitPatchAddresses;
 
