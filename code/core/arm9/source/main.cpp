@@ -303,7 +303,7 @@ static void applyGameJitPatches()
 }
 
 static void setupJit()
-{   
+{
     jit_init();
 
     const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
@@ -511,7 +511,7 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     setupMainRamInstructionCache();
     setupIWramDataCache();
     setupEWramDataCache();
-  
+
     rtos_setIrqMask(RTOS_IRQ_VBLANK);
     rtos_ackIrqMask(~0u);
     REG_IME = 1;
