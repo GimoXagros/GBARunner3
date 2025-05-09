@@ -24,7 +24,7 @@
 #define KEY_RUN_SETTINGS_JIT_PATCH_ADDRESSES                "jitPatchAddresses"
 #define KEY_RUN_SETTINGS_ENABLE_MAIN_RAM_ICACHE             "enableMainRamICache"
 #define KEY_RUN_SETTINGS_ENABLE_WRAM_ICACHE                 "enableWramICache"
-#define KEY_RUN_SETTINGS_ENABLE_IWRAM_DCACHE                "enableWramDCache"
+#define KEY_RUN_SETTINGS_ENABLE_IWRAM_DCACHE                "enableIWramDCache"
 #define KEY_RUN_SETTINGS_ENABLE_EWRAM_DCACHE                "enableEWramDCache"
 #define KEY_RUN_SETTINGS_SELF_MODIFYING_PATCH_ADDRESSES     "selfModifyingPatchAddresses"
 #define KEY_RUN_SETTINGS_SKIP_BIOS_INTRO                    "skipBiosIntro"
