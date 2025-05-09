@@ -7,12 +7,12 @@
 constexpr int GAMMA_TABLE_SIZE = 256;
 constexpr int GAMMA_STEPS = 5; // Min 1, Max 5. Default 5
 
-constexpr float TARGET_GAMMA = 2.f; // Default 2.2f
-constexpr float DARKEN_SCREEN = 0.5f; // Default 0.5f
+constexpr float TARGET_GAMMA = 2.0; // Default 2.0
+constexpr float DARKEN_SCREEN = 0; // Default 0.0
 
 // [DISPLAY_GAMMA] Display Gamma range can be modified from 0.0f ~ 2.2f, 5 steps max
-constexpr float GAMMA_MIN = 0.5f; // default 0.5f
-constexpr float GAMMA_MAX = 0.9f; // default 0.9f
+constexpr float GAMMA_MIN = 0.5; // default 0.5
+constexpr float GAMMA_MAX = 0.9; // default 0.9
 constexpr float GAMMA_STEP = (GAMMA_MAX - GAMMA_MIN) / (GAMMA_STEPS - 1);
 
 // Lambda LUT generators based from this example https://stackoverflow.com/a/62699172
