@@ -17,7 +17,10 @@ inline u8 rgb5ToRgb8(u8 val5)
 // Convert RGB8 to RGB5
 inline u32 rgb8ToRgb5(u32 value8)
 {
-    return (value8 * 31 + 127) / 255; // More precise and commonly used for rgb8 → rgb5
+    u32 value5 = (value8 * 63 + 255) / (255 * 2);
+    if (value5 > 31)
+        return 31;
+    return value5;
 }
 
 // Convert RGB8 to RGB6 (for the 6-bit green)
