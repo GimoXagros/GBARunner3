@@ -76,7 +76,7 @@ constexpr inline ColorProfile Usg001 =
 };
 
 // libretro PSP 1000 color (sRGB).
-constexpr inline ColorProfile PspO1g =
+constexpr inline ColorProfile Psp01g =
 {
     {
         { 835, 160, -130 },
