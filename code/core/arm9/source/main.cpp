@@ -307,22 +307,24 @@ static void setupJit()
     jit_init();
 
     const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
-    if (!runSettings.enableJit)
+    if (runSettings.enableJit)
     {
-        jit_disable();
-        return;
-    }
-    
-    if (runSettings.jitPatchAddresses && runSettings.jitPatchAddressCount > 0)
-    {
-        // manual jit patches
-        applyGameJitPatches();
-        jit_disable();
+        if (runSettings.jitPatchAddresses && runSettings.jitPatchAddressCount > 0)
+        {
+            // manual jit patches
+            applyGameJitPatches();
+            jit_disable();
+        }
+        else
+        {
+            // jit enabled
+            applyBiosJitPatches();
+        }
     }
     else
     {
-        // jit enabled
-        applyBiosJitPatches();
+        // jit disabled
+        jit_disable();
     }
 }
 
