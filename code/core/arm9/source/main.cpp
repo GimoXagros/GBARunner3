@@ -307,16 +307,24 @@ static void setupJit()
     jit_init();
 
     const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
-    if (runSettings.jitPatchAddresses && runSettings.jitPatchAddressCount > 0)
+    if (runSettings.enableJit)
     {
-        // manual jit patches
-        applyGameJitPatches();
-        jit_disable();
+        if (runSettings.jitPatchAddresses && runSettings.jitPatchAddressCount > 0)
+        {
+            // manual jit patches
+            applyGameJitPatches();
+            jit_disable();
+        }
+        else
+        {
+            // jit enabled
+            applyBiosJitPatches();
+        }
     }
     else
     {
-        // jit enabled
-        applyBiosJitPatches();
+        // jit disabled
+        jit_disable();
     }
 }
 
@@ -325,6 +333,19 @@ static void setupWramInstructionCache()
     const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
     mpu_setRegionInstructionCacheEnable(MPU_REGION_GBA_IWRAM, runSettings.enableWramInstructionCache);
     mpu_setRegionInstructionCacheEnable(MPU_REGION_GBA_EWRAM, runSettings.enableWramInstructionCache);
+}
+
+static void setupRomInstructionCache()
+{
+    const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
+    mpu_setRegionInstructionCacheEnable(MPU_REGION_MAIN_MEMORY_GBA_ROM, runSettings.enableRomInstructionCache);
+}
+
+static void setupIWramDataCache()
+{
+    const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
+    mpu_setRegionDataCacheEnable(MPU_REGION_GBA_IWRAM, runSettings.enableIWramDataCache);
+    mpu_setRegionDataBufferability(MPU_REGION_GBA_IWRAM, false);
 }
 
 static void setupEWramDataCache()
@@ -488,6 +509,8 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     dc_flushRange(gGbaBios, sizeof(gGbaBios));
     ic_invalidateAll();
     setupWramInstructionCache();
+    setupRomInstructionCache();
+    setupIWramDataCache();
     setupEWramDataCache();
 
     rtos_setIrqMask(RTOS_IRQ_VBLANK);
