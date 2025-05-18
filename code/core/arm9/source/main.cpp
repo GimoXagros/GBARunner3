@@ -44,7 +44,7 @@
 #include "Emulator/BootAnimationSkip.h"
 #include "MemoryEmulator/Arm/ArmDispatchTable.h"
 #include "VirtualMachine/VMUndefinedArmTable.h"
-#include "Arm9Clock.h"
+#include "arm9Clock.h"
 
 #define DEFAULT_ROM_FILE_PATH           "/rom.gba"
 #define BIOS_FILE_PATH                  "/_gba/bios.bin"
