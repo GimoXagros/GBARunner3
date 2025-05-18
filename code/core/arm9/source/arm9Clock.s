@@ -19,10 +19,11 @@ scfg_setArm9Clock:
 
     bic r2, r2, #SCFG_CLK_CPU_SPEED
     orr r2, r2, r0
+
     strh r2, [r3]
 
-    // allow the clock switch to stabilize for 4 * 5 = 20 cycles
-    mov r0, #5
+    // allow the clock switch to stabilize
+    mov r0, #8
 1:
     subs r0, r0, #1
     bne 1b
