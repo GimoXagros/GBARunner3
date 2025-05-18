@@ -17,6 +17,6 @@
             "0x080BE314",
             "0x080BE324"
         ],
-        "forceDSArm9Clock": true
+        "forceDSModeArm9Clock": true
     }
 }

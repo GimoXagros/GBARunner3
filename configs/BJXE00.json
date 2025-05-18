@@ -10,6 +10,6 @@
             "0x08F9F7F8",
             "0x08F9F804"
         ],
-        "forceDSArm9Clock": true
+        "forceDSModeArm9Clock": true
     }
 }

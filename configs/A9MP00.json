@@ -6,6 +6,6 @@
             "0x08159F6C",
             "0x08159F78"
         ],
-        "forceDSArm9Clock": true
+        "forceDSModeArm9Clock": true
     }
 }
