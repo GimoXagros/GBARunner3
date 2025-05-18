@@ -357,13 +357,16 @@ static void setupEWramDataCache()
 }
 
 static void setupArm9Clock()
-{    
-    const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
-    ScfgArm9Clock arm9Clock = runSettings.forceDSModeArm9ClockSpeed
-        ? ScfgArm9Clock::Nitro67MHz    // Force DS mode clock if true
-        : ScfgArm9Clock::Twl134MHz;
-    
-    scfg_setArm9Clock(arm9Clock);
+{
+    if (Environment::IsDsiMode())
+    {
+        const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
+        ScfgArm9Clock arm9Clock = runSettings.forceDSModeArm9ClockSpeed
+            ? ScfgArm9Clock::Nitro67MHz    // Force DS mode clock if true
+            : ScfgArm9Clock::Twl134MHz;
+
+        scfg_setArm9Clock(arm9Clock);
+    }
 }
 
 static void loadGameSpecificSettings()
