@@ -6,8 +6,6 @@
 
 u16 gColorLut[COLOR_LUT_SIZE] __attribute__((section(".lutram")));
 
-const ColorProfile* gCurrentPreset = &Agb001; // Default is AGB_001
-
 // When the 2d engine converts from 5 to 6 bit, the lsb bit will always be zero (i.e. 31 -> 62)
 inline constexpr u32 rgb8ToRgb5(u32 value8)
 {
@@ -53,58 +51,48 @@ inline constexpr u16 packToRGB5(fix32<12> r, fix32<12> g, fix32<12> b)
 }
 
 // Main Function
-static u16 applyColorCorrection(const u16 rgb5)
+static u16 applyColorCorrection(const u16 rgb5, const ColorProfile* preset, int gammaIndex)
 {
-    if (!gCurrentPreset) 
-        return rgb5; // fallback
-
-    // Extract RGB chanels
-    fix32<12> r5 = (rgb5 & 0x1F);
-    fix32<12> g5 = (rgb5 >> 5) & 0x1F;
-    fix32<12> b5 = (rgb5 >> 10) & 0x1F;
+    // Extract RGB channels
+    int r5 = (rgb5 & 0x1F);
+    int g5 = (rgb5 >> 5) & 0x1F;
+    int b5 = (rgb5 >> 10) & 0x1F;
 
     // Scale from 5 bits to 8 bits (0–255)
-    fix32<12> r8 = (r5 * 255) / 31;
-    fix32<12> g8 = (g5 * 255) / 31;
-    fix32<12> b8 = (b5 * 255) / 31;
+    int r8 = (r5 * 255) / 31;
+    int g8 = (g5 * 255) / 31;
+    int b8 = (b5 * 255) / 31;
 
     // Convert to linear gamma (encode)
-    fix32<12> rLin = encodeGamma(r8.Int());
-    fix32<12> gLin = encodeGamma(g8.Int());
-    fix32<12> bLin = encodeGamma(b8.Int());
+    fix32<12> rLin = GammaLut::encode(r8);
+    fix32<12> gLin = GammaLut::encode(g8);
+    fix32<12> bLin = GammaLut::encode(b8);
 
     // Apply luminance
-    rLin = (rLin * gCurrentPreset->luminance);
-    gLin = (gLin * gCurrentPreset->luminance);
-    bLin = (bLin * gCurrentPreset->luminance);
+    rLin = (rLin * preset->luminance);
+    gLin = (gLin * preset->luminance);
+    bLin = (bLin * preset->luminance);
 
     // Apply color correction matrix
     fix32<12> outR, outG, outB;
-    applyColorMatrix(gCurrentPreset->matrix, rLin, gLin, bLin, outR, outG, outB);
+    applyColorMatrix(preset->matrix, rLin, gLin, bLin, outR, outG, outB);
 
     // Convert to display gamma (decode).
-    outR = decodeGamma(outR.Int());
-    outG = decodeGamma(outG.Int());
-    outB = decodeGamma(outB.Int());
+    outR = GammaLut::decode((outR.Int()), gammaIndex);
+    outG = GammaLut::decode((outG.Int()), gammaIndex);
+    outB = GammaLut::decode((outB.Int()), gammaIndex);
 
     // Denormalize and convert to RGB8.
     return packToRGB5(outR, outG, outB);
 }
 
-// Generate LUT using current color preset and gamma
-void clut_generateColorLut()
+// Generate LUT using using the selected color profile and gamma index
+void clut_initColorCorrection(const ColorProfile* preset, int gammaIndex)
 {
     for (u32 i = 0; i < COLOR_LUT_SIZE; ++i)
     {
-        gColorLut[i] = applyColorCorrection(i);
+        gColorLut[i] = applyColorCorrection(i, preset, gammaIndex);
     }
-}
-
-// To start color calculation using the selected color profile
-void clut_initColorCorrection(const ColorProfile* preset)
-{
-    gCurrentPreset = preset;
-    clut_generateColorLut();
 }
 
 void clut_disableColorCorrection()
