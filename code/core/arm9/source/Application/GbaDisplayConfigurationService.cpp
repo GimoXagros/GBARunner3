@@ -7,7 +7,6 @@
 #include <libtwl/sys/sysPower.h>
 #include "DsDefinitions.h"
 #include "GbaColorCorrection/ColorLut.h"
-#include "GbaColorCorrection/GammaLut.h"
 #include "SystemIpc.h"
 #include "GbaDisplayConfigurationService.h"
 
