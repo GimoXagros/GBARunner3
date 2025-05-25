@@ -7,8 +7,8 @@
 class GammaLut 
 {
 public:
-    static u16 encode(u16 value);
-    static u16 decode(u16 value, int index);
+    static u8 Encode(u8 value);
+    static u8 Decode(u8 value, u8 index);
 
 private:
     static constexpr int TableSize = (1 << 8);
@@ -22,6 +22,6 @@ private:
     static constexpr float GammaMax = 0.9f; // default 0.9f
     static constexpr float GammaStep = (GammaMax - GammaMin) / (GammaSteps - 1);
 
-    static const std::array<u16, TableSize> encodeTable;
-    static const std::array<std::array<u16, TableSize>, GammaSteps> decodeTables;
+    static const std::array<u8, TableSize> encodeTable;
+    static const std::array<std::array<u8, TableSize>, GammaSteps> decodeTables;
 };

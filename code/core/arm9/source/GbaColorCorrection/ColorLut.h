@@ -5,5 +5,5 @@
 
 extern u16 gColorLut[COLOR_LUT_SIZE];
 
-void clut_initColorCorrection(const ColorProfile* preset, int gammaIndex);
+void clut_initColorCorrection(const ColorProfile* preset, u8 gammaIndex);
 void clut_disableColorCorrection();
