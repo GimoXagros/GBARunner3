@@ -10,4 +10,4 @@ struct ColorProfile
     fix32<12> luminance;    // Luminance factor
 };
 
-const ColorProfile* GetColorProfile(GbaColorCorrection colorProfile);
+const ColorProfile* cprof_getColorProfile(GbaColorCorrection colorProfile);

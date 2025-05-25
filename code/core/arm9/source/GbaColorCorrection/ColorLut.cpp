@@ -12,7 +12,9 @@ static constexpr u32 rgb8ToRgb5(u32 value8)
 {
     u32 value5 = (value8 * 63 + 255) / (255 * 2);
     if (value5 > 31)
+    {
         return 31;
+    }
     return value5;
 }
 

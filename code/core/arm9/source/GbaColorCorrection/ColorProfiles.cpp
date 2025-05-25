@@ -152,7 +152,7 @@ static const ColorProfile* const sColorProfileLut[] =
     /* GbaColorCorrection::mGba01   */ &sMgba01
 };
 
-const ColorProfile* GetColorProfile(GbaColorCorrection colorProfile)
+const ColorProfile* cprof_getColorProfile(GbaColorCorrection colorProfile)
 {
     return sColorProfileLut[static_cast<size_t>(colorProfile)];
 }

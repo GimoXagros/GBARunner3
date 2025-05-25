@@ -125,7 +125,7 @@ void GbaDisplayConfigurationService::SetupGbaScreen(const DisplaySettings& displ
 
 void GbaDisplayConfigurationService::SetupColorCorrection(const DisplaySettings& displaySettings)
 {
-    const ColorProfile* colorSetting = GetColorProfile(displaySettings.gbaColorCorrection);
+    const ColorProfile* colorSetting = cprof_getColorProfile(displaySettings.gbaColorCorrection);
     const auto gammaSetting = displaySettings.gbaDisplayGamma;
 
     if (colorSetting)
