@@ -48,7 +48,7 @@ static constexpr u16 packToRGB5(fix32<12> r, fix32<12> g, fix32<12> b)
 }
 
 // Main Function
-static u16 applyColorCorrection(const u16 rgb5, const ColorProfile* preset, u8 gammaIndex)
+static u16 applyColorCorrection(const u16 rgb5, const ColorProfile* preset, int gammaIndex)
 {
     // Extract RGB channels
     int r5 = (rgb5 & 0x1F);
@@ -60,10 +60,10 @@ static u16 applyColorCorrection(const u16 rgb5, const ColorProfile* preset, u8 g
     int g8 = (g5 * 255) / 31;
     int b8 = (b5 * 255) / 31;
 
-    // Convert to linear gamma (encode)
-    fix32<12> rLin = GammaLut::Encode(r8);
-    fix32<12> gLin = GammaLut::Encode(g8);
-    fix32<12> bLin = GammaLut::Encode(b8);
+    // Convert to non-linear gamma (encode)
+    fix32<12> rLin = gGammaLut.Encode(r8);
+    fix32<12> gLin = gGammaLut.Encode(g8);
+    fix32<12> bLin = gGammaLut.Encode(b8);
 
     // Apply luminance
     rLin = (rLin * preset->luminance);
@@ -74,17 +74,17 @@ static u16 applyColorCorrection(const u16 rgb5, const ColorProfile* preset, u8 g
     fix32<12> outR, outG, outB;
     applyColorMatrix(preset->matrix, rLin, gLin, bLin, outR, outG, outB);
 
-    // Convert to display gamma (decode).
-    outR = GammaLut::Decode(outR.Int(), gammaIndex);
-    outG = GammaLut::Decode(outG.Int(), gammaIndex);
-    outB = GammaLut::Decode(outB.Int(), gammaIndex);
+    // Convert to linearized gamma (decode).
+    outR = gGammaLut.Decode(outR.Int(), gammaIndex);
+    outG = gGammaLut.Decode(outG.Int(), gammaIndex);
+    outB = gGammaLut.Decode(outB.Int(), gammaIndex);
 
     // Denormalize and convert to RGB8.
     return packToRGB5(outR, outG, outB);
 }
 
 // Generate LUT using using the selected color profile and gamma index
-void clut_initColorCorrection(const ColorProfile* preset, u8 gammaIndex)
+void clut_initColorCorrection(const ColorProfile* preset, int gammaIndex)
 {
     for (u32 i = 0; i < COLOR_LUT_SIZE; ++i)
     {
