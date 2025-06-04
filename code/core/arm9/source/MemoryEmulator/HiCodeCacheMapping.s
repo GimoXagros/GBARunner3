@@ -17,7 +17,7 @@ arm_func hic_unmapRomBlock
 
 arm_func hic_undefinedHicodeMiss
     tst r13, #0x20 // spsr thumb bit
-    ldr sp,= dtcmStackEnd
+    ldr sp,= dtcmHicodeStackEnd
     push {r3,r12}
     ldr r12,= gHicodeState
         subeq r3, lr, #4 // arm

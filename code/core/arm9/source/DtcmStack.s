@@ -2,6 +2,13 @@
 
 #include "DtcmStackDefs.inc"
 
+.global dtcmHicodeStack
+dtcmHicodeStack:
+    .word 0xDEAD57AC // stack protection word
+    .space DTCM_HICODE_STACK_SIZE - 4
+.global dtcmHicodeStackEnd
+dtcmHicodeStackEnd:
+
 .global dtcmIrqStack
 dtcmIrqStack:
     .word 0xDEAD57AC // stack protection word

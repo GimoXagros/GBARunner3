@@ -20,7 +20,7 @@ arm_func memu_prefetchAbort
 
 1:
 #ifdef GBAR3_HICODE_CACHE_MAPPING
-    ldr sp,= dtcmStackEnd
+    ldr sp,= dtcmHicodeStackEnd
     push {r0-r3, r12, lr}
     mov r0, lr
     bl hic_mapRomBlock
