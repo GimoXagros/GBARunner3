@@ -40,9 +40,13 @@ private:
 public:
     RomGpioRtc()
         : _state(RtcTransferState::CommandWaitFallingEdge), _shiftRegister(0), _bitCount(0)
-        , _statusRegister(0x40), _intRegister(0), _rtcOffset(0), _weekDayOffset(0), _offsetUpdateRequired(false) { }
+        , _command(0), _byteIndex(0), _statusRegister(0x40), _intRegister(0), _dateTime()
+        , _rtcOffset(0), _weekDayOffset(0), _offsetUpdateRequired(false), _statePath(nullptr)
+        , _stateDirty(false), _flushRetryFrames(0) { }
 
+    void Initialize(const char* statePath);
     void Update(RomGpio& romGpio);
+    bool FlushStateIfDirty();
 
 private:
     static rio_rtc_datetime_t sDSRtcDateTime;
@@ -55,10 +59,12 @@ private:
     u16 _statusRegister;
     u16 _intRegister;
     rio_rtc_datetime_t _dateTime;
-    u8 _padding;
-    s32 _rtcOffset;
+    s64 _rtcOffset;
     s16 _weekDayOffset;
-    u16 _offsetUpdateRequired;
+    bool _offsetUpdateRequired;
+    const char* _statePath;
+    bool _stateDirty;
+    u16 _flushRetryFrames;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);
     void HandleInDataWaitRisingEdge(RomGpio& romGpio);
@@ -68,6 +74,8 @@ private:
     void UpdateDSDateTime();
     void UpdateDateTime();
     void UpdateRtcOffset();
+    bool LoadState();
+    void MarkStateDirty();
 
     void SetYear(u8 value);
     void SetMonth(u8 value);
@@ -82,5 +90,6 @@ private:
 
     u32 ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& dateTime, bool time24h) const;
     void FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rtc_datetime_t& dateTime, bool time24h) const;
+    u32 NormalizeSecondsSinceJanuary2000(s64 secondsSinceJanuary2000) const;
     u32 GetNumberOfDaysInMonth(u32 year, u32 month) const;
 };

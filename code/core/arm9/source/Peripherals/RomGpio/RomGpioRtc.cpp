@@ -3,7 +3,9 @@
 #include <libtwl/ipc/ipcFifoSystem.h>
 #include <libtwl/ipc/ipcFifo.h>
 #include "cp15.h"
+#include "Fat/ff.h"
 #include "IpcChannels.h"
+#include "Save/Save.h"
 #include "RomGpio.h"
 #include "RomGpioRtc.h"
 
@@ -32,8 +34,172 @@
 
 #define RIO_RTC_STATUS_WRITE_MASK   0b01101010
 
+#define RIO_RTC_STATE_MAGIC         0x54523347 // "G3RT" in little endian
+#define RIO_RTC_STATE_VERSION       1
+#define RIO_RTC_CYCLE_SECONDS       (36525ULL * 24 * 60 * 60)
+#define RIO_RTC_FLUSH_RETRY_FRAMES  60
+
+typedef struct
+{
+    u32 magic;
+    u16 version;
+    u16 size;
+    u32 hostSecondsSince2000;
+    u32 rtcSecondsSince2000;
+    s16 weekDayOffset;
+    u16 statusRegister;
+    u16 intRegister;
+    u16 reserved;
+    u32 checksum;
+} rio_rtc_state_file_t;
+static_assert(sizeof(rio_rtc_state_file_t) == 28);
+
+RTC_EWRAM static u32 calculateStateChecksum(const rio_rtc_state_file_t& state)
+{
+    const u8* bytes = reinterpret_cast<const u8*>(&state);
+    u32 checksum = 2166136261u;
+    for (u32 i = 0; i < sizeof(state) - sizeof(state.checksum); ++i)
+    {
+        checksum = (checksum ^ bytes[i]) * 16777619u;
+    }
+    return checksum;
+}
+
 [[gnu::section(".ewram.bss")]]
 RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
+
+// FIL contains a sector-sized buffer and cannot live on the 288-byte IRQ
+// stack used by the VBlank writer.
+[[gnu::section(".ewram.bss")]]
+static FIL sRtcStateFile alignas(32);
+
+[[gnu::section(".ewram.bss")]]
+static rio_rtc_state_file_t sRtcStateFileBuffer alignas(32);
+
+RTC_EWRAM void RomGpioRtc::Initialize(const char* statePath)
+{
+    _statePath = statePath;
+    if (LoadState())
+    {
+        return;
+    }
+
+    _statusRegister = RIO_RTC_STATUS_24H;
+    _intRegister = 0;
+    _rtcOffset = 0;
+    _weekDayOffset = 0;
+}
+
+RTC_EWRAM bool RomGpioRtc::LoadState()
+{
+    if (!_statePath)
+    {
+        return false;
+    }
+
+    memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
+    if (f_open(&sRtcStateFile, _statePath, FA_OPEN_EXISTING | FA_READ) != FR_OK)
+    {
+        return false;
+    }
+
+    memset(&sRtcStateFileBuffer, 0, sizeof(sRtcStateFileBuffer));
+    UINT bytesRead = 0;
+    const FRESULT readResult = f_read(
+        &sRtcStateFile, &sRtcStateFileBuffer, sizeof(sRtcStateFileBuffer), &bytesRead);
+    f_close(&sRtcStateFile);
+    const rio_rtc_state_file_t& state = sRtcStateFileBuffer;
+    if (readResult != FR_OK || bytesRead != sizeof(state) ||
+        state.magic != RIO_RTC_STATE_MAGIC ||
+        state.version != RIO_RTC_STATE_VERSION ||
+        state.size != sizeof(state) ||
+        state.checksum != calculateStateChecksum(state))
+    {
+        return false;
+    }
+
+    UpdateDSDateTime();
+    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+    const u64 elapsedSeconds = hostSeconds >= state.hostSecondsSince2000
+        ? static_cast<u64>(hostSeconds - state.hostSecondsSince2000)
+        : 0;
+    const u32 rtcSeconds = static_cast<u32>(
+        (static_cast<u64>(state.rtcSecondsSince2000) + elapsedSeconds) %
+        RIO_RTC_CYCLE_SECONDS);
+
+    _rtcOffset = static_cast<s64>(rtcSeconds) - hostSeconds;
+    _weekDayOffset = state.weekDayOffset % 7;
+    _statusRegister = state.statusRegister &
+        (RIO_RTC_STATUS_POWER | RIO_RTC_STATUS_WRITE_MASK);
+    _intRegister = state.intRegister;
+
+    // A host clock that moved backwards is rebased without moving the game RTC
+    // backwards. Persist the new baseline on the next safe VBlank.
+    if (hostSeconds < state.hostSecondsSince2000)
+    {
+        MarkStateDirty();
+    }
+    return true;
+}
+
+RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
+{
+    if (!_stateDirty)
+    {
+        return true;
+    }
+    if (_flushRetryFrames != 0)
+    {
+        --_flushRetryFrames;
+        return false;
+    }
+    if (!_statePath)
+    {
+        _stateDirty = false;
+        return true;
+    }
+
+    UpdateDSDateTime();
+    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+    memset(&sRtcStateFileBuffer, 0, sizeof(sRtcStateFileBuffer));
+    rio_rtc_state_file_t& state = sRtcStateFileBuffer;
+    state.magic = RIO_RTC_STATE_MAGIC;
+    state.version = RIO_RTC_STATE_VERSION;
+    state.size = static_cast<u16>(sizeof(state));
+    state.hostSecondsSince2000 = hostSeconds;
+    state.rtcSecondsSince2000 = NormalizeSecondsSinceJanuary2000(
+        static_cast<s64>(hostSeconds) + _rtcOffset);
+    state.weekDayOffset = _weekDayOffset;
+    state.statusRegister = _statusRegister;
+    state.intRegister = _intRegister;
+    state.checksum = calculateStateChecksum(state);
+
+    memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
+    UINT bytesWritten = 0;
+    bool success = f_open(&sRtcStateFile, _statePath, FA_CREATE_ALWAYS | FA_WRITE) == FR_OK;
+    if (success)
+    {
+        success = f_write(&sRtcStateFile, &state, sizeof(state), &bytesWritten) == FR_OK &&
+            bytesWritten == sizeof(state) && f_sync(&sRtcStateFile) == FR_OK;
+        f_close(&sRtcStateFile);
+    }
+
+    if (success)
+    {
+        _stateDirty = false;
+        return true;
+    }
+
+    _flushRetryFrames = RIO_RTC_FLUSH_RETRY_FRAMES;
+    return false;
+}
+
+RTC_EWRAM void RomGpioRtc::MarkStateDirty()
+{
+    _stateDirty = true;
+    _flushRetryFrames = 0;
+    sav_requestFileWrite();
+}
 
 RTC_EWRAM void RomGpioRtc::Update(RomGpio& romGpio)
 {
@@ -128,8 +294,7 @@ RTC_EWRAM void RomGpioRtc::CommandWaitRisingEdge(RomGpio& romGpio)
             else
             {
                 bool isRead = _shiftRegister & 1;
-                if (isRead &&
-                    (_command == RIO_RTC_COMMAND_DATE_TIME || _command == RIO_RTC_COMMAND_TIME))
+                if (_command == RIO_RTC_COMMAND_DATE_TIME || _command == RIO_RTC_COMMAND_TIME)
                 {
                     UpdateDateTime();
                 }
@@ -165,11 +330,11 @@ RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
             case RIO_RTC_COMMAND_STATUS:
             {
                 _statusRegister = (_statusRegister & RIO_RTC_STATUS_POWER) | (_shiftRegister & RIO_RTC_STATUS_WRITE_MASK);
+                MarkStateDirty();
                 break;
             }
             case RIO_RTC_COMMAND_DATE_TIME:
             {
-                _offsetUpdateRequired = true;
                 switch (_byteIndex)
                 {
                     case 0:
@@ -194,15 +359,15 @@ RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
                         SetSecond(_shiftRegister);
                         break;
                 }
-                if (_byteIndex++ == 7)
+                if (++_byteIndex == 7)
                 {
+                    _offsetUpdateRequired = true;
                     _state = RtcTransferState::Done;
                 }
                 break;
             }
             case RIO_RTC_COMMAND_TIME:
             {
-                _offsetUpdateRequired = true;
                 switch (_byteIndex)
                 {
                     case 0:
@@ -217,6 +382,7 @@ RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
                 }
                 if (++_byteIndex == 3)
                 {
+                    _offsetUpdateRequired = true;
                     _state = RtcTransferState::Done;
                 }
                 break;
@@ -227,6 +393,7 @@ RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
                 if (++_byteIndex == 2)
                 {
                     _state = RtcTransferState::Done;
+                    MarkStateDirty();
                 }
                 break;
             }
@@ -234,6 +401,7 @@ RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
             {
                 mem_swapByte(_shiftRegister, &((u8*)&_intRegister)[1]);
                 _state = RtcTransferState::Done;
+                MarkStateDirty();
                 break;
             }
         }
@@ -330,7 +498,8 @@ RTC_EWRAM void RomGpioRtc::UpdateDateTime()
 {
     UpdateDSDateTime();
     u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
-    u32 secondsSince2000 = dsRtcSecondsSince2000 + _rtcOffset;
+    u32 secondsSince2000 = NormalizeSecondsSinceJanuary2000(
+        static_cast<s64>(dsRtcSecondsSince2000) + _rtcOffset);
     FromSecondsSinceJanuary2000(secondsSince2000, _dateTime, _statusRegister & RIO_RTC_STATUS_24H);
     int weekDay = (_dateTime.date.weekDay + _weekDayOffset) % 7;
     _dateTime.date.weekDay = weekDay < 0 ? weekDay + 7 : weekDay;
@@ -343,8 +512,9 @@ RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()
     u32 gbaRtcSecondsSince2000 = ToSecondsSinceJanuary2000(_dateTime, _statusRegister & RIO_RTC_STATUS_24H);
     rio_rtc_datetime_t newDateTime;
     FromSecondsSinceJanuary2000(gbaRtcSecondsSince2000, newDateTime, true);
-    _rtcOffset = gbaRtcSecondsSince2000 - dsRtcSecondsSince2000;
+    _rtcOffset = static_cast<s64>(gbaRtcSecondsSince2000) - dsRtcSecondsSince2000;
     _weekDayOffset = (_dateTime.date.weekDay - newDateTime.date.weekDay) % 7;
+    MarkStateDirty();
 }
 
 RTC_EWRAM void RomGpioRtc::SetYear(u8 value)
@@ -555,6 +725,16 @@ RTC_EWRAM void RomGpioRtc::FromSecondsSinceJanuary2000(u32 secondsSinceJanuary20
 
     dateTime.date.month = ToBcd(month);
     dateTime.date.monthDay = ToBcd(remainingDays + 1);
+}
+
+RTC_EWRAM u32 RomGpioRtc::NormalizeSecondsSinceJanuary2000(s64 secondsSinceJanuary2000) const
+{
+    s64 result = secondsSinceJanuary2000 % static_cast<s64>(RIO_RTC_CYCLE_SECONDS);
+    if (result < 0)
+    {
+        result += RIO_RTC_CYCLE_SECONDS;
+    }
+    return static_cast<u32>(result);
 }
 
 RTC_EWRAM u32 RomGpioRtc::GetNumberOfDaysInMonth(u32 year, u32 month) const

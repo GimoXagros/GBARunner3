@@ -18,9 +18,10 @@ struct rio_registers_t
 class RomGpio
 {
 public:
-    void Initialize(rio_registers_t* romGpioRegisters);
+    void Initialize(rio_registers_t* romGpioRegisters, const char* rtcStatePath);
     void Reset();
     void UpdateRomRegisters();
+    bool FlushRtcStateIfDirty();
 
     void WriteDataRegister(u16 value)
     {
