@@ -15,7 +15,7 @@ extern gba_save_shared_t gGbaSaveShared;
 extern u32 emu_vblankIrqSkipSaveCheckInstruction;
 
 bool sav_tryPatchFunction(const u32* signature, u32 saveSwiNumber, void* patchFunction);
-void sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath);
+bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath);
 
 #ifdef __cplusplus
 extern "C" {

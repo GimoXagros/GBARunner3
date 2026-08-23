@@ -7,6 +7,7 @@
 #include "cp15.h"
 #include "Cpsr.h"
 #include "SdCache.h"
+#include "JitPatcher/JitCommon.h"
 
 typedef struct
 {
@@ -72,6 +73,7 @@ static bool isCurrentlyFetching(void)
 
 static void finishFetch()
 {
+    jit_resetDynamicRomBlock(&sdc_cache[sCurrentFetch.cacheBlock][0]);
     sCacheBlockToRomBlock[sCurrentFetch.cacheBlock] = sCurrentFetch.romBlock;
     sdc_romBlockToCacheBlock[sCurrentFetch.romBlock] = &sdc_cache[sCurrentFetch.cacheBlock][0];
     sCurrentFetch.romBlock = SDC_ROM_BLOCK_INVALID;
@@ -126,6 +128,7 @@ static void fillOutOfBoundsCacheBlock(u32 romBlock, u32 cacheBlock)
         }
     }
 
+    jit_resetDynamicRomBlock(&sdc_cache[cacheBlock][0]);
     sCacheBlockToRomBlock[cacheBlock] = romBlock;
     sdc_romBlockToCacheBlock[romBlock] = &sdc_cache[cacheBlock][0];
     dc_drainWriteBuffer();

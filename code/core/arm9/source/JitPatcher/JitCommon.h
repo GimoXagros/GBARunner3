@@ -84,6 +84,10 @@ void jit_init(void);
 
 void jit_disable(void);
 
+/// @brief Resets the JIT metadata associated with a reused SD cache block.
+/// @param cacheBlock A pointer to the first byte of an SD cache block.
+void jit_resetDynamicRomBlock(void* cacheBlock);
+
 #ifdef __cplusplus
 }
 #endif

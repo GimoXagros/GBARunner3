@@ -11,6 +11,8 @@
 [[gnu::section(".ewram.bss")]]
 jit_state_t gJitState;
 
+static bool sJitEnabled;
+
 [[gnu::section(".itcm"), gnu::optimize("Oz")]]
 u32 jit_getJitBitsOffset(const void* ptr)
 {
@@ -129,10 +131,12 @@ void jit_init(void)
 {
     memset(&gJitState, 0, sizeof(gJitState));
     gJitState.dummyJitBits = ~0u;
+    sJitEnabled = true;
 }
 
 void jit_disable(void)
 {
+    sJitEnabled = false;
     memset(gJitState.staticRomJitBits, 0xFF, sizeof(gJitState.staticRomJitBits));
     memset(gJitState.dynamicRomJitBits, 0xFF, sizeof(gJitState.dynamicRomJitBits));
     memset(gJitState.iWramJitBits, 0xFF, sizeof(gJitState.iWramJitBits));
@@ -145,4 +149,18 @@ void jit_disable(void)
     }
 
     vm_jumpToIrqHandler[2] -= 8; // fix the ldr r4, DTCM(vm_irqSavedR4)
+}
+
+void jit_resetDynamicRomBlock(void* cacheBlock)
+{
+    const u32 cacheOffset = (u32)cacheBlock - (u32)sdc_cache;
+    if (cacheOffset >= SDC_SIZE || (cacheOffset & SDC_BLOCK_MASK) != 0)
+        return;
+
+    const u32 jitBitsOffset = cacheOffset / 2 / 8;
+    const u32 jitAuxBitsOffset = cacheOffset / 2 / 4;
+    memset((u8*)gJitState.dynamicRomJitBits + jitBitsOffset,
+        sJitEnabled ? 0x00 : 0xFF, SDC_BLOCK_SIZE / 2 / 8);
+    memset((u8*)gJitState.dynamicRomJitAuxBits + jitAuxBitsOffset,
+        0, SDC_BLOCK_SIZE / 2 / 4);
 }

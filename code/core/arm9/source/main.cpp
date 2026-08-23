@@ -11,6 +11,7 @@
 #include <libtwl/gfx/gfxStatus.h>
 #include <libtwl/rtos/rtosIrq.h>
 #include <array>
+#include <memory>
 #include <string.h>
 #include "cp15.h"
 #include "Fat/ff.h"
@@ -261,7 +262,27 @@ static void handleSave(const char* savePath)
         }
     }
 
-    sav_initializeSave(saveTypeInfo, savePath);
+    if (!sav_initializeSave(saveTypeInfo, savePath))
+    {
+        gLogger->Log(LogLevel::Error, "Failed to open or create save file: %s\n", savePath);
+    }
+}
+
+static std::unique_ptr<char[]> createSavePath(const char* romPath)
+{
+    const size_t romPathLength = strlen(romPath);
+    auto savePath = std::make_unique<char[]>(romPathLength + 5);
+    memcpy(savePath.get(), romPath, romPathLength + 1);
+
+    char* fileName = strrchr(savePath.get(), '/');
+    fileName = fileName ? fileName + 1 : savePath.get();
+    char* backslash = strrchr(fileName, '\\');
+    if (backslash)
+        fileName = backslash + 1;
+
+    char* extension = strrchr(fileName, '.');
+    strcpy(extension ? extension : savePath.get() + romPathLength, ".sav");
+    return savePath;
 }
 
 extern "C" void logAddress(u32 address)
@@ -484,16 +505,9 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     applyBiosVmPatches();
     const char* romPath = argc > 1 ? argv[1] : DEFAULT_ROM_FILE_PATH;
     loadGbaRom(romPath);
-    char* romExtension = strrchr(romPath, '.');
-    if (romExtension)
-    {
-        romExtension[1] = 's';
-        romExtension[2] = 'a';
-        romExtension[3] = 'v';
-        romExtension[4] = '\0';
-    }
+    auto savePath = createSavePath(romPath);
     loadGameSpecificSettings();
-    handleSave(romPath);
+    handleSave(savePath.get());
     SelfModifyingPatches().ApplyPatches(gAppSettingsService.GetAppSettings().runSettings);
 
     waitSplashScreenAnimation();
