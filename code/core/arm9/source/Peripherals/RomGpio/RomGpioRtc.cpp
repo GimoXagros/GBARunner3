@@ -2,6 +2,7 @@
 #include <libtwl/mem/memSwap.h>
 #include <libtwl/ipc/ipcFifoSystem.h>
 #include <libtwl/ipc/ipcFifo.h>
+#include <string.h>
 #include "cp15.h"
 #include "Fat/ff.h"
 #include "IpcChannels.h"
