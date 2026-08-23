@@ -38,7 +38,6 @@
 #define RIO_RTC_STATE_MAGIC         0x54523347 // "G3RT" in little endian
 #define RIO_RTC_STATE_VERSION       1
 #define RIO_RTC_CYCLE_SECONDS       (36525ULL * 24 * 60 * 60)
-#define RIO_RTC_FLUSH_RETRY_FRAMES  60
 
 typedef struct
 {
@@ -76,6 +75,8 @@ static FIL sRtcStateFile alignas(32);
 
 [[gnu::section(".ewram.bss")]]
 static rio_rtc_state_file_t sRtcStateFileBuffer alignas(32);
+
+volatile u8 gRomGpioRtcStateDirty;
 
 RTC_EWRAM void RomGpioRtc::Initialize(const char* statePath)
 {
@@ -149,14 +150,10 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     {
         return true;
     }
-    if (_flushRetryFrames != 0)
-    {
-        --_flushRetryFrames;
-        return false;
-    }
     if (!_statePath)
     {
         _stateDirty = false;
+        gRomGpioRtcStateDirty = false;
         return true;
     }
 
@@ -188,17 +185,18 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     if (success)
     {
         _stateDirty = false;
+        gRomGpioRtcStateDirty = false;
         return true;
     }
 
-    _flushRetryFrames = RIO_RTC_FLUSH_RETRY_FRAMES;
     return false;
 }
 
 RTC_EWRAM void RomGpioRtc::MarkStateDirty()
 {
     _stateDirty = true;
-    _flushRetryFrames = 0;
+    gRomGpioRtcStateDirty = true;
+    gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE;
     sav_requestFileWrite();
 }
 

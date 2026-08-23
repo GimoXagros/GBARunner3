@@ -18,7 +18,8 @@ struct rio_registers_t
 class RomGpio
 {
 public:
-    void Initialize(rio_registers_t* romGpioRegisters, const char* rtcStatePath);
+    void Initialize(rio_registers_t* romGpioRegisters);
+    void LoadRtcState(const char* rtcStatePath);
     void Reset();
     void UpdateRomRegisters();
     bool FlushRtcStateIfDirty();
@@ -87,3 +88,4 @@ private:
 };
 
 extern RomGpio gRomGpio;
+extern volatile u8 gRomGpioRtcStateDirty;

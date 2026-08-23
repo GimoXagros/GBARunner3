@@ -5,12 +5,16 @@
 RomGpio gRomGpio;
 static RomGpioRtc sRomGpioRtc;
 
-void RomGpio::Initialize(rio_registers_t* romGpioRegisters, const char* rtcStatePath)
+void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
 {
     _registers = romGpioRegisters;
     _registersRomData = *romGpioRegisters;
-    sRomGpioRtc.Initialize(rtcStatePath);
     Reset();
+}
+
+void RomGpio::LoadRtcState(const char* rtcStatePath)
+{
+    sRomGpioRtc.Initialize(rtcStatePath);
 }
 
 bool RomGpio::FlushRtcStateIfDirty()

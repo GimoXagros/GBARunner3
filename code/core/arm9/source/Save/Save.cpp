@@ -8,6 +8,7 @@
 #include "MemFastSearch.h"
 #include "SaveSwi.h"
 #include "SaveTypeInfo.h"
+#include "cp15.h"
 #include "Peripherals/RomGpio/RomGpio.h"
 #include "VirtualMachine/VMNestedIrq.h"
 #include "MemoryEmulator/RomDefs.h"
@@ -38,6 +39,7 @@ void sav_initializeFileWriteScheduler(void)
 {
     // ARM nop. The VBlank handler restores the original branch after every
     // pending SRAM and RTC write has completed.
+    dc_drainWriteBuffer();
     emu_vblankIrqSkipSaveCheckInstruction = 0xE1A00000;
 }
 
@@ -227,19 +229,11 @@ extern "C" void sav_writeSaveToFile(void)
         f_sync(&gSaveFile);
     }
 
+    if (gRomGpioRtcStateDirty)
+    {
+        gRomGpio.FlushRtcStateIfDirty();
+    }
+
     gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
-}
-
-[[gnu::section(".ewram")]] void sav_writePendingFiles(void)
-{
-    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_WRITE)
-    {
-        sav_writeSaveToFile();
-    }
-
-    const bool rtcStateIsClean = gRomGpio.FlushRtcStateIfDirty();
-    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN && rtcStateIsClean)
-    {
-        emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
-    }
+    emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
 }

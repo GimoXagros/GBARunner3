@@ -511,6 +511,9 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     loadGameSpecificSettings();
     sav_initializeFileWriteScheduler();
     handleSave(savePath.get());
+    // Perform RTC sidecar I/O alongside normal save initialization. Once the
+    // splash screen is removed, GPIO setup must not touch the filesystem.
+    gRomGpio.LoadRtcState(rtcStatePath.get());
     SelfModifyingPatches().ApplyPatches(gAppSettingsService.GetAppSettings().runSettings);
 
     waitSplashScreenAnimation();
@@ -537,9 +540,7 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     setupJit();
     dma_init();
     gbas_init();
-    gRomGpio.Initialize(
-        (rio_registers_t*)sdc_loadRomBlockForPatching(RIO_GBA_ADDRESS),
-        rtcStatePath.get());
+    gRomGpio.Initialize((rio_registers_t*)sdc_loadRomBlockForPatching(RIO_GBA_ADDRESS));
     dc_flushRange((void*)ROM_LINEAR_DS_ADDRESS, ROM_LINEAR_SIZE);
     dc_flushRange(gGbaBios, sizeof(gGbaBios));
     ic_invalidateAll();

@@ -42,7 +42,7 @@ public:
         : _state(RtcTransferState::CommandWaitFallingEdge), _shiftRegister(0), _bitCount(0)
         , _command(0), _byteIndex(0), _statusRegister(0x40), _intRegister(0), _dateTime()
         , _rtcOffset(0), _weekDayOffset(0), _offsetUpdateRequired(false), _statePath(nullptr)
-        , _stateDirty(false), _flushRetryFrames(0) { }
+        , _stateDirty(false) { }
 
     void Initialize(const char* statePath);
     void Update(RomGpio& romGpio);
@@ -64,7 +64,6 @@ private:
     bool _offsetUpdateRequired;
     const char* _statePath;
     bool _stateDirty;
-    u16 _flushRetryFrames;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);
     void HandleInDataWaitRisingEdge(RomGpio& romGpio);

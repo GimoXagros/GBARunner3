@@ -15,6 +15,8 @@ system clock after a game changes it.
   committed when chip select goes low.
 - RTC file I/O is deferred to the existing VBlank save path, outside the GPIO
   transaction handler.
+- Existing RTC state is loaded during the normal save-initialization phase;
+  GPIO setup after the splash screen performs no filesystem operations.
 
 The design follows GameYob's elapsed-host-time and backward-clock handling, and
 mGBA's persisted RTC baseline/offset model. GBARunner3 stores the data in a

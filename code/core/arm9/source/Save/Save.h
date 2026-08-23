@@ -25,7 +25,6 @@ u8 sav_readSaveByteFromFile(u32 offset);
 void sav_writeSaveByteToFile(u32 offset, u8 data);
 void sav_flushSaveFile(void);
 void sav_writeSaveToFile(void);
-void sav_writePendingFiles(void);
 
 void sav_initializeFileWriteScheduler(void);
 void sav_requestFileWrite(void);
