@@ -7,9 +7,9 @@
 #include "RomGpio.h"
 #include "RomGpioRtc.h"
 
-// RTC GPIO transactions are infrequent. Optimizing this translation unit for
-// size keeps the current develop branch within its 128 KiB VRAM-A code budget.
-#pragma GCC optimize ("Os")
+// RTC GPIO transactions are infrequent. Keep their implementation in EWRAM so
+// the current develop branch stays within its 128 KiB VRAM-A code budget.
+#define RTC_EWRAM [[gnu::section(".ewram")]]
 
 #define ROM_GPIO_PIN_SCK            0
 #define ROM_GPIO_PIN_SIO            1
@@ -35,7 +35,7 @@
 [[gnu::section(".ewram.bss")]]
 RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
 
-void RomGpioRtc::Update(RomGpio& romGpio)
+RTC_EWRAM void RomGpioRtc::Update(RomGpio& romGpio)
 {
     if (!romGpio.GetPinState(ROM_GPIO_PIN_CS))
     {
@@ -99,7 +99,7 @@ void RomGpioRtc::Update(RomGpio& romGpio)
     }
 }
 
-void RomGpioRtc::CommandWaitRisingEdge(RomGpio& romGpio)
+RTC_EWRAM void RomGpioRtc::CommandWaitRisingEdge(RomGpio& romGpio)
 {
     if (!romGpio.GetPinState(ROM_GPIO_PIN_SCK))
     {
@@ -148,7 +148,7 @@ void RomGpioRtc::CommandWaitRisingEdge(RomGpio& romGpio)
     }
 }
 
-void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
+RTC_EWRAM void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
 {
     if (!romGpio.GetPinState(ROM_GPIO_PIN_SCK))
     {
@@ -241,7 +241,7 @@ void RomGpioRtc::HandleInDataWaitRisingEdge(RomGpio& romGpio)
     }
 }
 
-void RomGpioRtc::HandleOutDataWaitFallingEdge(RomGpio& romGpio)
+RTC_EWRAM void RomGpioRtc::HandleOutDataWaitFallingEdge(RomGpio& romGpio)
 {
     if (romGpio.GetPinState(ROM_GPIO_PIN_SCK))
     {
@@ -302,7 +302,7 @@ void RomGpioRtc::HandleOutDataWaitFallingEdge(RomGpio& romGpio)
     romGpio.SetPinState(ROM_GPIO_PIN_SIO, outputBit);
 }
 
-void RomGpioRtc::RtcReset()
+RTC_EWRAM void RomGpioRtc::RtcReset()
 {
     mem_swapByte(0, &_dateTime.date.year);
     mem_swapByte(1, &_dateTime.date.month);
@@ -316,7 +316,7 @@ void RomGpioRtc::RtcReset()
     UpdateRtcOffset();
 }
 
-void RomGpioRtc::UpdateDSDateTime()
+RTC_EWRAM void RomGpioRtc::UpdateDSDateTime()
 {
     dc_invalidateRange(&sDSRtcDateTime, sizeof(sDSRtcDateTime));
     ipc_sendWordDirect(
@@ -326,7 +326,7 @@ void RomGpioRtc::UpdateDSDateTime()
     ipc_recvWordDirect();
 }
 
-void RomGpioRtc::UpdateDateTime()
+RTC_EWRAM void RomGpioRtc::UpdateDateTime()
 {
     UpdateDSDateTime();
     u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
@@ -336,7 +336,7 @@ void RomGpioRtc::UpdateDateTime()
     _dateTime.date.weekDay = weekDay < 0 ? weekDay + 7 : weekDay;
 }
 
-void RomGpioRtc::UpdateRtcOffset()
+RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()
 {
     UpdateDSDateTime();
     u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
@@ -347,7 +347,7 @@ void RomGpioRtc::UpdateRtcOffset()
     _weekDayOffset = (_dateTime.date.weekDay - newDateTime.date.weekDay) % 7;
 }
 
-void RomGpioRtc::SetYear(u8 value)
+RTC_EWRAM void RomGpioRtc::SetYear(u8 value)
 {
     if ((value & 0xF) > 9 ||
         ((value >> 4) & 0xF) > 9)
@@ -357,7 +357,7 @@ void RomGpioRtc::SetYear(u8 value)
     mem_swapByte(value, &_dateTime.date.year);
 }
 
-void RomGpioRtc::SetMonth(u8 value)
+RTC_EWRAM void RomGpioRtc::SetMonth(u8 value)
 {
     value &= 0x1F;
     if (value == 0 ||
@@ -369,7 +369,7 @@ void RomGpioRtc::SetMonth(u8 value)
     mem_swapByte(value, &_dateTime.date.month);
 }
 
-void RomGpioRtc::SetDayOfMonth(u8 value)
+RTC_EWRAM void RomGpioRtc::SetDayOfMonth(u8 value)
 {
     value &= 0x3F;
     if (value == 0 ||
@@ -396,7 +396,7 @@ void RomGpioRtc::SetDayOfMonth(u8 value)
     mem_swapByte(value, &_dateTime.date.monthDay);
 }
 
-void RomGpioRtc::SetDayOfWeek(u8 value)
+RTC_EWRAM void RomGpioRtc::SetDayOfWeek(u8 value)
 {
     value &= 7;
     if (value == 7)
@@ -406,7 +406,7 @@ void RomGpioRtc::SetDayOfWeek(u8 value)
     mem_swapByte(value, &_dateTime.date.weekDay);
 }
 
-void RomGpioRtc::SetHour(u8 value)
+RTC_EWRAM void RomGpioRtc::SetHour(u8 value)
 {
     if (_statusRegister & RIO_RTC_STATUS_24H)
     {
@@ -434,7 +434,7 @@ void RomGpioRtc::SetHour(u8 value)
     mem_swapByte(value, &_dateTime.time.hour);
 }
 
-void RomGpioRtc::SetMinute(u8 value)
+RTC_EWRAM void RomGpioRtc::SetMinute(u8 value)
 {
     value &= 0x7F;
     if ((value >= 0x60 && value <= 0x79) ||
@@ -445,7 +445,7 @@ void RomGpioRtc::SetMinute(u8 value)
     mem_swapByte(value, &_dateTime.time.minute);
 }
 
-void RomGpioRtc::SetSecond(u8 value)
+RTC_EWRAM void RomGpioRtc::SetSecond(u8 value)
 {
     value &= 0x7F;
     if ((value >= 0x60 && value <= 0x79) ||
@@ -456,12 +456,12 @@ void RomGpioRtc::SetSecond(u8 value)
     mem_swapByte(value, &_dateTime.time.second);
 }
 
-u32 RomGpioRtc::FromBcd(u32 bcdValue) const
+RTC_EWRAM u32 RomGpioRtc::FromBcd(u32 bcdValue) const
 {
     return bcdValue - 6 * (bcdValue >> 4);
 }
 
-u32 RomGpioRtc::ToBcd(u32 value) const
+RTC_EWRAM u32 RomGpioRtc::ToBcd(u32 value) const
 {
     static const u8 sToBcd[100] =
     {
@@ -480,7 +480,7 @@ u32 RomGpioRtc::ToBcd(u32 value) const
     return sToBcd[value];
 }
 
-u32 RomGpioRtc::ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& dateTime, bool time24h) const
+RTC_EWRAM u32 RomGpioRtc::ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& dateTime, bool time24h) const
 {
     u32 yearsSince2000 = FromBcd(dateTime.date.year);
     u32 leapDays = yearsSince2000 / 4;
@@ -507,7 +507,7 @@ u32 RomGpioRtc::ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& dateTime, bo
         + FromBcd(dateTime.time.second & 0x3F);
 }
 
-void RomGpioRtc::FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rtc_datetime_t& dateTime, bool time24h) const
+RTC_EWRAM void RomGpioRtc::FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rtc_datetime_t& dateTime, bool time24h) const
 {
     dateTime.time.second = ToBcd(secondsSinceJanuary2000 % 60);
     u32 minutesSinceJanuary2000 = secondsSinceJanuary2000 / 60;
@@ -557,7 +557,7 @@ void RomGpioRtc::FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rt
     dateTime.date.monthDay = ToBcd(remainingDays + 1);
 }
 
-u32 RomGpioRtc::GetNumberOfDaysInMonth(u32 year, u32 month) const
+RTC_EWRAM u32 RomGpioRtc::GetNumberOfDaysInMonth(u32 year, u32 month) const
 {
     static const u8 sDaysPerMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
