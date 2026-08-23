@@ -219,7 +219,7 @@ extern "C" void sav_flushSaveFile(void)
     vm_disableNestedIrqs();
 }
 
-extern "C" void sav_writeSaveToFile(void)
+[[gnu::section(".ewram")]] void sav_writeSaveToFile(void)
 {
     if (gGbaSaveShared.saveDataSize != 0 && !Environment::IsIsNitroEmulator())
     {
