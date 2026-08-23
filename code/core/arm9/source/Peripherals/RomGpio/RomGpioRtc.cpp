@@ -7,6 +7,10 @@
 #include "RomGpio.h"
 #include "RomGpioRtc.h"
 
+// RTC GPIO transactions are infrequent. Optimizing this translation unit for
+// size keeps the current develop branch within its 128 KiB VRAM-A code budget.
+#pragma GCC optimize ("Os")
+
 #define ROM_GPIO_PIN_SCK            0
 #define ROM_GPIO_PIN_SIO            1
 #define ROM_GPIO_PIN_CS             2
