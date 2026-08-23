@@ -76,6 +76,7 @@ static FIL sRtcStateFile alignas(32);
 [[gnu::section(".ewram.bss")]]
 static rio_rtc_state_file_t sRtcStateFileBuffer alignas(32);
 
+[[gnu::section(".ewram.bss")]]
 volatile u8 gRomGpioRtcStateDirty;
 
 RTC_EWRAM void RomGpioRtc::Initialize(const char* statePath)
