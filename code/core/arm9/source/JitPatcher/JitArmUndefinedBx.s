@@ -26,8 +26,9 @@ ensureJittedCommonHiReg:
     ldr r8, [sp, #-4]
 
 ensureJittedCommon:
-    cmp r8, #ROM_LINEAR_GBA_ADDRESS
-        addhs r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
+    sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
+    cmp r9, #ROM_LINEAR_SIZE
+        addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
 
     ldr r10, [r12, #(vm_undefinedSpsr - vm_armUndefinedDispatchTable)]
     tst r8, #1

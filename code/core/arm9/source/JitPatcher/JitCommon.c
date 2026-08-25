@@ -93,9 +93,18 @@ void* jit_findBlockEnd(const void* ptr)
 [[gnu::section(".itcm")]]
 bool jit_isBlockJitted(void* ptr)
 {
-    if ((u32)ptr >= ROM_LINEAR_GBA_ADDRESS)
+    u32 address = (u32)ptr;
+    if (address >= ROM_LINEAR_GBA_ADDRESS && address < ROM_LINEAR_END_GBA_ADDRESS)
     {
-        ptr = (void*)((u32)ptr - ROM_LINEAR_GBA_ADDRESS + ROM_LINEAR_DS_ADDRESS);
+        ptr = (void*)(address - ROM_LINEAR_GBA_ADDRESS + ROM_LINEAR_DS_ADDRESS);
+    }
+    else if (address >= ROM_LINEAR_END_GBA_ADDRESS && address < 0x0E000000)
+    {
+        u32 romBlock = ((address << 7) >> 7) >> SDC_BLOCK_SHIFT;
+        void* cacheBlock = sdc_romBlockToCacheBlock[romBlock];
+        if (!cacheBlock)
+            return false;
+        ptr = (void*)((u32)cacheBlock + (address & SDC_BLOCK_MASK));
     }
 
     const u8* const jitBits = jit_getJitBits(ptr);
@@ -106,9 +115,15 @@ bool jit_isBlockJitted(void* ptr)
 [[gnu::section(".itcm")]]
 void jit_ensureBlockJitted(void* ptr)
 {
-    if ((u32)ptr >= ROM_LINEAR_GBA_ADDRESS)
+    u32 address = (u32)ptr;
+    if (address >= ROM_LINEAR_GBA_ADDRESS && address < ROM_LINEAR_END_GBA_ADDRESS)
     {
-        ptr = (void*)((u32)ptr - ROM_LINEAR_GBA_ADDRESS + ROM_LINEAR_DS_ADDRESS);
+        ptr = (void*)(address - ROM_LINEAR_GBA_ADDRESS + ROM_LINEAR_DS_ADDRESS);
+    }
+    else if (address >= ROM_LINEAR_END_GBA_ADDRESS && address < 0x0E000000)
+    {
+        const void* cacheBlock = sdc_getRomBlock(address);
+        ptr = (void*)((u32)cacheBlock + (address & SDC_BLOCK_MASK));
     }
 
     const u8* const jitBits = jit_getJitBits(ptr);
@@ -125,6 +140,12 @@ void jit_ensureBlockJitted(void* ptr)
     }
     dc_drainWriteBuffer();
     ic_invalidateAll();
+}
+
+[[gnu::section(".ewram")]]
+u32 jit_resolveArmBranchTarget(u32 instructionPtr, u32 targetPtr)
+{
+    return jit_resolveArmBranchTargetAddress(instructionPtr, targetPtr);
 }
 
 void jit_init(void)

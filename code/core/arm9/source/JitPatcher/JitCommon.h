@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MemoryEmulator/RomDefs.h"
+
 typedef struct
 {
     /// @brief Stores for each halfword in the statically loaded part of the rom
@@ -41,6 +43,22 @@ typedef struct
 
 extern jit_state_t gJitState;
 
+/// @brief Resolves a PC-relative ARM branch target calculated from the relocated
+///        linear ROM window back to its GBA address when it leaves that window.
+/// @param instructionPtr Address of the branch instruction as executed on ARM9.
+/// @param targetPtr Target calculated using the relocated ARM9 program counter.
+/// @return An address suitable for execution by the VM.
+static inline u32 jit_resolveArmBranchTargetAddress(u32 instructionPtr, u32 targetPtr)
+{
+    if (instructionPtr >= ROM_LINEAR_DS_ADDRESS && instructionPtr < ROM_LINEAR_END_DS_ADDRESS &&
+        (targetPtr < ROM_LINEAR_DS_ADDRESS || targetPtr >= ROM_LINEAR_END_DS_ADDRESS))
+    {
+        return targetPtr + ROM_LINEAR_GBA_ADDRESS - ROM_LINEAR_DS_ADDRESS;
+    }
+
+    return targetPtr;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -78,6 +96,8 @@ void* jit_findBlockEnd(const void* ptr);
 
 bool jit_isBlockJitted(void* ptr);
 void jit_ensureBlockJitted(void* ptr);
+
+u32 jit_resolveArmBranchTarget(u32 instructionPtr, u32 targetPtr);
 
 /// @brief Initializes the JIT patcher.
 void jit_init(void);
