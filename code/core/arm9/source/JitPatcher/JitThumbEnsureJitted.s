@@ -9,8 +9,9 @@ arm_func jit_thumbEnsureJittedHiReg
     ldr r8, [sp, #-4]
 
 arm_func jit_thumbEnsureJitted
-    cmp r8, #ROM_LINEAR_GBA_ADDRESS
-        addhs r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
+    sub lr, r8, #ROM_LINEAR_GBA_ADDRESS
+    cmp lr, #ROM_LINEAR_SIZE
+        addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
     sub lr, r8, #ROM_LINEAR_DS_ADDRESS
     cmp lr, #ROM_LINEAR_SIZE
     bhs 1f

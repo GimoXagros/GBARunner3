@@ -21,11 +21,15 @@ arm_func jit_armUndefinedBL
     ldr r10, [r10, #(vm_undefinedSpsr - vm_undefinedRegTmp)]
     add r8, r11, r12, asr #6
     push {r0-r3}
-    add r0, r8, #4
+    mov r0, r11
+    add r1, r8, #4
+    bl jit_resolveArmBranchTarget
+    mov r8, r0
+    mov r0, r8
     bl jit_ensureBlockJitted
     pop {r0-r3}
     msr spsr, r10
-    adds pc, r8, #4
+    movs pc, r8
 
 .section ".dtcm", "aw"
 
