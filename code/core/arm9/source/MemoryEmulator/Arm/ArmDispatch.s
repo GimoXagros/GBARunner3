@@ -15,7 +15,7 @@ arm_func memu_armDispatch
     ldr r8, DTCM(memu_arm_table_addr)
 
 #ifdef GBAR3_HICODE_CACHE_MAPPING
-    cmp r11, #0x08000000
+    subs r12, r11, #0x08000000
         bhs readInstructionFromCache
 #endif
 
@@ -41,11 +41,8 @@ armDispatchContinue:
 #ifdef GBAR3_HICODE_CACHE_MAPPING
 
 readInstructionFromCache:
-    sub r11, r11, #8
-    bic r11, r11, #0xFE000000
-    tst r11, #0x800
-    orrne r11, r11, #0x40000000 // set
-    mcr p15, 3, r11, c15, c0, 0 // set index
+    sub r12, r12, #8
+    mcr p15, 3, r12, c15, c0, 0 // set index
     mrc p15, 3, lr, c15, c3, 0 // read data
     b armDispatchContinue
 

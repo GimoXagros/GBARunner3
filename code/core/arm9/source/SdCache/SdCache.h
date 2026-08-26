@@ -2,6 +2,7 @@
 #include "SdCacheDefs.h"
 #include "MemoryEmulator/HiCodeCacheMapping.h"
 #include "cp15.h"
+#include "VirtualMachine/VMNestedIrq.h"
 
 /// @brief The sd cache blocks.
 extern u8 sdc_cache[SDC_BLOCK_COUNT][SDC_BLOCK_SIZE];
@@ -40,6 +41,20 @@ static inline const void* sdc_getRomBlock(u32 romAddress)
 // #endif
 //     ic_invalidateAll();
     return sdc_loadRomBlockDirect(romAddress);
+}
+
+static inline const void* sdc_getRomBlockWithoutIrqYielding(u32 romAddress)
+{
+    u32 romBlock = ((romAddress << 7) >> 7) >> SDC_BLOCK_SHIFT;
+    const void* data = sdc_romBlockToCacheBlock[romBlock];
+    if (__builtin_expect(!data, false))
+    {
+        bool irqYieldingState = vm_disableIrqYielding();
+        data = sdc_loadRomBlockDirect(romAddress);
+        vm_restoreIrqYielding(irqYieldingState);
+    }
+
+    return data;
 }
 
 static inline void sdc_resetIrqForbiddenReplacementRange(void)

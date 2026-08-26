@@ -14,7 +14,7 @@ arm_func memu_thumbDispatch
     str r0, DTCM(memu_thumb_r0)
 
 #ifdef GBAR3_HICODE_CACHE_MAPPING
-    cmp lr, #0x08000000
+    subs r0, lr, #0x08000000
         bhs readInstructionFromCache
 #endif
 
@@ -35,10 +35,7 @@ thumbDispatchContinue:
 
 readInstructionFromCache:
     str lr, DTCM(memu_inst_addr)
-    sub r0, lr, #8
-    bic r0, r0, #0xFE000000
-    tst r0, #0x800
-    orrne r0, r0, #0x40000000 // set
+    sub r0, r0, #8
     mcr p15, 3, r0, c15, c0, 0 // set index
     mrc p15, 3, r0, c15, c3, 0 // read data
     tst lr, #2
