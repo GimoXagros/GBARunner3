@@ -112,7 +112,10 @@ bool jit_isBlockJitted(void* ptr)
     return (*jitBits >> bitIdx) & 1;
 }
 
-[[gnu::section(".itcm")]]
+// Preparing an uncached block may perform SD I/O and is not latency-sensitive
+// enough to consume scarce ITCM space. Keep only the JIT bit lookup hot path in
+// ITCM; callers receive a linker veneer transparently.
+[[gnu::section(".ewram"), gnu::optimize("Oz")]]
 void* jit_ensureBlockJitted(void* ptr)
 {
     void* const executablePtr = ptr;
