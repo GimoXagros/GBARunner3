@@ -143,9 +143,9 @@ void jit_ensureBlockJitted(void* ptr)
 }
 
 [[gnu::section(".ewram")]]
-u32 jit_resolveArmBranchTarget(u32 instructionPtr, u32 targetPtr)
+u32 jit_calculateArmBranchTarget(u32 instructionPtr, u32 instruction)
 {
-    return jit_resolveArmBranchTargetAddress(instructionPtr, targetPtr);
+    return jit_calculateArmBranchTargetAddress(instructionPtr - 4, instruction);
 }
 
 void jit_init(void)

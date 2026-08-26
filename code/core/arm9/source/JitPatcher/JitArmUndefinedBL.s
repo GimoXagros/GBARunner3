@@ -14,16 +14,14 @@ arm_func jit_armUndefinedBL
 #endif
     mcr p15, 0, r10, c7, c5, 0
 
-    mov r12, lr, lsl #8
     str r11, [r10, #vm_undefinedRegTmp]!
     ldmia r10, {lr}^ // set return address in lr
     nop
     ldr r10, [r10, #(vm_undefinedSpsr - vm_undefinedRegTmp)]
-    add r8, r11, r12, asr #6
     push {r0-r3}
     mov r0, r11
-    add r1, r8, #4
-    bl jit_resolveArmBranchTarget
+    mov r1, lr
+    bl jit_calculateArmBranchTarget
     mov r8, r0
     mov r0, r8
     bl jit_ensureBlockJitted

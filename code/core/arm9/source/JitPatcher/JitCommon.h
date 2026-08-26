@@ -59,6 +59,19 @@ static inline u32 jit_resolveArmBranchTargetAddress(u32 instructionPtr, u32 targ
     return targetPtr;
 }
 
+/// @brief Recreates the ARM B/BL target from the original instruction while
+///        preserving the GBA PC+8 rule across the relocated linear ROM edge.
+/// @param instructionPtr Address of the instruction in ARM9 executable space.
+/// @param instruction Original ARM B/BL instruction.
+/// @return Target in ARM9 executable space. High ROM remains at its GBA virtual
+///         address and is made executable by the hicode instruction-cache map.
+static inline u32 jit_calculateArmBranchTargetAddress(u32 instructionPtr, u32 instruction)
+{
+    const s32 offset = (s32)(instruction << 8) >> 6;
+    const u32 undefinedPc = instructionPtr + 4;
+    return jit_resolveArmBranchTargetAddress(undefinedPc, undefinedPc + offset + 4);
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -97,7 +110,7 @@ void* jit_findBlockEnd(const void* ptr);
 bool jit_isBlockJitted(void* ptr);
 void jit_ensureBlockJitted(void* ptr);
 
-u32 jit_resolveArmBranchTarget(u32 instructionPtr, u32 targetPtr);
+u32 jit_calculateArmBranchTarget(u32 undefinedPc, u32 instruction);
 
 /// @brief Initializes the JIT patcher.
 void jit_init(void);
