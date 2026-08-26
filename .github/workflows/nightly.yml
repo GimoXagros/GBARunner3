@@ -21,9 +21,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Make application
+      - name: Make application and test ROM
         run: |
-          make -C code
+          make -C code debug
       - name: Prepare for build publishing
         run: |
           mkdir -p out/_gba/
