@@ -113,8 +113,9 @@ bool jit_isBlockJitted(void* ptr)
 }
 
 [[gnu::section(".itcm")]]
-void jit_ensureBlockJitted(void* ptr)
+void* jit_ensureBlockJitted(void* ptr)
 {
+    void* const executablePtr = ptr;
     u32 address = (u32)ptr;
     if (address >= ROM_LINEAR_GBA_ADDRESS && address < ROM_LINEAR_END_GBA_ADDRESS)
     {
@@ -129,7 +130,7 @@ void jit_ensureBlockJitted(void* ptr)
     const u8* const jitBits = jit_getJitBits(ptr);
     u32 bitIdx = ((u32)ptr & 0xF) >> 1;
     if ((*jitBits >> bitIdx) & 1)
-        return;
+        return executablePtr;
     if ((u32)ptr & 1)
     {
         jit_processThumbBlock((u16*)((u32)ptr & ~1));
@@ -140,6 +141,7 @@ void jit_ensureBlockJitted(void* ptr)
     }
     dc_drainWriteBuffer();
     ic_invalidateAll();
+    return executablePtr;
 }
 
 [[gnu::section(".ewram")]]

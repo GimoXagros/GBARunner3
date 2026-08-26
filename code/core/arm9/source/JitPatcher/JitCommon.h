@@ -108,7 +108,10 @@ void* jit_findBlockStart(const void* ptr);
 void* jit_findBlockEnd(const void* ptr);
 
 bool jit_isBlockJitted(void* ptr);
-void jit_ensureBlockJitted(void* ptr);
+/// @brief JIT-processes the block containing ptr and returns the address that
+///        the ARM9 must execute. Static ROM is already relocated by callers;
+///        high ROM remains a GBA virtual address backed by the hicode map.
+void* jit_ensureBlockJitted(void* ptr);
 
 u32 jit_calculateArmBranchTarget(u32 undefinedPc, u32 instruction);
 

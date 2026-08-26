@@ -18,9 +18,8 @@ arm_func jit_armUndefinedB
     mov r0, r11
     mov r1, lr
     bl jit_calculateArmBranchTarget
-    mov r8, r0
-    mov r0, r8
     bl jit_ensureBlockJitted
+    mov r8, r0
     pop {r0-r3}
     msr spsr, r10
     movs pc, r8
