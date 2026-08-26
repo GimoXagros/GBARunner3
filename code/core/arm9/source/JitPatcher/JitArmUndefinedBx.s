@@ -60,14 +60,15 @@ ensureJittedStaticRom:
     b 1b
 
 ensureJittedIWram:
-    mov lr, r11, lsr #24
-    cmp lr, #2
-        moveq lr, #0
-        mcreq p15, 0, lr, c7, c10, 4
+    // Executing below IWRAM means the source was EWRAM or relocated ROM.
+    // A direct compare saves one ITCM instruction over extracting the top byte.
+    cmp r11, #0x03000000
+        movlo lr, #0
+        mcrlo p15, 0, lr, c7, c10, 4
 #ifdef GBAR3_HICODE_CACHE_MAPPING
-        mcreq p15, 0, lr, c6, c4, 0 // disable mpu region
+        mcrlo p15, 0, lr, c6, c4, 0 // disable mpu region
 #endif
-        mcreq p15, 0, lr, c7, c5, 0
+        mcrlo p15, 0, lr, c7, c5, 0
 
     ldr r11,= (gJitState + 0x20000) // iWramJitBits
     mov r9, r8, lsl #17
