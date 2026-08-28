@@ -1,41 +1,24 @@
 # GBARunner3 RTC + ROM Hack Compatibility Build
 
-This branch is a custom GBARunner3 build for testing Korean-patched GBA ROM hacks
-through Pico Launcher/DSpico on Nintendo 3DS systems running in DS mode.
+The authoritative user and build documentation now lives in
+[`README.md`](README.md), and the issue comparison lives in
+[`TODO.md`](TODO.md).
 
-## Changes
+## Verified build identity
 
-- Integrates the upstream `feature/rom-gpio` RTC implementation with the current
-  `develop` branch.
-- Resets JIT and auxiliary metadata whenever a 4 KiB high-ROM cache block is
-  reused. This prevents code from a newly mapped 32 MiB ROM region from inheriting
-  the processed state of an evicted region.
-- Builds the `.sav` path in owned memory instead of overwriting the launcher-provided
-  ROM argument.
-- Opens or creates save files in one operation, initializes new or short saves with
-  `0xFF`, and checks seek, write, sync, read, and cluster-map results.
-- Retains the current UTF-8 FatFs configuration for Korean long filenames.
+- Tag: `custom-v0.1.0-rc5`
+- Commit: `967730a0db710f9d90dbd70907223d3f75e25a81`
+- `GBARunner3.nds` SHA-256:
+  `E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`
+- Environment: Nintendo 3DS in DS mode using DSpico
 
-## Test target
+The reported hardware pass covers normal startup and observed runtime for the
+seven Korean-patched revisions listed in the README. It does not establish a
+full-playthrough, every save protocol, or every RTC transition.
 
-- Game code: `B8CJ`, version `00`
-- ROM size: 32 MiB
-- SHA-256: `0B3670F3A08BD763D153ECE802FEDF71D03DF40D0B2E004DE2835856266586C3`
-- Detected save tag: `SRAM_F_V103` at ROM offset `0x01D46640`
-- Expected save: adjacent `.sav`, 32 KiB, initially filled with `0xFF`
+Tales of the World: Narikiri Dungeon 2 is excluded from this emulator regression
+claim because the supplied patched image is suspected to be malformed. Its save
+behavior will be investigated separately. No commercial ROM, patched ROM, save,
+or BIOS is included in this repository or release.
 
-The test ROM is copyrighted and is intentionally not included in this repository
-or any release artifact. Rockman EXE 2 diagnostic ROMs are explicitly excluded from
-the test matrix and no game-specific configuration is supplied for them.
-
-## Hardware verification
-
-The build must be launched from a `.gba` Pico Launcher file association so the ROM
-path is supplied as `argv[1]`. Verify that the Korean-patched target boots and that
-an adjacent 32 KiB `.sav` is created, updated in-game, and loaded after a cold
-restart. Emulator-only checks do not substitute for this DSpico hardware test.
-
-## RTC limitation
-
-The integrated upstream RTC branch emulates the cartridge GPIO RTC against the DS
-clock. Per-game RTC offsets are not yet persisted across emulator restarts.
+Per-game RTC offsets are not yet persisted across emulator restarts.
