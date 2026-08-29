@@ -55,6 +55,8 @@
 #define SETTINGS_FILE_PATH              "/_gba/gbarunner3.json"
 #define GAME_SETTINGS_FILE_PATH_FORMAT  "/_gba/configs/%c%c%c%c%02X.json"
 
+#define BOOT_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
+
 [[gnu::section(".ewram.bss")]]
 FATFS gFatFs;
 [[gnu::section(".ewram.bss")]]
@@ -125,7 +127,7 @@ static bool mountAgbSemihosting()
     return true;
 }
 
-static void loadGbaBios()
+BOOT_EWRAM static void loadGbaBios()
 {
     memset(&gFile, 0, sizeof(gFile));
     f_open(&gFile, BIOS_FILE_PATH, FA_OPEN_EXISTING | FA_READ);
@@ -148,7 +150,7 @@ static constexpr auto sBiosRelocations = std::to_array<u16>
     0x3998, 0x399C, 0x39C4, 0x39C8, 0x39CC
 });
 
-static void relocateGbaBios()
+BOOT_EWRAM static void relocateGbaBios()
 {
     const u32 base = (u32)gGbaBios;
     //swi table
@@ -161,7 +163,7 @@ static void relocateGbaBios()
         gGbaBios[address >> 2] += base;
 }
 
-static void applyBiosVmPatches()
+BOOT_EWRAM static void applyBiosVmPatches()
 {
     gGbaBios[0x0024 >> 2] = 0xE1E0009C; // mrs r12, spsr
     gGbaBios[0x0028 >> 2] = 0xE1A0009E; // mrs lr, cpsr
@@ -185,13 +187,13 @@ static void applyBiosVmPatches()
     gGbaBios[0x0388 >> 2] = 0xE189009C; // msr cpsr_cf, r12
 }
 
-static void applyBiosJitPatches()
+BOOT_EWRAM static void applyBiosJitPatches()
 {
     gGbaBios[0x00DC >> 2] = 0xE1B0009E; // bx lr (jump to rom)
     gGbaBios[0x0134 >> 2] = 0xEE800090; // ldr pc, [r0, #-4] (jump to irq handler)
 }
 
-static void loadGbaRom(const char* romPath)
+BOOT_EWRAM static void loadGbaRom(const char* romPath)
 {
     UINT br;
     memset(&gFile, 0, sizeof(gFile));
@@ -208,7 +210,7 @@ static void loadGbaRom(const char* romPath)
     }
 }
 
-static void disableSramReads(void)
+BOOT_EWRAM static void disableSramReads(void)
 {
     memu_setLoad8Handler(0xE, memu_load8Undefined);
     memu_setLoad8Handler(0xF, memu_load8Undefined);
@@ -218,7 +220,7 @@ static void disableSramReads(void)
     memu_setLoad32Handler(0xF, memu_load32Undefined);
 }
 
-static void disableSramWrites(void)
+BOOT_EWRAM static void disableSramWrites(void)
 {
     memu_setStore8Handler(0xE, memu_store8Undefined);
     memu_setStore8Handler(0xF, memu_store8Undefined);
@@ -228,7 +230,7 @@ static void disableSramWrites(void)
     memu_setStore32Handler(0xF, memu_store32Undefined);
 }
 
-static void handleSave(const char* savePath)
+BOOT_EWRAM static void handleSave(const char* savePath)
 {
     const auto& gameSettings = gAppSettingsService.GetAppSettings().gameSettings;
     if (gameSettings.saveType == GbaSaveType::None)
@@ -270,7 +272,7 @@ static void handleSave(const char* savePath)
     }
 }
 
-[[gnu::section(".ewram")]]
+BOOT_EWRAM
 static std::unique_ptr<char[]> createSidecarPath(const char* romPath, const char* newExtension)
 {
     const size_t romPathLength = strlen(romPath);
