@@ -21,13 +21,16 @@ claim because the supplied patched image is suspected to be malformed. Its save
 behavior will be investigated separately. No commercial ROM, patched ROM, save,
 or BIOS is included in this repository or release.
 
-## RTC persistence development candidate
+## custom-v0.1.1 release identity
 
-- Commit: `a8ee9be2721ef7c66a2c899c62453139580fd3be`
+- Tag: `custom-v0.1.1`
+- Binary-producing implementation commit:
+  `a8ee9be2721ef7c66a2c899c62453139580fd3be`
 - `GBARunner3.nds` SHA-256:
   `14FD5FB8AAB3A6236CAAAEBEECBB3E2615D981D054472896636F53DDB8F4FC32`
 - CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33248527389>
 
-This candidate persists per-game RTC state in `.g3rtc` sidecars and includes the
-custom NDS banner icon. The application and test NDS compile successfully, but
-hardware verification is required before replacing the rc5 release baseline.
+This release persists per-game RTC state in `.g3rtc` sidecars and includes the
+custom NDS banner icon. The application and test NDS compile successfully. The
+rc5 binary remains the immutable hardware regression baseline until the new RTC
+cold-start and recovery paths complete DSpico/3DS verification.

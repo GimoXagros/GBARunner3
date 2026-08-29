@@ -1,6 +1,6 @@
 # Licensing status notice
 
-As of 2026-08-29, neither the upstream
+As of 2026-08-30, neither the upstream
 [`Gericom/GBARunner3`](https://github.com/Gericom/GBARunner3) repository nor the
 related `Gericom/GBARunner2` repository publishes a repository-wide open-source
 license. The question remains open in upstream issues
@@ -30,11 +30,23 @@ include:
 This list is descriptive and is not a substitute for reading every applicable
 file and submodule notice.
 
+## Custom branding assets
+
+`logo.png` was supplied for inclusion in this fork. The NDS banner asset at
+`code/bootstrap/icon.bmp` is a 32x32, 16-color conversion of that image. This
+status notice does not assert a separate open-source license for either branding
+asset. Reuse outside this fork requires permission from the applicable asset
+rightsholder. Release binaries embed the converted banner icon.
+
 ## ROMs, BIOS, and release artifacts
 
 Commercial ROMs, patched commercial ROM images, saves, and BIOS files are not
 licensed or distributed by this repository. A compiled emulator binary does not
 grant rights to those materials.
+
+The `custom-v0.1.1` release includes source and binaries under this same
+license-status notice; creating the tag or release does not add a new license
+grant.
 
 Before publishing a modified source tree or distributing compiled binaries,
 obtain clarification or permission from the relevant upstream copyright holders

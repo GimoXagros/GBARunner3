@@ -14,21 +14,20 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 ## Current custom release
 
 The current supported custom build is
-[`custom-v0.1.0-rc5`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.0-rc5).
+[`custom-v0.1.1`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.1).
 The broken rc2 and rc4 release entries have been withdrawn.
 
-- Source commit used for hardware verification:
-  `967730a0db710f9d90dbd70907223d3f75e25a81`
+- Release source: tag `custom-v0.1.1`
 - `GBARunner3.nds` SHA-256:
-  `E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`
-- Verified environment: Nintendo 3DS in DS mode using DSpico
+  `14FD5FB8AAB3A6236CAAAEBEECBB3E2615D981D054472896636F53DDB8F4FC32`
+- Automated verification: application and test NDS build successfully
+- Hardware status: RTC cold-start persistence and recovery require DSpico/3DS
+  verification
 
-The current RTC-persistence development candidate is built from commit
-`a8ee9be2721ef7c66a2c899c62453139580fd3be`. Its `GBARunner3.nds` SHA-256 is
-`14FD5FB8AAB3A6236CAAAEBEECBB3E2615D981D054472896636F53DDB8F4FC32`.
-[CI build 33248527389](https://github.com/GimoXagros/GBARunner3/actions/runs/33248527389)
-compiled the application and test NDS successfully. This is a hardware-test
-candidate, not a replacement release for rc5 yet.
+The immutable hardware regression baseline remains `custom-v0.1.0-rc5` at
+commit `967730a0db710f9d90dbd70907223d3f75e25a81`, with NDS SHA-256
+`E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`.
+That baseline was verified on Nintendo 3DS in DS mode using DSpico.
 
 ## Changes in this fork
 
@@ -48,7 +47,7 @@ candidate, not a replacement release for rc5 yet.
 
 ## Installation
 
-1. Download the rc5 ZIP from the current custom release.
+1. Download the `custom-v0.1.1` ZIP from the current custom release.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Merge the included `_gba/configs` directory into `/_gba/configs` on the SD
    card.
@@ -95,7 +94,7 @@ investigation.
 
 - RTC persistence now has format/corruption/time-transition regression coverage,
   but cold-start behavior and write recovery still require hardware verification
-  on DSpico/3DS before release promotion.
+  on DSpico/3DS.
 - Several save implementations and region/ROM-hack combinations still require
   issue-specific hardware retesting.
 - Some upstream compatibility, timing, sound, JIT, DMA, and application-feature
