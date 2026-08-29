@@ -31,7 +31,7 @@ gba_save_shared_t gGbaSaveShared;
 static DWORD sClusterTable[64];
 static u32 sSkipSaveCheckInstruction;
 
-void sav_initializeFileWriteScheduler(void)
+[[gnu::section(".ewram")]] void sav_initializeFileWriteScheduler(void)
 {
     sSkipSaveCheckInstruction = emu_vblankIrqSkipSaveCheckInstruction;
 }

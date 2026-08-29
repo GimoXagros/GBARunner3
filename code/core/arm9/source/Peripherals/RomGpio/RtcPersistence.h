@@ -40,7 +40,7 @@ static_assert(sizeof(StateFile) == 44);
 constexpr uint16_t STATE_PAYLOAD_LENGTH =
     offsetof(StateFile, checksum) - offsetof(StateFile, gameCode);
 
-inline uint32_t CalculateFnv1a(const void* data, size_t size)
+[[gnu::section(".ewram")]] inline uint32_t CalculateFnv1a(const void* data, size_t size)
 {
     const auto* bytes = static_cast<const uint8_t*>(data);
     uint32_t hash = 2166136261u;
@@ -51,19 +51,19 @@ inline uint32_t CalculateFnv1a(const void* data, size_t size)
     return hash;
 }
 
-inline uint32_t CalculateChecksum(const StateFile& state)
+[[gnu::section(".ewram")]] inline uint32_t CalculateChecksum(const StateFile& state)
 {
     return CalculateFnv1a(&state, offsetof(StateFile, checksum));
 }
 
-inline bool MatchesIdentity(const StateFile& state, const Identity& identity)
+[[gnu::section(".ewram")]] inline bool MatchesIdentity(const StateFile& state, const Identity& identity)
 {
     return state.gameCode == identity.gameCode &&
         state.romSize == identity.romSize &&
         state.headerHash == identity.headerHash;
 }
 
-inline bool Validate(const StateFile& state, const Identity& identity)
+[[gnu::section(".ewram")]] inline bool Validate(const StateFile& state, const Identity& identity)
 {
     return state.magic == STATE_MAGIC &&
         state.version == STATE_VERSION &&
@@ -73,7 +73,7 @@ inline bool Validate(const StateFile& state, const Identity& identity)
         state.checksum == CalculateChecksum(state);
 }
 
-inline StateFile CreateState(
+[[gnu::section(".ewram")]] inline StateFile CreateState(
     const Identity& identity,
     uint32_t sequence,
     uint32_t hostSecondsSince2000,
@@ -99,7 +99,7 @@ inline StateFile CreateState(
     return state;
 }
 
-inline uint32_t AdvanceGameSeconds(
+[[gnu::section(".ewram")]] inline uint32_t AdvanceGameSeconds(
     uint32_t storedGameSeconds,
     uint32_t storedHostSeconds,
     uint32_t currentHostSeconds)
@@ -111,7 +111,7 @@ inline uint32_t AdvanceGameSeconds(
         (static_cast<uint64_t>(storedGameSeconds) + elapsed) % CYCLE_SECONDS);
 }
 
-inline int64_t RestoreOffset(
+[[gnu::section(".ewram")]] inline int64_t RestoreOffset(
     uint32_t storedGameSeconds,
     uint32_t storedHostSeconds,
     uint32_t currentHostSeconds)
@@ -121,7 +121,7 @@ inline int64_t RestoreOffset(
         currentHostSeconds;
 }
 
-inline bool IsSequenceNewer(uint32_t candidate, uint32_t selected)
+[[gnu::section(".ewram")]] inline bool IsSequenceNewer(uint32_t candidate, uint32_t selected)
 {
     return static_cast<int32_t>(candidate - selected) > 0;
 }

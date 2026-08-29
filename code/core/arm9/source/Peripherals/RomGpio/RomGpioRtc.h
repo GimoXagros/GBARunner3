@@ -40,7 +40,7 @@ private:
     } rio_rtc_datetime_t;
 
 public:
-    RomGpioRtc()
+    [[gnu::section(".ewram")]] RomGpioRtc()
         : _state(RtcTransferState::CommandWaitFallingEdge), _shiftRegister(0), _bitCount(0)
         , _command(0), _byteIndex(0), _statusRegister(0x40), _intRegister(0), _dateTime()
         , _rtcOffset(0), _weekDayOffset(0), _offsetUpdateRequired(false)

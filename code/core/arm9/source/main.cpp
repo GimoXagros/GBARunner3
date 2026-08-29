@@ -270,6 +270,7 @@ static void handleSave(const char* savePath)
     }
 }
 
+[[gnu::section(".ewram")]]
 static std::unique_ptr<char[]> createSidecarPath(const char* romPath, const char* newExtension)
 {
     const size_t romPathLength = strlen(romPath);
