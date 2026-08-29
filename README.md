@@ -23,6 +23,13 @@ The broken rc2 and rc4 release entries have been withdrawn.
   `E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`
 - Verified environment: Nintendo 3DS in DS mode using DSpico
 
+The current RTC-persistence development candidate is built from commit
+`a8ee9be2721ef7c66a2c899c62453139580fd3be`. Its `GBARunner3.nds` SHA-256 is
+`14FD5FB8AAB3A6236CAAAEBEECBB3E2615D981D054472896636F53DDB8F4FC32`.
+[CI build 33248527389](https://github.com/GimoXagros/GBARunner3/actions/runs/33248527389)
+compiled the application and test NDS successfully. This is a hardware-test
+candidate, not a replacement release for rc5 yet.
+
 ## Changes in this fork
 
 - Enables the upstream high-ROM instruction-cache mapping work and fixes ARM
@@ -30,6 +37,8 @@ The broken rc2 and rc4 release entries have been withdrawn.
 - Resets high-ROM JIT metadata when an SD-cache block is reused.
 - Implements cartridge GPIO RTC transactions using the DS clock through ARM7
   IPC.
+- Persists RTC offset, weekday, status, and interrupt state in a validated
+  per-ROM `.g3rtc` sidecar, with temporary and backup-file recovery.
 - Searches high-ROM regions for save routines that need patching.
 - Creates adjacent `.sav` files without modifying the launcher-owned ROM path,
   initializes new or short saves with `0xFF`, and checks initialization I/O.
@@ -84,7 +93,9 @@ investigation.
 
 ## Known limitations
 
-- Per-game RTC offsets are not persisted across emulator restarts yet.
+- RTC persistence now has format/corruption/time-transition regression coverage,
+  but cold-start behavior and write recovery still require hardware verification
+  on DSpico/3DS before release promotion.
 - Several save implementations and region/ROM-hack combinations still require
   issue-specific hardware retesting.
 - Some upstream compatibility, timing, sound, JIT, DMA, and application-feature
@@ -111,6 +122,8 @@ The application output is `code/bootstrap/GBARunner3.nds`; the `debug` target
 also builds the GoogleTest NDS. The exact rc5 release commit was built
 successfully by both the application and test targets in
 [CI](https://github.com/GimoXagros/GBARunner3/actions/runs/32963024490).
+The RTC-persistence candidate and custom NDS banner were also built successfully
+in [CI build 33248527389](https://github.com/GimoXagros/GBARunner3/actions/runs/33248527389).
 
 ## Contributing and issue reports
 

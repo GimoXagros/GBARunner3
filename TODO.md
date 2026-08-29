@@ -15,11 +15,12 @@ input and route have not been verified on rc5.
 
 ## P0: release and integration blockers
 
-- [ ] **Persist RTC state per game** — Partial for
-  [#30](https://github.com/Gericom/GBARunner3/issues/30). GPIO transactions and
-  DS-clock IPC are implemented, but the RTC offset is memory-only. Define a
-  versioned per-game sidecar/footer format, validate writes atomically, reload it
-  after a cold start, and test Ruby/Sapphire/Emerald and RTC-using ROM hacks.
+- [x] **Persist RTC state per game** — Implemented for
+  [#30](https://github.com/Gericom/GBARunner3/issues/30). The branch now stores
+  RTC offset, weekday, status, and interrupt state in a versioned, checksummed
+  per-ROM `.g3rtc` sidecar. Temporary/backup recovery and host-clock rollback
+  behavior have regression coverage. Hardware cold-start and recovery testing
+  remains in **Expand RTC verification** below.
 - [ ] **Retest exact Emerald and Emerald-derived failures** — Retest
   [#164](https://github.com/Gericom/GBARunner3/issues/164),
   [#193](https://github.com/Gericom/GBARunner3/issues/193),
