@@ -15,6 +15,7 @@
 //};
 
 // libretro GBA AGB-001 color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sAgb001 =
 {
     {
@@ -26,6 +27,7 @@ static const ColorProfile sAgb001 =
 };
 
 // libretro GBA SP (AGS-101) color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sAgs101 =
 {
     {
@@ -37,6 +39,7 @@ static const ColorProfile sAgs101 =
 };
 
 // libretro GB micro OXY-001 color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sOxy001 =
 {
     {
@@ -48,6 +51,7 @@ static const ColorProfile sOxy001 =
 };
 
 //// libretro NDS Phat NTR-001 color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sNtr001 =
 {
     {
@@ -59,6 +63,7 @@ static const ColorProfile sNtr001 =
 };
 
 // libretro NDS lite USG-001 color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sUsg001 =
 {
     {
@@ -70,6 +75,7 @@ static const ColorProfile sUsg001 =
 };
 
 // libretro PSP 1000 color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sPsp01g =
 {
     {
@@ -81,6 +87,7 @@ static const ColorProfile sPsp01g =
 };
 
 // libretro Nintendo Switch GBA Classics color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sNswIps =
 {
     {
@@ -92,6 +99,7 @@ static const ColorProfile sNswIps =
 };
 
 // libretro Nintendo Switch GBA Classics Oled color (sRGB).
+[[gnu::section(".ewram")]]
 static const ColorProfile sNswOle =
 {
     {
@@ -103,6 +111,7 @@ static const ColorProfile sNswOle =
 };
 
 // libretro Visual Boy Advance color.
+[[gnu::section(".ewram")]]
 static const ColorProfile sVbaEmu =
 {
     {
@@ -114,6 +123,7 @@ static const ColorProfile sVbaEmu =
 };
 
 // libretro No$GBA full color.
+[[gnu::section(".ewram")]]
 static const ColorProfile sNoCash =
 {
     {
@@ -125,6 +135,7 @@ static const ColorProfile sNoCash =
 };
 
 // libretro mGBA GBA shader color.
+[[gnu::section(".ewram")]]
 static const ColorProfile sMgba01 =
 {
     {
@@ -136,6 +147,7 @@ static const ColorProfile sMgba01 =
 };
 
 // This should exactly match "Application/Settings/Enums/GbaColorCorrection.h" if updated
+[[gnu::section(".ewram")]]
 static const ColorProfile* const sColorProfileLut[] =
 {
     /* GbaColorCorrection::None     */ nullptr,

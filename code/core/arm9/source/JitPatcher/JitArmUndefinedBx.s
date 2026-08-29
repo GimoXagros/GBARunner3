@@ -26,8 +26,9 @@ ensureJittedCommonHiReg:
     ldr r8, [sp, #-4]
 
 ensureJittedCommon:
-    cmp r8, #ROM_LINEAR_GBA_ADDRESS
-        addhs r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
+    sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
+    cmp r9, #ROM_LINEAR_SIZE
+        addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
 
     ldr r10, [r12, #(vm_undefinedSpsr - vm_armUndefinedDispatchTable)]
     tst r8, #1
@@ -59,11 +60,15 @@ ensureJittedStaticRom:
     b 1b
 
 ensureJittedIWram:
-    mov lr, r11, lsr #24
-    cmp lr, #2
-        moveq lr, #0
-        mcreq p15, 0, lr, c7, c10, 4
-        mcreq p15, 0, lr, c7, c5, 0
+    // Executing below IWRAM means the source was EWRAM or relocated ROM.
+    // A direct compare saves one ITCM instruction over extracting the top byte.
+    cmp r11, #0x03000000
+        movlo lr, #0
+        mcrlo p15, 0, lr, c7, c10, 4
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+        mcrlo p15, 0, lr, c6, c4, 0 // disable mpu region
+#endif
+        mcrlo p15, 0, lr, c7, c5, 0
 
     ldr r11,= (gJitState + 0x20000) // iWramJitBits
     mov r9, r8, lsl #17

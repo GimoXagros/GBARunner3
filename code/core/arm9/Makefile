@@ -44,6 +44,7 @@ SOURCES		:=	source \
 				source/Peripherals \
 				source/Peripherals/Graphics \
 				source/Peripherals/Interrupts \
+				source/Peripherals/RomGpio \
 				source/Peripherals/Sound \
 				source/Save \
 				source/SdCache \
@@ -57,7 +58,7 @@ INCLUDES	:=	include source ../common ../../libs/mini-printf
 # options for code generation
 #---------------------------------------------------------------------------------
 ARCH	:=	-marm -mthumb-interwork -march=armv5te -mtune=arm946e-s \
-			-DLIBTWL_ARM9 -DARM9 #-DGBAR3_IRQ_YIELDING
+			-DLIBTWL_ARM9 -DARM9 -DGBAR3_HICODE_CACHE_MAPPING #-DGBAR3_IRQ_YIELDING
 
 CFLAGS	:=	-g -Wall -O2\
 			 -fomit-frame-pointer\

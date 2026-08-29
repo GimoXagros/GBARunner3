@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MemoryEmulator/RomDefs.h"
+
 typedef struct
 {
     /// @brief Stores for each halfword in the statically loaded part of the rom
@@ -41,6 +43,35 @@ typedef struct
 
 extern jit_state_t gJitState;
 
+/// @brief Resolves a PC-relative ARM branch target calculated from the relocated
+///        linear ROM window back to its GBA address when it leaves that window.
+/// @param instructionPtr Address of the branch instruction as executed on ARM9.
+/// @param targetPtr Target calculated using the relocated ARM9 program counter.
+/// @return An address suitable for execution by the VM.
+static inline u32 jit_resolveArmBranchTargetAddress(u32 instructionPtr, u32 targetPtr)
+{
+    if (instructionPtr >= ROM_LINEAR_DS_ADDRESS && instructionPtr < ROM_LINEAR_END_DS_ADDRESS &&
+        (targetPtr < ROM_LINEAR_DS_ADDRESS || targetPtr >= ROM_LINEAR_END_DS_ADDRESS))
+    {
+        return targetPtr + ROM_LINEAR_GBA_ADDRESS - ROM_LINEAR_DS_ADDRESS;
+    }
+
+    return targetPtr;
+}
+
+/// @brief Recreates the ARM B/BL target from the original instruction while
+///        preserving the GBA PC+8 rule across the relocated linear ROM edge.
+/// @param instructionPtr Address of the instruction in ARM9 executable space.
+/// @param instruction Original ARM B/BL instruction.
+/// @return Target in ARM9 executable space. High ROM remains at its GBA virtual
+///         address and is made executable by the hicode instruction-cache map.
+static inline u32 jit_calculateArmBranchTargetAddress(u32 instructionPtr, u32 instruction)
+{
+    const s32 offset = (s32)(instruction << 8) >> 6;
+    const u32 undefinedPc = instructionPtr + 4;
+    return jit_resolveArmBranchTargetAddress(undefinedPc, undefinedPc + offset + 4);
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -77,12 +108,21 @@ void* jit_findBlockStart(const void* ptr);
 void* jit_findBlockEnd(const void* ptr);
 
 bool jit_isBlockJitted(void* ptr);
-void jit_ensureBlockJitted(void* ptr);
+/// @brief JIT-processes the block containing ptr and returns the address that
+///        the ARM9 must execute. Static ROM is already relocated by callers;
+///        high ROM remains a GBA virtual address backed by the hicode map.
+void* jit_ensureBlockJitted(void* ptr);
+
+u32 jit_calculateArmBranchTarget(u32 undefinedPc, u32 instruction);
 
 /// @brief Initializes the JIT patcher.
 void jit_init(void);
 
 void jit_disable(void);
+
+/// @brief Resets the JIT metadata associated with a reused SD cache block.
+/// @param cacheBlock A pointer to the first byte of an SD cache block.
+void jit_resetDynamicRomBlock(void* cacheBlock);
 
 #ifdef __cplusplus
 }

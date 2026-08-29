@@ -44,11 +44,16 @@ emu_vblankIrqSkipSaveCheckInstruction:
     mcr p15, 0, r13, c7, c6, 1 // invalidate range
     ldrb lr, [r13]
     cmp lr, #3 // GBA_SAVE_STATE_WRITE
-    bne emu_vblankIrqReturn
+    beq writePendingFiles
+    ldr r13,= gRomGpioRtcStateDirty
+    ldrb lr, [r13]
+    cmp lr, #0
+    beq emu_vblankIrqReturn
 
+writePendingFiles:
     ldr sp,= dtcmIrqStackEnd
     push {r0-r3,r12}
-    bl sav_writeSaveToFile
+    bl sav_writePendingFiles
     pop {r0-r3,r12}
     b emu_vblankIrqReturn
 #endif

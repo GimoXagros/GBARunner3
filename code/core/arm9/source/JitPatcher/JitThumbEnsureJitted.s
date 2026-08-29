@@ -9,8 +9,9 @@ arm_func jit_thumbEnsureJittedHiReg
     ldr r8, [sp, #-4]
 
 arm_func jit_thumbEnsureJitted
-    cmp r8, #ROM_LINEAR_GBA_ADDRESS
-        addhs r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
+    sub lr, r8, #ROM_LINEAR_GBA_ADDRESS
+    cmp lr, #ROM_LINEAR_SIZE
+        addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
     sub lr, r8, #ROM_LINEAR_DS_ADDRESS
     cmp lr, #ROM_LINEAR_SIZE
     bhs 1f
@@ -37,6 +38,9 @@ arm_func jit_thumbEnsureJitted
     cmp lr, #2
         moveq lr, #0
         mcreq p15, 0, lr, c7, c10, 4
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+        mcreq p15, 0, lr, c6, c4, 0 // disable mpu region
+#endif
         mcreq p15, 0, lr, c7, c5, 0
 
     push {r0-r3}

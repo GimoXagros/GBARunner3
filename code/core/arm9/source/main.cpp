@@ -11,6 +11,7 @@
 #include <libtwl/gfx/gfxStatus.h>
 #include <libtwl/rtos/rtosIrq.h>
 #include <array>
+#include <memory>
 #include <string.h>
 #include "cp15.h"
 #include "Fat/ff.h"
@@ -44,12 +45,17 @@
 #include "Emulator/BootAnimationSkip.h"
 #include "MemoryEmulator/Arm/ArmDispatchTable.h"
 #include "VirtualMachine/VMUndefinedArmTable.h"
+#include "MemoryEmulator/HiCodeCacheMapping.h"
+#include "VirtualMachine/VMNestedIrq.h"
 #include "arm9Clock.h"
+#include "Peripherals/RomGpio/RomGpio.h"
 
 #define DEFAULT_ROM_FILE_PATH           "/rom.gba"
 #define BIOS_FILE_PATH                  "/_gba/bios.bin"
 #define SETTINGS_FILE_PATH              "/_gba/gbarunner3.json"
 #define GAME_SETTINGS_FILE_PATH_FORMAT  "/_gba/configs/%c%c%c%c%02X.json"
+
+#define BOOT_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
 
 [[gnu::section(".ewram.bss")]]
 FATFS gFatFs;
@@ -77,7 +83,7 @@ static NullLogger sNullLogger;
 ILogger* gLogger;
 static SplashScreen* sSplashScreen;
 
-static void setupLogger()
+BOOT_EWRAM static void setupLogger()
 {
     if (Environment::IsIsNitroEmulator())
         gLogger = &sPlainLogger;
@@ -85,7 +91,7 @@ static void setupLogger()
         gLogger = &sNullLogger;
 }
 
-static bool mountDldi()
+BOOT_EWRAM static bool mountDldi()
 {
     FRESULT res = f_mount(&gFatFs, "fat:", 1);
     if (res != FR_OK)
@@ -97,7 +103,7 @@ static bool mountDldi()
     return true;
 }
 
-static bool mountDsiSd()
+BOOT_EWRAM static bool mountDsiSd()
 {
     FRESULT res = f_mount(&gFatFs, "sd:", 1);
     if (res != FR_OK)
@@ -109,7 +115,7 @@ static bool mountDsiSd()
     return true;
 }
 
-static bool mountAgbSemihosting()
+BOOT_EWRAM static bool mountAgbSemihosting()
 {
     FRESULT res = f_mount(&gFatFs, "pc:", 1);
     if (res != FR_OK)
@@ -121,7 +127,7 @@ static bool mountAgbSemihosting()
     return true;
 }
 
-static void loadGbaBios()
+BOOT_EWRAM static void loadGbaBios()
 {
     memset(&gFile, 0, sizeof(gFile));
     f_open(&gFile, BIOS_FILE_PATH, FA_OPEN_EXISTING | FA_READ);
@@ -144,7 +150,7 @@ static constexpr auto sBiosRelocations = std::to_array<u16>
     0x3998, 0x399C, 0x39C4, 0x39C8, 0x39CC
 });
 
-static void relocateGbaBios()
+BOOT_EWRAM static void relocateGbaBios()
 {
     const u32 base = (u32)gGbaBios;
     //swi table
@@ -157,7 +163,7 @@ static void relocateGbaBios()
         gGbaBios[address >> 2] += base;
 }
 
-static void applyBiosVmPatches()
+BOOT_EWRAM static void applyBiosVmPatches()
 {
     gGbaBios[0x0024 >> 2] = 0xE1E0009C; // mrs r12, spsr
     gGbaBios[0x0028 >> 2] = 0xE1A0009E; // mrs lr, cpsr
@@ -181,13 +187,13 @@ static void applyBiosVmPatches()
     gGbaBios[0x0388 >> 2] = 0xE189009C; // msr cpsr_cf, r12
 }
 
-static void applyBiosJitPatches()
+BOOT_EWRAM static void applyBiosJitPatches()
 {
     gGbaBios[0x00DC >> 2] = 0xE1B0009E; // bx lr (jump to rom)
     gGbaBios[0x0134 >> 2] = 0xEE800090; // ldr pc, [r0, #-4] (jump to irq handler)
 }
 
-static void loadGbaRom(const char* romPath)
+BOOT_EWRAM static void loadGbaRom(const char* romPath)
 {
     UINT br;
     memset(&gFile, 0, sizeof(gFile));
@@ -204,7 +210,7 @@ static void loadGbaRom(const char* romPath)
     }
 }
 
-static void disableSramReads(void)
+BOOT_EWRAM static void disableSramReads(void)
 {
     memu_setLoad8Handler(0xE, memu_load8Undefined);
     memu_setLoad8Handler(0xF, memu_load8Undefined);
@@ -214,7 +220,7 @@ static void disableSramReads(void)
     memu_setLoad32Handler(0xF, memu_load32Undefined);
 }
 
-static void disableSramWrites(void)
+BOOT_EWRAM static void disableSramWrites(void)
 {
     memu_setStore8Handler(0xE, memu_store8Undefined);
     memu_setStore8Handler(0xF, memu_store8Undefined);
@@ -224,7 +230,7 @@ static void disableSramWrites(void)
     memu_setStore32Handler(0xF, memu_store32Undefined);
 }
 
-static void handleSave(const char* savePath)
+BOOT_EWRAM static void handleSave(const char* savePath)
 {
     const auto& gameSettings = gAppSettingsService.GetAppSettings().gameSettings;
     if (gameSettings.saveType == GbaSaveType::None)
@@ -260,7 +266,29 @@ static void handleSave(const char* savePath)
         }
     }
 
-    sav_initializeSave(saveTypeInfo, savePath);
+    if (!sav_initializeSave(saveTypeInfo, savePath))
+    {
+        gLogger->Log(LogLevel::Error, "Failed to open or create save file: %s\n", savePath);
+    }
+}
+
+BOOT_EWRAM
+static std::unique_ptr<char[]> createSidecarPath(const char* romPath, const char* newExtension)
+{
+    const size_t romPathLength = strlen(romPath);
+    const size_t extensionLength = strlen(newExtension);
+    auto resultPath = std::make_unique<char[]>(romPathLength + extensionLength + 1);
+    memcpy(resultPath.get(), romPath, romPathLength + 1);
+
+    char* fileName = strrchr(resultPath.get(), '/');
+    fileName = fileName ? fileName + 1 : resultPath.get();
+    char* backslash = strrchr(fileName, '\\');
+    if (backslash)
+        fileName = backslash + 1;
+
+    char* extension = strrchr(fileName, '.');
+    strcpy(extension ? extension : resultPath.get() + romPathLength, newExtension);
+    return resultPath;
 }
 
 extern "C" void logAddress(u32 address)
@@ -268,7 +296,7 @@ extern "C" void logAddress(u32 address)
     gLogger->Log(LogLevel::Trace, "0x%X\n", address);
 }
 
-static bool shouldMountDsiSd(int argc, char* argv[])
+BOOT_EWRAM static bool shouldMountDsiSd(int argc, char* argv[])
 {
     if (!Environment::IsDsiMode())
         return false;
@@ -282,7 +310,7 @@ static bool shouldMountDsiSd(int argc, char* argv[])
     return true;
 }
 
-static void applyGameJitPatches()
+BOOT_EWRAM static void applyGameJitPatches()
 {
     gLogger->Log(LogLevel::Debug, "Applying game JIT patches...\n");
 
@@ -303,7 +331,7 @@ static void applyGameJitPatches()
     }
 }
 
-static void setupJit()
+BOOT_EWRAM static void setupJit()
 {
     jit_init();
 
@@ -369,7 +397,7 @@ static void setupArm9Clock()
     }
 }
 
-static void loadGameSpecificSettings()
+BOOT_EWRAM static void loadGameSpecificSettings()
 {
     auto path = std::make_unique<char[]>(128);
     mini_snprintf(path.get(), 128, GAME_SETTINGS_FILE_PATH_FORMAT,
@@ -393,7 +421,7 @@ static void splashScreenIrqHandler()
     }
 }
 
-static void startSplashScreenAnimation()
+BOOT_EWRAM static void startSplashScreenAnimation()
 {
     REG_IME = 0;
     rtos_setIrqMask(0);
@@ -409,7 +437,7 @@ static void startSplashScreenAnimation()
     arm_enableIrqs();
 }
 
-static void waitSplashScreenAnimation()
+BOOT_EWRAM static void waitSplashScreenAnimation()
 {
     while (!sSplashScreen->IsFinished())
     {
@@ -417,7 +445,7 @@ static void waitSplashScreenAnimation()
     }
 }
 
-static void stopSplashScreenAnimation()
+BOOT_EWRAM static void stopSplashScreenAnimation()
 {
     arm_disableIrqs();
     REG_IME = 0;
@@ -429,6 +457,8 @@ static void stopSplashScreenAnimation()
     *(vu32*)0x0100001C = 0xEAFFFFFE; // b .
 }
 
+extern u32 hicodeUndefinedData[];
+
 extern "C" void gbaRunnerMain(int argc, char* argv[])
 {
     heap_init();
@@ -436,6 +466,8 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     REG_DISPCNT = 0x10000;
     REG_DISPCNT_SUB = 0x10000;
     GFX_PLTT_BG_SUB[0] = 0;
+
+    vm_nestedIrqLevel = 1; // prevent enabling nested irqs during initialization
 
     sSplashScreen = new SplashScreen();
     sSplashScreen->Initialize();
@@ -483,16 +515,23 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     applyBiosVmPatches();
     const char* romPath = argc > 1 ? argv[1] : DEFAULT_ROM_FILE_PATH;
     loadGbaRom(romPath);
-    char* romExtension = strrchr(romPath, '.');
-    if (romExtension)
+    auto savePath = createSidecarPath(romPath, ".sav");
+    auto rtcStatePath = createSidecarPath(romPath, ".g3rtc");
+    auto rtcTempPath = createSidecarPath(romPath, ".g3rtc.tmp");
+    auto rtcBackupPath = createSidecarPath(romPath, ".g3rtc.bak");
+    const RtcPersistence::Identity rtcIdentity
     {
-        romExtension[1] = 's';
-        romExtension[2] = 'a';
-        romExtension[3] = 'v';
-        romExtension[4] = '\0';
-    }
+        gRomHeader.gameCode,
+        static_cast<u32>(f_size(&gFile)),
+        RtcPersistence::CalculateFnv1a(&gRomHeader, sizeof(gRomHeader))
+    };
     loadGameSpecificSettings();
-    handleSave(romPath);
+    sav_initializeFileWriteScheduler();
+    handleSave(savePath.get());
+    // Keep all RTC filesystem I/O in the ordinary boot/save phase. Late GPIO
+    // initialization only attaches the already-restored RTC to ROM registers.
+    gRomGpio.LoadRtcState(
+        rtcStatePath.get(), rtcTempPath.get(), rtcBackupPath.get(), rtcIdentity);
     SelfModifyingPatches().ApplyPatches(gAppSettingsService.GetAppSettings().runSettings);
 
     waitSplashScreenAnimation();
@@ -519,6 +558,7 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     setupJit();
     dma_init();
     gbas_init();
+    gRomGpio.Initialize((rio_registers_t*)sdc_loadRomBlockForPatching(RIO_GBA_ADDRESS));
     dc_flushRange((void*)ROM_LINEAR_DS_ADDRESS, ROM_LINEAR_SIZE);
     dc_flushRange(gGbaBios, sizeof(gGbaBios));
     ic_invalidateAll();
@@ -528,6 +568,8 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     setupEWramDataCache();
     setupArm9Clock();
 
+    hic_initialize();
+    vm_nestedIrqLevel = 0;  // restore nested irq level
     rtos_setIrqMask(RTOS_IRQ_VBLANK);
     rtos_ackIrqMask(~0u);
     REG_IME = 1;
