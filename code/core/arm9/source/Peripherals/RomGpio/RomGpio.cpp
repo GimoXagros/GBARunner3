@@ -3,7 +3,7 @@
 #include "RomGpio.h"
 
 RomGpio gRomGpio;
-static RomGpioRtc sRomGpioRtc;
+[[gnu::section(".ewram.bss")]] static RomGpioRtc sRomGpioRtc;
 
 void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
 {
