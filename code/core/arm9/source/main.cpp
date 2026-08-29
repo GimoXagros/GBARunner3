@@ -83,7 +83,7 @@ static NullLogger sNullLogger;
 ILogger* gLogger;
 static SplashScreen* sSplashScreen;
 
-static void setupLogger()
+BOOT_EWRAM static void setupLogger()
 {
     if (Environment::IsIsNitroEmulator())
         gLogger = &sPlainLogger;
@@ -91,7 +91,7 @@ static void setupLogger()
         gLogger = &sNullLogger;
 }
 
-static bool mountDldi()
+BOOT_EWRAM static bool mountDldi()
 {
     FRESULT res = f_mount(&gFatFs, "fat:", 1);
     if (res != FR_OK)
@@ -103,7 +103,7 @@ static bool mountDldi()
     return true;
 }
 
-static bool mountDsiSd()
+BOOT_EWRAM static bool mountDsiSd()
 {
     FRESULT res = f_mount(&gFatFs, "sd:", 1);
     if (res != FR_OK)
@@ -115,7 +115,7 @@ static bool mountDsiSd()
     return true;
 }
 
-static bool mountAgbSemihosting()
+BOOT_EWRAM static bool mountAgbSemihosting()
 {
     FRESULT res = f_mount(&gFatFs, "pc:", 1);
     if (res != FR_OK)
@@ -296,7 +296,7 @@ extern "C" void logAddress(u32 address)
     gLogger->Log(LogLevel::Trace, "0x%X\n", address);
 }
 
-static bool shouldMountDsiSd(int argc, char* argv[])
+BOOT_EWRAM static bool shouldMountDsiSd(int argc, char* argv[])
 {
     if (!Environment::IsDsiMode())
         return false;
@@ -310,7 +310,7 @@ static bool shouldMountDsiSd(int argc, char* argv[])
     return true;
 }
 
-static void applyGameJitPatches()
+BOOT_EWRAM static void applyGameJitPatches()
 {
     gLogger->Log(LogLevel::Debug, "Applying game JIT patches...\n");
 
@@ -331,7 +331,7 @@ static void applyGameJitPatches()
     }
 }
 
-static void setupJit()
+BOOT_EWRAM static void setupJit()
 {
     jit_init();
 
@@ -397,7 +397,7 @@ static void setupArm9Clock()
     }
 }
 
-static void loadGameSpecificSettings()
+BOOT_EWRAM static void loadGameSpecificSettings()
 {
     auto path = std::make_unique<char[]>(128);
     mini_snprintf(path.get(), 128, GAME_SETTINGS_FILE_PATH_FORMAT,
@@ -421,7 +421,7 @@ static void splashScreenIrqHandler()
     }
 }
 
-static void startSplashScreenAnimation()
+BOOT_EWRAM static void startSplashScreenAnimation()
 {
     REG_IME = 0;
     rtos_setIrqMask(0);
@@ -437,7 +437,7 @@ static void startSplashScreenAnimation()
     arm_enableIrqs();
 }
 
-static void waitSplashScreenAnimation()
+BOOT_EWRAM static void waitSplashScreenAnimation()
 {
     while (!sSplashScreen->IsFinished())
     {
@@ -445,7 +445,7 @@ static void waitSplashScreenAnimation()
     }
 }
 
-static void stopSplashScreenAnimation()
+BOOT_EWRAM static void stopSplashScreenAnimation()
 {
     arm_disableIrqs();
     REG_IME = 0;
