@@ -269,7 +269,7 @@ extern "C" void sav_writeSaveToFile(void)
     emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
 }
 
-[[gnu::section(".ewram")]] extern "C" void sav_writePendingFiles(void)
+[[gnu::section(".ewram")]] void sav_writePendingFiles(void)
 {
     if (gGbaSaveShared.saveState == GBA_SAVE_STATE_WRITE)
     {
