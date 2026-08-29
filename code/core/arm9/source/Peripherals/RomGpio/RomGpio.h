@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RtcPersistence.h"
+
 #define RIO_GBA_ADDRESS             0x080000C4
 
 #define RIO_PIN_MASK                0xF
@@ -19,8 +21,14 @@ class RomGpio
 {
 public:
     void Initialize(rio_registers_t* romGpioRegisters);
+    void LoadRtcState(
+        const char* statePath,
+        const char* tempPath,
+        const char* backupPath,
+        const RtcPersistence::Identity& identity);
     void Reset();
     void UpdateRomRegisters();
+    bool FlushRtcStateIfDirty();
 
     void WriteDataRegister(u16 value)
     {
@@ -86,3 +94,4 @@ private:
 };
 
 extern RomGpio gRomGpio;
+extern volatile u8 gRomGpioRtcStateDirty;

@@ -270,21 +270,22 @@ static void handleSave(const char* savePath)
     }
 }
 
-static std::unique_ptr<char[]> createSavePath(const char* romPath)
+static std::unique_ptr<char[]> createSidecarPath(const char* romPath, const char* newExtension)
 {
     const size_t romPathLength = strlen(romPath);
-    auto savePath = std::make_unique<char[]>(romPathLength + 5);
-    memcpy(savePath.get(), romPath, romPathLength + 1);
+    const size_t extensionLength = strlen(newExtension);
+    auto resultPath = std::make_unique<char[]>(romPathLength + extensionLength + 1);
+    memcpy(resultPath.get(), romPath, romPathLength + 1);
 
-    char* fileName = strrchr(savePath.get(), '/');
-    fileName = fileName ? fileName + 1 : savePath.get();
+    char* fileName = strrchr(resultPath.get(), '/');
+    fileName = fileName ? fileName + 1 : resultPath.get();
     char* backslash = strrchr(fileName, '\\');
     if (backslash)
         fileName = backslash + 1;
 
     char* extension = strrchr(fileName, '.');
-    strcpy(extension ? extension : savePath.get() + romPathLength, ".sav");
-    return savePath;
+    strcpy(extension ? extension : resultPath.get() + romPathLength, newExtension);
+    return resultPath;
 }
 
 extern "C" void logAddress(u32 address)
@@ -511,9 +512,23 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     applyBiosVmPatches();
     const char* romPath = argc > 1 ? argv[1] : DEFAULT_ROM_FILE_PATH;
     loadGbaRom(romPath);
-    auto savePath = createSavePath(romPath);
+    auto savePath = createSidecarPath(romPath, ".sav");
+    auto rtcStatePath = createSidecarPath(romPath, ".g3rtc");
+    auto rtcTempPath = createSidecarPath(romPath, ".g3rtc.tmp");
+    auto rtcBackupPath = createSidecarPath(romPath, ".g3rtc.bak");
+    const RtcPersistence::Identity rtcIdentity
+    {
+        gRomHeader.gameCode,
+        static_cast<u32>(f_size(&gFile)),
+        RtcPersistence::CalculateFnv1a(&gRomHeader, sizeof(gRomHeader))
+    };
     loadGameSpecificSettings();
+    sav_initializeFileWriteScheduler();
     handleSave(savePath.get());
+    // Keep all RTC filesystem I/O in the ordinary boot/save phase. Late GPIO
+    // initialization only attaches the already-restored RTC to ROM registers.
+    gRomGpio.LoadRtcState(
+        rtcStatePath.get(), rtcTempPath.get(), rtcBackupPath.get(), rtcIdentity);
     SelfModifyingPatches().ApplyPatches(gAppSettingsService.GetAppSettings().runSettings);
 
     waitSplashScreenAnimation();

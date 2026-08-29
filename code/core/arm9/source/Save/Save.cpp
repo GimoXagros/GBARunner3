@@ -8,6 +8,8 @@
 #include "MemFastSearch.h"
 #include "SaveSwi.h"
 #include "SaveTypeInfo.h"
+#include "cp15.h"
+#include "Peripherals/RomGpio/RomGpio.h"
 #include "VirtualMachine/VMNestedIrq.h"
 #include "MemoryEmulator/RomDefs.h"
 #include "SdCache/SdCache.h"
@@ -28,6 +30,17 @@ gba_save_shared_t gGbaSaveShared;
 
 static DWORD sClusterTable[64];
 static u32 sSkipSaveCheckInstruction;
+
+void sav_initializeFileWriteScheduler(void)
+{
+    sSkipSaveCheckInstruction = emu_vblankIrqSkipSaveCheckInstruction;
+}
+
+[[gnu::section(".ewram")]] void sav_requestFileWrite(void)
+{
+    dc_drainWriteBuffer();
+    emu_vblankIrqSkipSaveCheckInstruction = 0xE1A00000; // nop
+}
 
 // temporarily
 extern FIL gFile;
@@ -254,4 +267,22 @@ extern "C" void sav_writeSaveToFile(void)
 
     gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
     emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
+}
+
+[[gnu::section(".ewram")]] extern "C" void sav_writePendingFiles(void)
+{
+    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_WRITE)
+    {
+        sav_writeSaveToFile();
+    }
+
+    const bool rtcStateIsClean = gRomGpio.FlushRtcStateIfDirty();
+    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN && rtcStateIsClean)
+    {
+        emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
+    }
+    else
+    {
+        sav_requestFileWrite();
+    }
 }

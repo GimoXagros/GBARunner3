@@ -12,6 +12,20 @@ void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
     Reset();
 }
 
+void RomGpio::LoadRtcState(
+    const char* statePath,
+    const char* tempPath,
+    const char* backupPath,
+    const RtcPersistence::Identity& identity)
+{
+    sRomGpioRtc.Initialize(statePath, tempPath, backupPath, identity);
+}
+
+bool RomGpio::FlushRtcStateIfDirty()
+{
+    return sRomGpioRtc.FlushStateIfDirty();
+}
+
 void RomGpio::Reset()
 {
     _inputData = 0;
