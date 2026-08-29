@@ -8,6 +8,8 @@
 
 #pragma GCC optimize("Os")
 
+#define JSON_SETTINGS_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
+
 #define KEY_DISPLAY_SETTINGS                        "displaySettings"
 #define KEY_DISPLAY_SETTINGS_GBA_SCREEN             "gbaScreen"
 #define KEY_DISPLAY_SETTINGS_GBA_COLOR_CORRECTION   "gbaColorCorrection"
@@ -57,7 +59,7 @@
 #define ENUM_STRING_GBA_SAVE_TYPE_AUTO              "auto"
 #define ENUM_STRING_GBA_SAVE_TYPE_NONE              "none"
 
-static bool tryParseGbaScreen(const char* gbaScreenString, GbaScreen& gbaScreen)
+JSON_SETTINGS_EWRAM static bool tryParseGbaScreen(const char* gbaScreenString, GbaScreen& gbaScreen)
 {
     if (!gbaScreenString)
         return false;
@@ -72,7 +74,7 @@ static bool tryParseGbaScreen(const char* gbaScreenString, GbaScreen& gbaScreen)
     return true;
 }
 
-static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, GbaColorCorrection& gbaColorCorrection)
+JSON_SETTINGS_EWRAM static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, GbaColorCorrection& gbaColorCorrection)
 {
     if (!gbaColorCorrectionString)
         return false;
@@ -107,7 +109,7 @@ static bool tryParseGbaColorCorrection(const char* gbaColorCorrectionString, Gba
     return true;
 }
 
-static bool tryParseGbaBorderImage(const char* gbaBorderImageString, GbaBorderImage& gbaBorderImage)
+JSON_SETTINGS_EWRAM static bool tryParseGbaBorderImage(const char* gbaBorderImageString, GbaBorderImage& gbaBorderImage)
 {
     if (!gbaBorderImageString)
         return false;
@@ -124,7 +126,7 @@ static bool tryParseGbaBorderImage(const char* gbaBorderImageString, GbaBorderIm
     return true;
 }
 
-static bool tryParseGbaSaveType(const char* gbaSaveTypeString, GbaSaveType& gbaSaveType)
+JSON_SETTINGS_EWRAM static bool tryParseGbaSaveType(const char* gbaSaveTypeString, GbaSaveType& gbaSaveType)
 {
     if (!gbaSaveTypeString)
         return false;
@@ -139,12 +141,12 @@ static bool tryParseGbaSaveType(const char* gbaSaveTypeString, GbaSaveType& gbaS
     return true;
 }
 
-static void readBoolSetting(const JsonVariantConst& jsonValue, bool16& setting)
+JSON_SETTINGS_EWRAM static void readBoolSetting(const JsonVariantConst& jsonValue, bool16& setting)
 {
     setting = jsonValue | static_cast<bool>(setting);
 }
 
-static void readDisplaySettings(const JsonObjectConst& json, DisplaySettings& displaySettings)
+JSON_SETTINGS_EWRAM static void readDisplaySettings(const JsonObjectConst& json, DisplaySettings& displaySettings)
 {
     if (json.isNull())
         return;
@@ -174,7 +176,7 @@ static void readDisplaySettings(const JsonObjectConst& json, DisplaySettings& di
     tryParseGbaBorderImage(json[KEY_DISPLAY_SETTINGS_BORDER_IMAGE], displaySettings.borderImage);
 }
 
-static u32 parseHexString(const char* hexString)
+JSON_SETTINGS_EWRAM static u32 parseHexString(const char* hexString)
 {
     if (hexString == nullptr || hexString[0] == 0)
     {
@@ -198,7 +200,7 @@ static u32 parseHexString(const char* hexString)
     return value;
 }
 
-static bool tryParseJitPatchAddresses(const JsonArrayConst& jitPatchAddresses, RunSettings& runSettings)
+JSON_SETTINGS_EWRAM static bool tryParseJitPatchAddresses(const JsonArrayConst& jitPatchAddresses, RunSettings& runSettings)
 {
     if (jitPatchAddresses.isNull())
         return false;
@@ -214,7 +216,7 @@ static bool tryParseJitPatchAddresses(const JsonArrayConst& jitPatchAddresses, R
     return true;
 }
 
-static bool tryParseSelfModifyingPatchAddresses(const JsonArrayConst& selfModifyingPatchAddresses, RunSettings& runSettings)
+JSON_SETTINGS_EWRAM static bool tryParseSelfModifyingPatchAddresses(const JsonArrayConst& selfModifyingPatchAddresses, RunSettings& runSettings)
 {
     if (selfModifyingPatchAddresses.isNull())
         return false;
@@ -230,7 +232,7 @@ static bool tryParseSelfModifyingPatchAddresses(const JsonArrayConst& selfModify
     return true;
 }
 
-static void readRunSettings(const JsonObjectConst& json, RunSettings& runSettings)
+JSON_SETTINGS_EWRAM static void readRunSettings(const JsonObjectConst& json, RunSettings& runSettings)
 {
     if (json.isNull())
         return;
@@ -245,7 +247,7 @@ static void readRunSettings(const JsonObjectConst& json, RunSettings& runSetting
     readBoolSetting(json[KEY_RUN_SETTINGS_SKIP_BIOS_INTRO], runSettings.skipBiosIntro);
 }
 
-static void readGameSettings(const JsonObjectConst& json, GameSettings& gameSettings)
+JSON_SETTINGS_EWRAM static void readGameSettings(const JsonObjectConst& json, GameSettings& gameSettings)
 {
     if (json.isNull())
         return;
@@ -253,14 +255,14 @@ static void readGameSettings(const JsonObjectConst& json, GameSettings& gameSett
     tryParseGbaSaveType(json[KEY_GAME_SETTINGS_SAVE_TYPE], gameSettings.saveType);
 }
 
-static void readJson(const JsonDocument& json, AppSettings& appSettings)
+JSON_SETTINGS_EWRAM static void readJson(const JsonDocument& json, AppSettings& appSettings)
 {
     readDisplaySettings(json[KEY_DISPLAY_SETTINGS], appSettings.displaySettings);
     readRunSettings(json[KEY_RUN_SETTINGS], appSettings.runSettings);
     readGameSettings(json[KEY_GAME_SETTINGS], appSettings.gameSettings);
 }
 
-bool JsonAppSettingsSerializer::TryDeserialize(const TCHAR* filePath, AppSettings& appSettings)
+JSON_SETTINGS_EWRAM bool JsonAppSettingsSerializer::TryDeserialize(const TCHAR* filePath, AppSettings& appSettings)
 {
     if (_settingsFile.Open(filePath, FA_READ | FA_OPEN_EXISTING) != FR_OK)
         return false;
