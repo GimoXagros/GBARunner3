@@ -1,5 +1,7 @@
 # GBARunner3
 
+![GBARunner3 custom logo](logo.png)
+
 GBARunner3 runs Game Boy Advance software on Nintendo DS-family hardware by
 combining direct execution, instruction patching, and emulation of hardware that
 cannot be exposed directly. It is still under development: compatibility varies

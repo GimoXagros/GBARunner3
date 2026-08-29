@@ -20,6 +20,7 @@ endif
 GAME_TITLE     := GBARunner 3
 GAME_SUBTITLE1 := By Gericom
 GAME_SUBTITLE2 :=
+GAME_ICON      := icon.bmp
 
 include $(DEVKITARM)/ds_rules
 
@@ -44,7 +45,7 @@ checkarm9:
 	$(MAKE) -C arm9
 
 #---------------------------------------------------------------------------------
-$(TARGET).nds	: $(NITRO_FILES) ../core/arm7/$(TARGET).elf arm9/$(TARGET).elf
+$(TARGET).nds	: $(NITRO_FILES) ../core/arm7/$(TARGET).elf arm9/$(TARGET).elf $(GAME_ICON)
 	ndstool	-c $(TARGET).nds -7 ../core/arm7/$(TARGET).elf -9 arm9/$(TARGET).elf \
 	-b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)" \
 	$(_ADDFILES)
