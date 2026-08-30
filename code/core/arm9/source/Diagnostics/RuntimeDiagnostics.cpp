@@ -39,8 +39,8 @@ struct DiagnosticRecord
     u32 irqState;
     u32 hardwareIrqMask;
     u32 forcedIrqMask;
-    u32 dataAbortCount;
-    u32 prefetchAbortCount;
+    u32 hicodeBlock;
+    u32 hicodeBlockMask;
     u32 sramReadCount;
     u32 sramWriteCount;
     u32 lastSramAddress;
@@ -96,6 +96,7 @@ bool sDumpKeysWereDown;
 
 extern "C" u32 vm_irqSavedLR;
 extern "C" u32 memu_inst_addr;
+extern "C" u32 gHicodeState[2];
 
 DIAG_EWRAM u16 read16(u32 offset)
 {
@@ -181,8 +182,6 @@ DIAG_EWRAM void dumpRing()
 
 extern "C"
 {
-volatile u32 gDiagDataAbortCount = 0;
-volatile u32 gDiagPrefetchAbortCount = 0;
 volatile DiagnosticSramState gDiagSramState = {};
 }
 
@@ -218,10 +217,10 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     record.irqState = vm_emulatedIfImeIe;
     record.hardwareIrqMask = vm_hwIrqMask;
     record.forcedIrqMask = vm_forcedIrqMask;
-    record.dataAbortCount = gDiagDataAbortCount;
-    record.prefetchAbortCount = gDiagPrefetchAbortCount;
-    record.sramReadCount = gDiagSramState.readCount;
-    record.sramWriteCount = gDiagSramState.writeCount;
+    record.hicodeBlock = gHicodeState[0];
+    record.hicodeBlockMask = gHicodeState[1];
+    record.sramReadCount = gDiagSramState.lastReadAddress != 0;
+    record.sramWriteCount = gDiagSramState.lastWriteAddress != 0;
     record.lastSramAddress = gDiagSramState.lastWriteAddress != 0
         ? gDiagSramState.lastWriteAddress : gDiagSramState.lastReadAddress;
     record.lastSramValue = gDiagSramState.lastWriteValue;

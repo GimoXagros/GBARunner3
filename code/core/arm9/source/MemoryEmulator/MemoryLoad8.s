@@ -109,9 +109,6 @@ memu_load8RomHiContinue:
 arm_func memu_load8Sram
 #ifdef GBAR3_RUNTIME_DIAGNOSTICS
     ldr r10,= gDiagSramState
-    ldr r11, [r10]
-    add r11, r11, #1
-    str r11, [r10]
     str r8, [r10, #8]
 #endif
     ldr r10,= gSaveData

@@ -63,7 +63,7 @@ def main() -> int:
 
     columns = [
         "sample", "irq_pc", "emulated_pc", "cpsr", "irq_state", "hw_irq_mask", "forced_irq_mask",
-        "data_aborts", "prefetch_aborts", "sram_reads", "sram_writes",
+        "hicode_block", "hicode_block_mask", "sram_read_seen", "sram_write_seen",
         "last_sram_address", "last_sram_value", "dma_starts", "last_dma_channel",
         "dma_flags", "sd_forbidden_range",
         "dispcnt", "dispstat", "vcount", "bg0cnt", "bg1cnt", "bg2cnt", "bg3cnt",

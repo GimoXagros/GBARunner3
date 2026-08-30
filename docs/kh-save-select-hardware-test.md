@@ -29,7 +29,8 @@ variant directories.
 3. Press `L + R + Select` together once, then wait another five seconds.
 4. Power down normally and copy the `.g3diag` file beside the ROM back to the
    developer. The file contains the last 256 VBlank samples (about four
-   seconds) and register/counter state only. It contains no ROM, BIOS, VRAM,
+   seconds), register state, DMA event counts, and the last observed byte-wide
+   SRAM access addresses. It contains no ROM, BIOS, VRAM,
    or save payload.
 
 Decode it with:

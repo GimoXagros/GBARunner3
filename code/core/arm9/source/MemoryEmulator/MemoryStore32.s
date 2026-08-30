@@ -139,14 +139,6 @@ arm_func memu_store32Rom
     bx lr
 
 arm_func memu_store32Sram
-#ifdef GBAR3_RUNTIME_DIAGNOSTICS
-    ldr r10,= gDiagSramState
-    ldr r11, [r10, #12]
-    add r11, r11, #1
-    str r11, [r10, #12]
-    str r8, [r10, #16]
-    str r9, [r10, #20]
-#endif
     tst r8, #3
         bxne lr
     ldr r10,= gSaveData

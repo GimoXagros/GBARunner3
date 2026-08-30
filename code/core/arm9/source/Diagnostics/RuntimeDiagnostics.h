@@ -7,9 +7,6 @@
 extern "C" {
 #endif
 
-extern volatile u32 gDiagDataAbortCount;
-extern volatile u32 gDiagPrefetchAbortCount;
-
 typedef struct
 {
     u32 readCount;
