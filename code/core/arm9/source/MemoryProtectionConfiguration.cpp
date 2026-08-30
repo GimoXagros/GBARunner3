@@ -20,9 +20,15 @@ extern "C" void setupMemoryProtection()
 
     // mpu region 2: GBA VRAM
     MemoryProtectionRegionBuilder(0x06000000, MPU_REGION_SIZE_8MB)
+#ifdef GBAR3_DIAG_DISABLE_BG_VRAM_ABORT
+        .WithDataAccessPermission(MPU_ACCESS_PERMISSION_READ_WRITE)
+#else
         .WithDataAccessPermission(MPU_ACCESS_PERMISSION_PRIV_READ_WRITE)
+#endif
         .WithInstructionAccessPermission(MPU_ACCESS_PERMISSION_PRIV_READ_WRITE)
+#ifndef GBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER
         .Bufferable()
+#endif
         .ApplyToRegion(MPU_REGION_2);
 
     // mpu region 3: Linear part of GBA rom

@@ -22,6 +22,12 @@ arm_func memu_thumbDispatch
 
 thumbDispatchContinue:
     msr cpsr_c, #0xD1 // switch to fiq mode
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    ldr r8,= gDiagDataAbortCount
+    ldr r9, [r8]
+    add r9, r9, #1
+    str r9, [r8]
+#endif
 
     orr r11, r0, r0, lsl #16
     mvn r9, #0x3000 // mask for dtcm mirroring; 0xFFFFCFFF

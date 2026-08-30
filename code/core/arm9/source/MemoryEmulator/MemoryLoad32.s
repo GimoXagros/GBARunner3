@@ -170,6 +170,13 @@ memu_load32RomHiContinue:
     b memu_load32RomContinue
 
 arm_func memu_load32Sram
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    ldr r10,= gDiagSramState
+    ldr r11, [r10]
+    add r11, r11, #1
+    str r11, [r10]
+    str r8, [r10, #8]
+#endif
     ldr r10,= gSaveData
     mov r11, r8, lsl #17
     ldrb r9, [r10, r11, lsr #17]

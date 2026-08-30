@@ -12,6 +12,9 @@
 #include "GbaDma.h"
 #include "MemoryEmulator/RomDefs.h"
 #include "DmaTransfer.h"
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+#include "Diagnostics/RuntimeDiagnostics.h"
+#endif
 
 DTCM_DATA dma_state_t dma_state;
 
@@ -273,6 +276,10 @@ ITCM_CODE void dma_immTransfer16(u32 src, u32 dst, u32 byteCount, int srcStep, i
         dma_immTransferSafe16BadSrc(dst, byteCount, dstStep);
         return;
     }
+#ifdef GBAR3_DIAG_FORCE_SAFE_DMA
+    dma_immTransferSafe16(src, dst, byteCount, srcStep, dstStep);
+    return;
+#endif
     u32 srcRegion = src >> 24;
     u32 srcEnd = src + byteCount;
     u32 srcEndRegion = srcEnd >> 24;
@@ -311,6 +318,10 @@ ITCM_CODE void dma_immTransfer32(u32 src, u32 dst, u32 byteCount, int srcStep, i
         dma_immTransferSafe32BadSrc(dst, byteCount, dstStep);
         return;
     }
+#ifdef GBAR3_DIAG_FORCE_SAFE_DMA
+    dma_immTransferSafe32(src, dst, byteCount, srcStep, dstStep);
+    return;
+#endif
     u32 srcRegion = src >> 24;
     u32 srcEnd = src + byteCount;
     u32 srcEndRegion = srcEnd >> 24;
@@ -522,6 +533,9 @@ ITCM_CODE static void dmaStartImmediate(int channel, GbaDmaChannel* dmaIoBase, u
 
 ITCM_CODE static void dmaStart(int channel, GbaDmaChannel* dmaIoBase, u32 control)
 {
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    diag_recordDmaStart(channel, dmaIoBase, control);
+#endif
     dmaIoBase->control = control & ~GBA_DMA_CONTROL_ENABLED;
     if (control & GBA_DMA_CONTROL_ROM_DREQ)
         return; // rom dreq

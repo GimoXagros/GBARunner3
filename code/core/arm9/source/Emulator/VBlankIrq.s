@@ -4,6 +4,13 @@
 #include "AsmMacros.inc"
 
 arm_func emu_vblankIrq
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    ldr sp,= dtcmIrqStackEnd
+    push {r0-r3,r12}
+    bl diag_sampleVBlank
+    pop {r0-r3,r12}
+    mov r13, #0x04000000 // restore the IRQ handler's scratch/base value
+#endif
     // For center and mask display capture has to be enabled every frame
     // and the buffers need to be swapped
 jumpToCaptureUpdate:

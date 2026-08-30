@@ -30,6 +30,7 @@ SOURCES		:=	source \
 				source/Application/Settings/Json \
 				source/Core \
 				source/Core/Heap \
+				source/Diagnostics \
 				source/Emulator \
 				source/Fat \
 				source/GbaColorCorrection \
@@ -59,6 +60,22 @@ INCLUDES	:=	include source ../common ../../libs/mini-printf
 #---------------------------------------------------------------------------------
 ARCH	:=	-marm -mthumb-interwork -march=armv5te -mtune=arm946e-s \
 			-DLIBTWL_ARM9 -DARM9 -DGBAR3_HICODE_CACHE_MAPPING #-DGBAR3_IRQ_YIELDING
+
+ifeq ($(GBAR3_RUNTIME_DIAGNOSTICS),1)
+ARCH += -DGBAR3_RUNTIME_DIAGNOSTICS
+endif
+ifeq ($(GBAR3_DIAG_DISABLE_BG_VRAM_ABORT),1)
+ARCH += -DGBAR3_DIAG_DISABLE_BG_VRAM_ABORT
+endif
+ifeq ($(GBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER),1)
+ARCH += -DGBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER
+endif
+ifeq ($(GBAR3_DIAG_DISABLE_JIT),1)
+ARCH += -DGBAR3_DIAG_DISABLE_JIT
+endif
+ifeq ($(GBAR3_DIAG_FORCE_SAFE_DMA),1)
+ARCH += -DGBAR3_DIAG_FORCE_SAFE_DMA
+endif
 
 CFLAGS	:=	-g -Wall -O2\
 			 -fomit-frame-pointer\

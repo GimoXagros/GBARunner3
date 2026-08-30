@@ -49,6 +49,9 @@
 #include "VirtualMachine/VMNestedIrq.h"
 #include "arm9Clock.h"
 #include "Peripherals/RomGpio/RomGpio.h"
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+#include "Diagnostics/RuntimeDiagnostics.h"
+#endif
 
 #define DEFAULT_ROM_FILE_PATH           "/rom.gba"
 #define BIOS_FILE_PATH                  "/_gba/bios.bin"
@@ -336,6 +339,9 @@ BOOT_EWRAM static void setupJit()
     jit_init();
 
     const auto& runSettings = gAppSettingsService.GetAppSettings().runSettings;
+#ifdef GBAR3_DIAG_DISABLE_JIT
+    jit_disable();
+#else
     if (runSettings.enableJit)
     {
         if (runSettings.jitPatchAddresses && runSettings.jitPatchAddressCount > 0)
@@ -355,6 +361,7 @@ BOOT_EWRAM static void setupJit()
         // jit disabled
         jit_disable();
     }
+#endif
 }
 
 static void setupWramInstructionCache()
@@ -519,6 +526,10 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     auto rtcStatePath = createSidecarPath(romPath, ".g3rtc");
     auto rtcTempPath = createSidecarPath(romPath, ".g3rtc.tmp");
     auto rtcBackupPath = createSidecarPath(romPath, ".g3rtc.bak");
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    auto diagnosticPath = createSidecarPath(romPath, ".g3diag");
+    diag_initialize(diagnosticPath.get(), gRomHeader.gameCode, static_cast<u32>(f_size(&gFile)));
+#endif
     const RtcPersistence::Identity rtcIdentity
     {
         gRomHeader.gameCode,

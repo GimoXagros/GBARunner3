@@ -111,6 +111,14 @@ arm_func memu_store8Rom
     bx lr
 
 arm_func memu_store8Sram
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    ldr r10,= gDiagSramState
+    ldr r11, [r10, #12]
+    add r11, r11, #1
+    str r11, [r10, #12]
+    str r8, [r10, #16]
+    str r9, [r10, #20]
+#endif
     ldr r10,= gSaveData
     mov r11, r8, lsl #17
     ldrb r11, [r10, r11, lsr #17]!

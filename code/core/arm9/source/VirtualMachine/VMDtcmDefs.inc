@@ -12,6 +12,7 @@
 
 vm_irqSavedR4:
     .word 0
+.global vm_irqSavedLR
 vm_irqSavedLR:
     .word 0
 .global vm_irqVector

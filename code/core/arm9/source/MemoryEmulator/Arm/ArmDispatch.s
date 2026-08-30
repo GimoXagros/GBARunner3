@@ -11,6 +11,12 @@ arm_dispatch_base:
 arm_func memu_armDispatch
     str lr, DTCM(memu_inst_addr)
     msr cpsr_c, #0x91 // switch to fiq mode
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+    ldr r8,= gDiagDataAbortCount
+    ldr r9, [r8]
+    add r9, r9, #1
+    str r9, [r8]
+#endif
     ldr r11, DTCM(memu_inst_addr)
     ldr r8, DTCM(memu_arm_table_addr)
 

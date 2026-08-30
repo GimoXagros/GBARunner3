@@ -8,4 +8,5 @@ build
 *.elf
 *.map
 *.bin
+__pycache__/
 code/bootstrap/nitrofiles

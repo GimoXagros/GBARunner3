@@ -1,0 +1,53 @@
+name: Build KH save-selection diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/kh-save-select-black-screen
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20241104
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: A-baseline
+            flags: ""
+          - id: B-no-bg-vram-abort
+            flags: GBAR3_DIAG_DISABLE_BG_VRAM_ABORT=1
+          - id: C-no-vram-write-buffer
+            flags: GBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER=1
+          - id: D-no-bg-abort-no-write-buffer
+            flags: GBAR3_DIAG_DISABLE_BG_VRAM_ABORT=1 GBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER=1
+          - id: E-no-jit
+            flags: GBAR3_DIAG_DISABLE_JIT=1
+          - id: F-safe-dma
+            flags: GBAR3_DIAG_FORCE_SAFE_DMA=1
+    name: ${{ matrix.id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build diagnostic NDS
+        shell: bash
+        run: >-
+          make -C code
+          GBAR3_RUNTIME_DIAGNOSTICS=1
+          ${{ matrix.flags }}
+      - name: Prepare hardware-test artifact
+        shell: bash
+        run: |
+          mkdir -p "out/${{ matrix.id }}/_gba"
+          cp code/bootstrap/GBARunner3.nds "out/${{ matrix.id }}/GBARunner3-KH-save-select-${{ matrix.id }}.nds"
+          cp -r configs "out/${{ matrix.id }}/_gba/"
+          cp docs/kh-save-select-hardware-test.md "out/${{ matrix.id }}/HARDWARE-TEST.md"
+          cp tools/diagnostics/decode_g3diag.py "out/${{ matrix.id }}/decode_g3diag.py"
+      - name: Publish diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GBARunner3-KH-save-select-${{ matrix.id }}
+          path: out/${{ matrix.id }}
