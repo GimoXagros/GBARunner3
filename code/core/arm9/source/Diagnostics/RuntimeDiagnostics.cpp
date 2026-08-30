@@ -19,6 +19,20 @@ constexpr u32 DiagnosticMagic = 0x47443347; // "G3DG"
 constexpr u32 DiagnosticVersion = 1;
 constexpr u32 RingCapacity = 256;
 constexpr u16 DumpKeyMask = (1 << 2) | (1 << 8) | (1 << 9); // Select + R + L
+constexpr u32 DiagnosticFlags = 0
+#ifdef GBAR3_DIAG_DISABLE_BG_VRAM_ABORT
+    | (1 << 0)
+#endif
+#ifdef GBAR3_DIAG_DISABLE_VRAM_WRITE_BUFFER
+    | (1 << 1)
+#endif
+#ifdef GBAR3_DIAG_DISABLE_JIT
+    | (1 << 2)
+#endif
+#ifdef GBAR3_DIAG_FORCE_SAFE_DMA
+    | (1 << 3)
+#endif
+    ;
 
 struct DmaSnapshot
 {
@@ -163,7 +177,7 @@ DIAG_EWRAM void dumpRing()
         sGameCode,
         sRomSize,
         sTotalSamples,
-        0,
+        DiagnosticFlags,
         { 0, 0, 0, 0, 0 }
     };
 

@@ -86,7 +86,14 @@ def main() -> int:
             writer.writerow(f"0x{value:08X}" for value in row)
 
     game_code = header[7].to_bytes(4, "little").decode("ascii", errors="replace")
-    print(f"decoded {len(rows)} records for {game_code} to {output}")
+    flags = header[10]
+    enabled = [
+        name
+        for bit, name in enumerate(("no-bg-vram-abort", "no-vram-write-buffer", "no-jit", "safe-dma"))
+        if flags & (1 << bit)
+    ]
+    variant = ",".join(enabled) if enabled else "baseline"
+    print(f"decoded {len(rows)} records for {game_code} ({variant}) to {output}")
     return 0
 
 

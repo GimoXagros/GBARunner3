@@ -32,6 +32,8 @@ variant directories.
    seconds), register state, DMA event counts, and the last observed byte-wide
    SRAM access addresses. It contains no ROM, BIOS, VRAM,
    or save payload.
+5. Rename or copy that `.g3diag` before starting the next variant. The decoder
+   also reads the embedded variant flags to prevent A/B results being mixed up.
 
 Decode it with:
 
