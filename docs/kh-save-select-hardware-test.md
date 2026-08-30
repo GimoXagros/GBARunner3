@@ -25,14 +25,19 @@ variant directories.
 ## Capturing the black-screen state
 
 1. Boot the game and choose `New Game`.
-2. After the black screen appears, wait at least five seconds.
-3. Press `L + R + Select` together once, then wait another five seconds.
-4. Power down normally and copy the `.g3diag` file beside the ROM back to the
+2. The build creates a 64-byte armed marker beside the ROM during boot.
+3. After the black screen appears, wait at least five seconds.
+4. Press `Select` once. The build keeps sampling for another two seconds and
+   then writes the ring. Wait another five seconds before powering down.
+5. Power down normally, then inspect `.g3diag`. A 55,360-byte file is a complete
+   capture. A 64-byte file proves that the path was writable but the trigger
+   was not captured. A different size is an incomplete write.
+6. Copy the `.g3diag` file beside the ROM back to the
    developer. The file contains the last 256 VBlank samples (about four
    seconds), register state, DMA event counts, and the last observed byte-wide
    SRAM access addresses. It contains no ROM, BIOS, VRAM,
    or save payload.
-5. Rename or copy that `.g3diag` before starting the next variant. The decoder
+7. Rename or copy that `.g3diag` before starting the next variant. The decoder
    also reads the embedded variant flags to prevent A/B results being mixed up.
 
 Decode it with:

@@ -16,9 +16,10 @@ namespace
 #define DIAG_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
 
 constexpr u32 DiagnosticMagic = 0x47443347; // "G3DG"
-constexpr u32 DiagnosticVersion = 1;
+constexpr u32 DiagnosticVersion = 2;
 constexpr u32 RingCapacity = 256;
-constexpr u16 DumpKeyMask = (1 << 2) | (1 << 8) | (1 << 9); // Select + R + L
+constexpr u16 DumpKeyMask = 1 << 2; // Select
+constexpr u32 PostTriggerSamples = 120;
 constexpr u32 DiagnosticFlags = 0
 #ifdef GBAR3_DIAG_DISABLE_BG_VRAM_ABORT
     | (1 << 0)
@@ -65,7 +66,7 @@ struct DiagnosticRecord
     u32 sdForbiddenRange;
     u16 display[15];
     u16 irq[4];
-    u16 alignmentPadding;
+    u16 keyInput;
     u32 timers[4];
     u32 sound[3];
     DmaSnapshot dma[4];
@@ -84,7 +85,19 @@ struct DiagnosticHeader
     u32 romSize;
     u32 dumpSample;
     u32 flags;
-    u32 reserved[5];
+    u32 status;
+    u32 fileResult;
+    u32 dumpAttempts;
+    u32 triggerSample;
+    u32 reserved;
+};
+
+enum class DiagnosticStatus : u32
+{
+    Armed = 1,
+    Triggered = 2,
+    Captured = 3,
+    WriteFailed = 4
 };
 
 static_assert(offsetof(DiagnosticSramState, readCount) == 0);
@@ -98,13 +111,18 @@ static_assert(offsetof(DiagnosticRecord, dma) == 136);
 static_assert(sizeof(DiagnosticRecord) == 216);
 
 [[gnu::section(".ewram.bss")]] DiagnosticRecord sRing[RingCapacity];
-[[gnu::section(".ewram.bss")]] char sFilePath[256];
+[[gnu::section(".ewram.bss")]] char sFilePath[512];
 u32 sWriteIndex;
 u32 sTotalSamples;
 u32 sGameCode;
 u32 sRomSize;
 u32 sDmaStartCount;
 u32 sLastDmaChannel = 0xFFFFFFFF;
+u32 sTriggerSample;
+u32 sPostTriggerSamples;
+u32 sDumpAttempts;
+FRESULT sLastFileResult;
+DiagnosticStatus sStatus;
 bool sDumped;
 bool sDumpKeysWereDown;
 
@@ -159,13 +177,9 @@ DIAG_EWRAM void copyDmaState(DiagnosticRecord& record)
     }
 }
 
-DIAG_EWRAM void dumpRing()
+DIAG_EWRAM DiagnosticHeader makeHeader()
 {
-    FIL file {};
-    if (f_open(&file, sFilePath, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
-        return;
-
-    DiagnosticHeader header
+    return
     {
         DiagnosticMagic,
         DiagnosticVersion,
@@ -178,19 +192,60 @@ DIAG_EWRAM void dumpRing()
         sRomSize,
         sTotalSamples,
         DiagnosticFlags,
-        { 0, 0, 0, 0, 0 }
+        static_cast<u32>(sStatus),
+        static_cast<u32>(sLastFileResult),
+        sDumpAttempts,
+        sTriggerSample,
+        0
     };
+}
 
+DIAG_EWRAM bool writeDiagnosticFile(bool includeRing)
+{
+    FIL file {};
+    sLastFileResult = f_open(&file, sFilePath, FA_CREATE_ALWAYS | FA_WRITE);
+    if (sLastFileResult != FR_OK)
+        return false;
+
+    const DiagnosticHeader header = makeHeader();
     UINT written = 0;
-    const bool headerWritten = f_write(&file, &header, sizeof(header), &written) == FR_OK
-        && written == sizeof(header);
-    if (headerWritten)
+    sLastFileResult = f_write(&file, &header, sizeof(header), &written);
+    bool success = sLastFileResult == FR_OK && written == sizeof(header);
+    if (success && includeRing)
     {
         written = 0;
-        f_write(&file, sRing, sizeof(sRing), &written);
-        f_sync(&file);
+        sLastFileResult = f_write(&file, sRing, sizeof(sRing), &written);
+        success = sLastFileResult == FR_OK && written == sizeof(sRing);
     }
-    f_close(&file);
+    if (success)
+    {
+        sLastFileResult = f_sync(&file);
+        success = sLastFileResult == FR_OK;
+    }
+    const FRESULT closeResult = f_close(&file);
+    if (success && closeResult != FR_OK)
+    {
+        sLastFileResult = closeResult;
+        success = false;
+    }
+    return success;
+}
+
+DIAG_EWRAM void dumpRing()
+{
+    ++sDumpAttempts;
+    sStatus = DiagnosticStatus::Captured;
+    if (writeDiagnosticFile(true))
+    {
+        sDumped = true;
+        return;
+    }
+
+    // Keep the trigger available after a transient media error. The armed
+    // header created during boot distinguishes a trigger failure from an
+    // invalid path or an unwritable device.
+    sStatus = DiagnosticStatus::WriteFailed;
+    sPostTriggerSamples = 0;
 }
 }
 
@@ -210,8 +265,14 @@ extern "C" DIAG_EWRAM void diag_initialize(const char* filePath, u32 gameCode, u
     sRomSize = romSize;
     sDmaStartCount = 0;
     sLastDmaChannel = 0xFFFFFFFF;
+    sTriggerSample = 0xFFFFFFFF;
+    sPostTriggerSamples = 0;
+    sDumpAttempts = 0;
+    sLastFileResult = FR_OK;
+    sStatus = DiagnosticStatus::Armed;
     sDumped = false;
     sDumpKeysWereDown = false;
+    writeDiagnosticFile(false);
 }
 
 extern "C" DIAG_EWRAM void diag_recordDmaStart(u32 channel, const GbaDmaChannel*, u32)
@@ -243,6 +304,8 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     record.dmaFlags = dma_state.dmaFlags;
     record.sdForbiddenRange = gSdCacheIrqForbiddenRomBlockReplacementRange;
     copyDisplayState(record);
+    const u16 keys = *reinterpret_cast<vu16*>(0x04000130);
+    record.keyInput = keys;
     for (u32 timer = 0; timer < 4; ++timer)
         record.timers[timer] = read32(GBA_REG_OFFS_TM0CNT + timer * 4);
     for (u32 i = 0; i < 3; ++i)
@@ -252,14 +315,17 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     sWriteIndex = (sWriteIndex + 1) & (RingCapacity - 1);
     ++sTotalSamples;
 
-    const u16 keys = *reinterpret_cast<vu16*>(0x04000130);
     const bool dumpKeysDown = (keys & DumpKeyMask) == 0;
-    if (dumpKeysDown && !sDumpKeysWereDown && !sDumped)
+    if (dumpKeysDown && !sDumpKeysWereDown && !sDumped && sPostTriggerSamples == 0)
     {
-        dumpRing();
-        sDumped = true;
+        sTriggerSample = sTotalSamples;
+        sPostTriggerSamples = PostTriggerSamples;
+        sStatus = DiagnosticStatus::Triggered;
     }
     sDumpKeysWereDown = dumpKeysDown;
+
+    if (sPostTriggerSamples != 0 && --sPostTriggerSamples == 0)
+        dumpRing();
 }
 
 #endif

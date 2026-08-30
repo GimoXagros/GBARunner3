@@ -38,6 +38,9 @@ jobs:
           make -C code
           GBAR3_RUNTIME_DIAGNOSTICS=1
           ${{ matrix.flags }}
+      - name: Test diagnostic decoder
+        shell: bash
+        run: python3 tools/diagnostics/test_decode_g3diag.py
       - name: Prepare hardware-test artifact
         shell: bash
         run: |

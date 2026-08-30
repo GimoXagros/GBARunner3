@@ -36,12 +36,17 @@ def main() -> int:
     magic, version, header_size, record_size, capacity, write_index, total = header[:7]
     if magic != MAGIC:
         raise SystemExit("not a GBARunner3 diagnostic dump")
-    if version != 1 or header_size != HEADER.size:
+    if version not in (1, 2) or header_size != HEADER.size:
         raise SystemExit(f"unsupported diagnostic format version {version}")
     if record_size < PREFIX.size + 4 * DMA.size:
         raise SystemExit("diagnostic record size is inconsistent")
 
     present = min(total, capacity)
+    required_size = header_size + (capacity * record_size if present else 0)
+    if len(data) < required_size:
+        raise SystemExit(
+            "diagnostic capture is incomplete; the armed header exists but the ring was not written"
+        )
     oldest = write_index if total >= capacity else 0
     rows = []
     for logical in range(present):
@@ -53,13 +58,14 @@ def main() -> int:
         core = values[:17]
         display = values[17:32]
         irq = values[32:36]
+        key_input = values[36]
         timers = values[37:41]
         sound = values[41:44]
         dma_values = []
         dma_offset = offset + PREFIX.size
         for channel in range(4):
             dma_values.extend(DMA.unpack_from(data, dma_offset + channel * DMA.size))
-        rows.append(core + display + irq + timers + sound + tuple(dma_values))
+        rows.append(core + display + irq + (key_input,) + timers + sound + tuple(dma_values))
 
     columns = [
         "sample", "irq_pc", "emulated_pc", "cpsr", "irq_state", "hw_irq_mask", "forced_irq_mask",
@@ -69,6 +75,7 @@ def main() -> int:
         "dispcnt", "dispstat", "vcount", "bg0cnt", "bg1cnt", "bg2cnt", "bg3cnt",
         "winin", "winout", "mosaic", "bldcnt", "bldalpha", "bldy", "bg2pa", "bg2pd",
         "ie", "if", "waitcnt", "ime",
+        "nds_keyinput",
         "timer0", "timer1", "timer2", "timer3",
         "sound0", "sound1", "sound2",
     ]
@@ -93,6 +100,13 @@ def main() -> int:
         if flags & (1 << bit)
     ]
     variant = ",".join(enabled) if enabled else "baseline"
+    if version >= 2:
+        status_names = {1: "armed", 2: "triggered", 3: "captured", 4: "write-failed"}
+        status = status_names.get(header[11], f"unknown-{header[11]}")
+        print(
+            f"status={status}, file_result={header[12]}, dump_attempts={header[13]}, "
+            f"trigger_sample={header[14]}"
+        )
     print(f"decoded {len(rows)} records for {game_code} ({variant}) to {output}")
     return 0
 
