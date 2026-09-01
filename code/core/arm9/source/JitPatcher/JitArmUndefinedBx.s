@@ -27,10 +27,9 @@ ensureJittedCommonHiReg:
 
 ensureJittedCommon:
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
-    push {r0-r3,r12,lr}
-    mov r0, r8
-    bl cfdiag_recordControlFlowTarget
-    pop {r0-r3,r12,lr}
+    b cfdiag_recordArmBxTarget
+.global cfdiag_armBxTargetReturn
+cfdiag_armBxTargetReturn:
 #endif
     sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
     cmp r9, #ROM_LINEAR_SIZE

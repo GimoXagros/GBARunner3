@@ -1,0 +1,14 @@
+.section ".itcm", "ax"
+
+#include "AsmMacros.inc"
+
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+arm_func cfdiag_recordArmBxTarget
+    push {r0-r3,r12,lr}
+    mov r0, r8
+    bl cfdiag_recordControlFlowTarget
+    pop {r0-r3,r12,lr}
+    b cfdiag_armBxTargetReturn
+#endif
+
+.end
