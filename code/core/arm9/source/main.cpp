@@ -530,8 +530,11 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     auto rtcTempPath = createSidecarPath(romPath, ".g3rtc.tmp");
     auto rtcBackupPath = createSidecarPath(romPath, ".g3rtc.bak");
 #ifdef GBAR3_RUNTIME_DIAGNOSTICS
-    auto diagnosticPath = createSidecarPath(romPath, ".g3diag");
-    diag_initialize(diagnosticPath.get(), gRomHeader.gameCode, static_cast<u32>(f_size(&gFile)));
+    auto diagnosticPathA = createSidecarPath(romPath, ".g3diag.a");
+    auto diagnosticPathB = createSidecarPath(romPath, ".g3diag.b");
+    diag_initialize(
+        diagnosticPathA.get(), diagnosticPathB.get(),
+        gRomHeader.gameCode, static_cast<u32>(f_size(&gFile)));
 #endif
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
     auto controlFlowDiagnosticPathA = createSidecarPath(romPath, ".g3diag.a");

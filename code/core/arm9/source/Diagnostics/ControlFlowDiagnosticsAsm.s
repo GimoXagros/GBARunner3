@@ -15,11 +15,15 @@ arm_func cfdiag_recordArmBxTarget
 
 .section ".ewram.bss", "aw", %nobits
 
-#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#if defined(GBAR3_RUNTIME_DIAGNOSTICS) || defined(GBAR3_CONTROL_FLOW_DIAGNOSTICS)
 .balign 8
+.global diag_stack
+diag_stack:
 .global cfdiag_stack
 cfdiag_stack:
     .space 2048
+.global diag_stackEnd
+diag_stackEnd:
 .global cfdiag_stackEnd
 cfdiag_stackEnd:
 #endif

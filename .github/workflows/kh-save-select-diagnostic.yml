@@ -1,4 +1,4 @@
-name: Build KH J saved-SPSR Thumb dispatch test
+name: Build KH K runtime-state test
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20241104
-    name: J-saved-spsr-thumb-dispatch
+    name: K-runtime-state
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,22 +20,23 @@ jobs:
         shell: bash
         run: >-
           make -C code
-          GBAR3_CONTROL_FLOW_DIAGNOSTICS=1
+          GBAR3_RUNTIME_DIAGNOSTICS=1
       - name: Test diagnostic decoder
         shell: bash
         run: |
+          python3 tools/diagnostics/test_decode_g3diag.py
           python3 tools/diagnostics/test_decode_g3cf.py
           python3 tools/diagnostics/test_hicode_undefined_dispatch.py
       - name: Prepare hardware-test artifact
         shell: bash
         run: |
-          mkdir -p "out/J-saved-spsr-thumb-dispatch/_gba"
-          cp code/bootstrap/GBARunner3.nds "out/J-saved-spsr-thumb-dispatch/GBARunner3-KH-J-saved-spsr-thumb-dispatch.nds"
-          cp -r configs "out/J-saved-spsr-thumb-dispatch/_gba/"
-          cp docs/kh-save-select-hicode-thumb-test.md "out/J-saved-spsr-thumb-dispatch/HARDWARE-TEST.md"
-          cp tools/diagnostics/decode_g3cf.py "out/J-saved-spsr-thumb-dispatch/decode_g3cf.py"
+          mkdir -p "out/K-runtime-state/_gba"
+          cp code/bootstrap/GBARunner3.nds "out/K-runtime-state/GBARunner3-KH-K-runtime-state.nds"
+          cp -r configs "out/K-runtime-state/_gba/"
+          cp docs/kh-save-select-runtime-state-test.md "out/K-runtime-state/HARDWARE-TEST.md"
+          cp tools/diagnostics/decode_g3diag.py "out/K-runtime-state/decode_g3diag.py"
       - name: Publish diagnostic artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GBARunner3-KH-J-saved-spsr-thumb-dispatch
-          path: out/J-saved-spsr-thumb-dispatch
+          name: GBARunner3-KH-K-runtime-state
+          path: out/K-runtime-state

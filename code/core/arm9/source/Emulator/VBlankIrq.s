@@ -7,13 +7,13 @@ arm_func emu_vblankIrq
 #if defined(GBAR3_RUNTIME_DIAGNOSTICS) || defined(GBAR3_CONTROL_FLOW_DIAGNOSTICS)
     ldr sp,= dtcmIrqStackEnd
     push {r0-r3,r12}
+    ldr sp,= diag_stackEnd
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
-    ldr sp,= cfdiag_stackEnd
     bl cfdiag_sampleVBlank
-    ldr sp,= (dtcmIrqStackEnd - 5 * 4)
 #else
     bl diag_sampleVBlank
 #endif
+    ldr sp,= (dtcmIrqStackEnd - 5 * 4)
     pop {r0-r3,r12}
     mov r13, #0x04000000 // restore the IRQ handler's scratch/base value
 #endif

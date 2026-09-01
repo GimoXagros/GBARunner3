@@ -142,9 +142,12 @@ seconds after the transition input, and the latest record is a normal periodic
 VBlank rather than an emergency. This verifies that reloading
 `vm_undefinedSpsr` removes the first proven CPU control-flow failure.
 
-The trace alone does not establish whether the Save Slot UI was visible or
-whether selecting a slot reached subsequent gameplay. That remains a required
-human hardware observation before closing the original black-screen issue.
+The subsequent hardware observation establishes that the screen still becomes
+black before the Save Slot UI appears. The former terminal control-flow failure
+is gone, but it was not the only incompatibility. Because CPU checkpoints and
+VBlank continue for about 80 seconds, the remaining symptom is now investigated
+as a live display, peripheral-completion, or guest polling failure. The proven
+saved-SPSR correction remains in place.
 
 ## Last valid control flow
 
@@ -188,11 +191,16 @@ entry branch behavior.
 
 ## Next evidence gate
 
-1. Record whether J displays the Save Slot screen on 3DS + DSpico.
-2. If Save Slot appears, select a slot and verify continued progression.
-3. If the screen remains black, treat the now-live CPU/VBlank path as a new
-   display or polling investigation rather than reverting the proven dispatch
-   correction.
-4. Recheck the established RC5 hardware baseline before promotion.
+The K runtime-state build preserves J behavior and records the most recent 64
+VBlanks. Each record combines guest PC/CPSR with guest and translated DS display
+state, live timer counters, IRQ masks/pending state, all four DMA channels,
+sound controls, high-ROM mapping, and SD-cache exclusion state. It alternates
+checksummed `.g3diag.a` / `.g3diag.b` checkpoints once per second after the New
+Game input; no post-failure hotkey is required.
+
+The next hardware trace must determine whether the black interval has changing
+PC/timers/DMA with an incorrect display configuration, or a stable polling PC
+waiting for a DMA/timer/IRQ condition. Only the first divergent subsystem will
+be changed. Recheck the established RC5 hardware baseline before promotion.
 
 **Hardware verification required.**

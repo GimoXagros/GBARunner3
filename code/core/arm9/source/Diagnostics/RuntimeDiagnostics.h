@@ -21,7 +21,8 @@ typedef struct
 // it does not add a function call to every SRAM access.
 extern volatile DiagnosticSramState gDiagSramState;
 
-void diag_initialize(const char* filePath, u32 gameCode, u32 romSize);
+void diag_initialize(
+    const char* pathA, const char* pathB, u32 gameCode, u32 romSize);
 void diag_sampleVBlank(void);
 void diag_recordDmaStart(u32 channel, const GbaDmaChannel* dma, u32 control);
 

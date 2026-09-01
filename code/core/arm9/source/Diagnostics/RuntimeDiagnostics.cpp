@@ -16,10 +16,11 @@ namespace
 #define DIAG_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
 
 constexpr u32 DiagnosticMagic = 0x47443347; // "G3DG"
-constexpr u32 DiagnosticVersion = 2;
-constexpr u32 RingCapacity = 256;
-constexpr u16 DumpKeyMask = 1 << 2; // Select
-constexpr u32 PostTriggerSamples = 120;
+constexpr u32 DiagnosticVersion = 3;
+constexpr u32 RingCapacity = 64;
+constexpr u16 KeyA = 1 << 0;
+constexpr u16 KeySelect = 1 << 2;
+constexpr u32 PersistFrameInterval = 60;
 constexpr u32 DiagnosticFlags = 0
 #ifdef GBAR3_DIAG_DISABLE_BG_VRAM_ABORT
     | (1 << 0)
@@ -64,11 +65,13 @@ struct DiagnosticRecord
     u32 lastDmaChannel;
     u32 dmaFlags;
     u32 sdForbiddenRange;
-    u16 display[15];
+    u16 display[21];
     u16 irq[4];
     u16 keyInput;
     u32 timers[4];
     u32 sound[3];
+    u32 dsDisplay[2];
+    u32 dsIrq[2];
     DmaSnapshot dma[4];
 };
 
@@ -83,20 +86,20 @@ struct DiagnosticHeader
     u32 totalSamples;
     u32 gameCode;
     u32 romSize;
-    u32 dumpSample;
+    u32 checkpointSequence;
     u32 flags;
     u32 status;
     u32 fileResult;
-    u32 dumpAttempts;
-    u32 triggerSample;
-    u32 reserved;
+    u32 checksum;
+    u32 armSample;
+    u32 transitionSample;
 };
 
 enum class DiagnosticStatus : u32
 {
-    Armed = 1,
-    Triggered = 2,
-    Captured = 3,
+    Ready = 1,
+    Armed = 2,
+    Checkpoint = 3,
     WriteFailed = 4
 };
 
@@ -106,25 +109,30 @@ static_assert(offsetof(DiagnosticSramState, writeCount) == 12);
 static_assert(offsetof(DiagnosticSramState, lastWriteAddress) == 16);
 static_assert(offsetof(DiagnosticSramState, lastWriteValue) == 20);
 static_assert(sizeof(DiagnosticHeader) == 64);
-static_assert(offsetof(DiagnosticRecord, timers) == 108);
-static_assert(offsetof(DiagnosticRecord, dma) == 136);
-static_assert(sizeof(DiagnosticRecord) == 216);
+static_assert(offsetof(DiagnosticRecord, timers) == 120);
+static_assert(offsetof(DiagnosticRecord, dsDisplay) == 148);
+static_assert(offsetof(DiagnosticRecord, dma) == 164);
+static_assert(sizeof(DiagnosticRecord) == 244);
 
 [[gnu::section(".ewram.bss")]] DiagnosticRecord sRing[RingCapacity];
-[[gnu::section(".ewram.bss")]] char sFilePath[512];
+[[gnu::section(".ewram.bss")]] char sPathA[512];
+[[gnu::section(".ewram.bss")]] char sPathB[512];
 u32 sWriteIndex;
 u32 sTotalSamples;
 u32 sGameCode;
 u32 sRomSize;
 u32 sDmaStartCount;
-u32 sLastDmaChannel = 0xFFFFFFFF;
-u32 sTriggerSample;
-u32 sPostTriggerSamples;
-u32 sDumpAttempts;
+u32 sLastDmaChannel;
+u32 sCheckpointSequence;
+u32 sArmSample;
+u32 sTransitionSample;
+u32 sFramesAfterTransition;
+u16 sLastKeysDown;
 FRESULT sLastFileResult;
 DiagnosticStatus sStatus;
-bool sDumped;
-bool sDumpKeysWereDown;
+bool sArmed;
+bool sTransitionObserved;
+bool sWritePathB;
 
 extern "C" u32 vm_irqSavedLR;
 extern "C" u32 memu_inst_addr;
@@ -140,6 +148,26 @@ DIAG_EWRAM u32 read32(u32 offset)
     return *reinterpret_cast<vu32*>(&emu_ioRegisters[offset]);
 }
 
+DIAG_EWRAM u16 readHardware16(u32 address)
+{
+    return *reinterpret_cast<vu16*>(address);
+}
+
+DIAG_EWRAM u32 readHardware32(u32 address)
+{
+    return *reinterpret_cast<vu32*>(address);
+}
+
+DIAG_EWRAM u16 gbaVCountFromDs(u16 dsVCount)
+{
+    if (dsVCount < 160)
+        return dsVCount;
+    if (dsVCount < 192)
+        return 160;
+    const u16 gbaVCount = dsVCount - 32;
+    return gbaVCount > 227 ? 227 : gbaVCount;
+}
+
 DIAG_EWRAM void copyDisplayState(DiagnosticRecord& record)
 {
     constexpr u32 offsets[] =
@@ -148,15 +176,37 @@ DIAG_EWRAM void copyDisplayState(DiagnosticRecord& record)
         GBA_REG_OFFS_BG0CNT, GBA_REG_OFFS_BG1CNT, GBA_REG_OFFS_BG2CNT,
         GBA_REG_OFFS_BG3CNT, GBA_REG_OFFS_WININ, GBA_REG_OFFS_WINOUT,
         GBA_REG_OFFS_MOSAIC, GBA_REG_OFFS_BLDCNT, GBA_REG_OFFS_BLDALPHA,
-        GBA_REG_OFFS_BLDY, GBA_REG_OFFS_BG2PA, GBA_REG_OFFS_BG2PD
+        GBA_REG_OFFS_BLDY, GBA_REG_OFFS_BG2PA, GBA_REG_OFFS_BG2PB,
+        GBA_REG_OFFS_BG2PC, GBA_REG_OFFS_BG2PD, GBA_REG_OFFS_BG2X_L,
+        GBA_REG_OFFS_BG2X_H, GBA_REG_OFFS_BG2Y_L, GBA_REG_OFFS_BG2Y_H
     };
     for (u32 i = 0; i < sizeof(offsets) / sizeof(offsets[0]); ++i)
         record.display[i] = read16(offsets[i]);
 
+    const u16 dsDispStat = readHardware16(0x04000004);
+    const u16 dsVCount = readHardware16(0x04000006);
+    record.display[1] = (record.display[1] & ~0xC7u) | (dsDispStat & 7);
+    record.display[2] = gbaVCountFromDs(dsVCount);
+    record.dsDisplay[0] = readHardware32(0x04000000);
+    record.dsDisplay[1] = static_cast<u32>(dsDispStat) | (static_cast<u32>(dsVCount) << 16);
+
     record.irq[0] = read16(GBA_REG_OFFS_IE);
-    record.irq[1] = read16(GBA_REG_OFFS_IF);
+    record.irq[1] = vm_emulatedIfImeIe & 0x3FFF;
     record.irq[2] = read16(GBA_REG_OFFS_WAITCNT);
-    record.irq[3] = read16(GBA_REG_OFFS_IME);
+    record.irq[3] = (vm_emulatedIfImeIe >> 15) & 1;
+    record.dsIrq[0] = readHardware16(0x04000210);
+    record.dsIrq[1] = readHardware16(0x04000214);
+}
+
+DIAG_EWRAM void copyTimerState(DiagnosticRecord& record)
+{
+    for (u32 timer = 0; timer < 4; ++timer)
+    {
+        const u32 offset = GBA_REG_OFFS_TM0CNT + timer * 4;
+        const u16 liveCounter = readHardware16(0x04000100 + timer * 4);
+        const u16 guestControl = read16(offset + 2);
+        record.timers[timer] = liveCounter | (static_cast<u32>(guestControl) << 16);
+    }
 }
 
 DIAG_EWRAM void copyDmaState(DiagnosticRecord& record)
@@ -177,6 +227,17 @@ DIAG_EWRAM void copyDmaState(DiagnosticRecord& record)
     }
 }
 
+DIAG_EWRAM u32 fnv1a(const void* data, size_t size, u32 hash)
+{
+    const auto* bytes = static_cast<const u8*>(data);
+    for (size_t i = 0; i < size; ++i)
+    {
+        hash ^= bytes[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
 DIAG_EWRAM DiagnosticHeader makeHeader()
 {
     return
@@ -190,24 +251,30 @@ DIAG_EWRAM DiagnosticHeader makeHeader()
         sTotalSamples,
         sGameCode,
         sRomSize,
-        sTotalSamples,
+        sCheckpointSequence,
         DiagnosticFlags,
         static_cast<u32>(sStatus),
         static_cast<u32>(sLastFileResult),
-        sDumpAttempts,
-        sTriggerSample,
-        0
+        0,
+        sArmSample,
+        sTransitionSample
     };
 }
 
-DIAG_EWRAM bool writeDiagnosticFile(bool includeRing)
+DIAG_EWRAM bool writeDiagnosticFile(const char* path, bool includeRing)
 {
     FIL file {};
-    sLastFileResult = f_open(&file, sFilePath, FA_CREATE_ALWAYS | FA_WRITE);
+    sLastFileResult = f_open(&file, path, FA_CREATE_ALWAYS | FA_WRITE);
     if (sLastFileResult != FR_OK)
         return false;
 
-    const DiagnosticHeader header = makeHeader();
+    DiagnosticHeader header = makeHeader();
+    if (includeRing)
+    {
+        u32 checksum = fnv1a(&header, sizeof(header), 2166136261u);
+        header.checksum = fnv1a(sRing, sizeof(sRing), checksum);
+    }
+
     UINT written = 0;
     sLastFileResult = f_write(&file, &header, sizeof(header), &written);
     bool success = sLastFileResult == FR_OK && written == sizeof(header);
@@ -231,21 +298,23 @@ DIAG_EWRAM bool writeDiagnosticFile(bool includeRing)
     return success;
 }
 
-DIAG_EWRAM void dumpRing()
+DIAG_EWRAM void persist()
 {
-    ++sDumpAttempts;
-    sStatus = DiagnosticStatus::Captured;
-    if (writeDiagnosticFile(true))
+    ++sCheckpointSequence;
+    sStatus = DiagnosticStatus::Checkpoint;
+    const char* path = sWritePathB ? sPathB : sPathA;
+    if (writeDiagnosticFile(path, true))
     {
-        sDumped = true;
+        sWritePathB = !sWritePathB;
         return;
     }
-
-    // Keep the trigger available after a transient media error. The armed
-    // header created during boot distinguishes a trigger failure from an
-    // invalid path or an unwritable device.
     sStatus = DiagnosticStatus::WriteFailed;
-    sPostTriggerSamples = 0;
+}
+
+DIAG_EWRAM void copyPath(char* destination, const char* source)
+{
+    strncpy(destination, source, 511);
+    destination[511] = 0;
 }
 }
 
@@ -254,25 +323,30 @@ extern "C"
 volatile DiagnosticSramState gDiagSramState = {};
 }
 
-extern "C" DIAG_EWRAM void diag_initialize(const char* filePath, u32 gameCode, u32 romSize)
+extern "C" DIAG_EWRAM void diag_initialize(
+    const char* pathA, const char* pathB, u32 gameCode, u32 romSize)
 {
     memset(sRing, 0, sizeof(sRing));
-    strncpy(sFilePath, filePath, sizeof(sFilePath) - 1);
-    sFilePath[sizeof(sFilePath) - 1] = 0;
+    copyPath(sPathA, pathA);
+    copyPath(sPathB, pathB);
     sWriteIndex = 0;
     sTotalSamples = 0;
     sGameCode = gameCode;
     sRomSize = romSize;
     sDmaStartCount = 0;
     sLastDmaChannel = 0xFFFFFFFF;
-    sTriggerSample = 0xFFFFFFFF;
-    sPostTriggerSamples = 0;
-    sDumpAttempts = 0;
+    sCheckpointSequence = 0;
+    sArmSample = 0xFFFFFFFF;
+    sTransitionSample = 0xFFFFFFFF;
+    sFramesAfterTransition = 0;
+    sLastKeysDown = 0;
     sLastFileResult = FR_OK;
-    sStatus = DiagnosticStatus::Armed;
-    sDumped = false;
-    sDumpKeysWereDown = false;
-    writeDiagnosticFile(false);
+    sStatus = DiagnosticStatus::Ready;
+    sArmed = false;
+    sTransitionObserved = false;
+    sWritePathB = false;
+    writeDiagnosticFile(sPathA, false);
+    writeDiagnosticFile(sPathB, false);
 }
 
 extern "C" DIAG_EWRAM void diag_recordDmaStart(u32 channel, const GbaDmaChannel*, u32)
@@ -283,6 +357,31 @@ extern "C" DIAG_EWRAM void diag_recordDmaStart(u32 channel, const GbaDmaChannel*
 
 extern "C" DIAG_EWRAM void diag_sampleVBlank()
 {
+    const u16 keys = readHardware16(0x04000130);
+    const u16 keysDown = static_cast<u16>(~keys) & 0x03FF;
+    const u16 newlyPressed = keysDown & ~sLastKeysDown;
+    sLastKeysDown = keysDown;
+
+    if (!sArmed && (newlyPressed & KeySelect))
+    {
+        memset(sRing, 0, sizeof(sRing));
+        sWriteIndex = 0;
+        sTotalSamples = 0;
+        sArmed = true;
+        sTransitionObserved = false;
+        sStatus = DiagnosticStatus::Armed;
+        sArmSample = 0;
+    }
+    if (!sArmed)
+        return;
+
+    if (!sTransitionObserved && (newlyPressed & KeyA))
+    {
+        sTransitionObserved = true;
+        sTransitionSample = sTotalSamples;
+        sFramesAfterTransition = 0;
+    }
+
     DiagnosticRecord& record = sRing[sWriteIndex];
     memset(&record, 0, sizeof(record));
     record.sampleIndex = sTotalSamples;
@@ -294,8 +393,8 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     record.forcedIrqMask = vm_forcedIrqMask;
     record.hicodeBlock = gHicodeState[0];
     record.hicodeBlockMask = gHicodeState[1];
-    record.sramReadCount = gDiagSramState.lastReadAddress != 0;
-    record.sramWriteCount = gDiagSramState.lastWriteAddress != 0;
+    record.sramReadCount = gDiagSramState.readCount;
+    record.sramWriteCount = gDiagSramState.writeCount;
     record.lastSramAddress = gDiagSramState.lastWriteAddress != 0
         ? gDiagSramState.lastWriteAddress : gDiagSramState.lastReadAddress;
     record.lastSramValue = gDiagSramState.lastWriteValue;
@@ -304,10 +403,8 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     record.dmaFlags = dma_state.dmaFlags;
     record.sdForbiddenRange = gSdCacheIrqForbiddenRomBlockReplacementRange;
     copyDisplayState(record);
-    const u16 keys = *reinterpret_cast<vu16*>(0x04000130);
     record.keyInput = keys;
-    for (u32 timer = 0; timer < 4; ++timer)
-        record.timers[timer] = read32(GBA_REG_OFFS_TM0CNT + timer * 4);
+    copyTimerState(record);
     for (u32 i = 0; i < 3; ++i)
         record.sound[i] = read32(GBA_REG_OFFS_SOUNDCNT_L + i * 4);
     copyDmaState(record);
@@ -315,17 +412,11 @@ extern "C" DIAG_EWRAM void diag_sampleVBlank()
     sWriteIndex = (sWriteIndex + 1) & (RingCapacity - 1);
     ++sTotalSamples;
 
-    const bool dumpKeysDown = (keys & DumpKeyMask) == 0;
-    if (dumpKeysDown && !sDumpKeysWereDown && !sDumped && sPostTriggerSamples == 0)
+    if (sTransitionObserved && ++sFramesAfterTransition == PersistFrameInterval)
     {
-        sTriggerSample = sTotalSamples;
-        sPostTriggerSamples = PostTriggerSamples;
-        sStatus = DiagnosticStatus::Triggered;
+        sFramesAfterTransition = 0;
+        persist();
     }
-    sDumpKeysWereDown = dumpKeysDown;
-
-    if (sPostTriggerSamples != 0 && --sPostTriggerSamples == 0)
-        dumpRing();
 }
 
 #endif
