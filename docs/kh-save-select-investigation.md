@@ -107,6 +107,24 @@ The decoder therefore selects `.g3diag.b`. The periodic `.a` proves that H
 armed and persisted without the Select stall seen in G. The emergency `.b`
 captures the failure rather than only a late black-screen sample.
 
+## I hardware trace result
+
+Both I checkpoints are complete and checksummed. `.g3diag.a` sequence 3 is a
+periodic checkpoint; `.g3diag.b` sequence 4 is another `not-implemented`
+emergency checkpoint.
+
+| File | SHA-256 | Result |
+| --- | --- | --- |
+| `.g3diag.a` | `0F00D12074CFA0D8FA4611E39CF27C8DA125B143CFDBEEFBFFC9BAC8BAD58762` | valid periodic checkpoint |
+| `.g3diag.b` | `730118902240EA1CD6BDCAC60EB05255F519E6D126A29E717E328BA209B95FB8` | valid emergency checkpoint |
+
+The selected I trace ends in the same `0x09ED3570`, `0xB100BC01`,
+`NOT_IMPLEMENTED` sequence as H. This rejects the I implementation, not the
+saved-state diagnosis: I tested `r13` inside `notHicodeMiss` after
+`ldr sp,=dtcmHicodeStackEnd` had replaced that register with the scratch stack
+pointer. J instead reloads `vm_undefinedSpsr` from DTCM after switching to the
+FIQ register bank.
+
 ## Last valid control flow
 
 ```text
@@ -149,7 +167,7 @@ entry branch behavior.
 
 ## Next evidence gate
 
-1. Build the I diagnostic artifact with the generic dispatcher correction.
+1. Build the J diagnostic artifact with the corrected saved-SPSR reload.
 2. Verify Main Menu -> New Game -> Save Slot on 3DS + DSpico.
 3. If Save Slot appears, select a slot and verify continued progression.
 4. Decode the new `.g3diag.a/.b` pair and confirm that the previous

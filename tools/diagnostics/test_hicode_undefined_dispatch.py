@@ -12,16 +12,20 @@ def main() -> int:
     source = SOURCE.read_text(encoding="utf-8")
     block = source.split("notHicodeMiss:", 1)[1].split(".bss", 1)[0]
 
-    state_test = block.index("tst r13, #0x20")
     mode_switch = block.index("msr cpsr_c, #0xD1")
+    saved_state_load = block.index(
+        "ldr r10, [r8, #(vm_undefinedSpsr - vm_undefinedInstructionAddr)]"
+    )
+    state_test = block.index("tst r10, #0x20")
     cache_fetch = block.index("mrc p15, 3, lr, c15, c3, 0")
     arm_dispatch = block.index("beq vm_undefinedArmInstructionInLR")
     halfword_select = block.index("moveq lr, lr, lsr #16")
     thumb_dispatch = block.index("b vm_undefinedThumbInstructionInLR")
 
-    assert state_test < mode_switch < cache_fetch < arm_dispatch
+    assert mode_switch < saved_state_load < state_test < cache_fetch < arm_dispatch
     assert arm_dispatch < halfword_select < thumb_dispatch
     assert block.count("vm_undefinedThumbInstructionInLR") == 1
+    assert "tst r13, #0x20" not in block
 
     vm_source = (
         ROOT / "code/core/arm9/source/VirtualMachine/VMUndefined.s"

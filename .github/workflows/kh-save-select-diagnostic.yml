@@ -1,4 +1,4 @@
-name: Build KH I hicode Thumb dispatch test
+name: Build KH J saved-SPSR Thumb dispatch test
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20241104
-    name: I-hicode-thumb-dispatch
+    name: J-saved-spsr-thumb-dispatch
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,13 +29,13 @@ jobs:
       - name: Prepare hardware-test artifact
         shell: bash
         run: |
-          mkdir -p "out/I-hicode-thumb-dispatch/_gba"
-          cp code/bootstrap/GBARunner3.nds "out/I-hicode-thumb-dispatch/GBARunner3-KH-I-hicode-thumb-dispatch.nds"
-          cp -r configs "out/I-hicode-thumb-dispatch/_gba/"
-          cp docs/kh-save-select-hicode-thumb-test.md "out/I-hicode-thumb-dispatch/HARDWARE-TEST.md"
-          cp tools/diagnostics/decode_g3cf.py "out/I-hicode-thumb-dispatch/decode_g3cf.py"
+          mkdir -p "out/J-saved-spsr-thumb-dispatch/_gba"
+          cp code/bootstrap/GBARunner3.nds "out/J-saved-spsr-thumb-dispatch/GBARunner3-KH-J-saved-spsr-thumb-dispatch.nds"
+          cp -r configs "out/J-saved-spsr-thumb-dispatch/_gba/"
+          cp docs/kh-save-select-hicode-thumb-test.md "out/J-saved-spsr-thumb-dispatch/HARDWARE-TEST.md"
+          cp tools/diagnostics/decode_g3cf.py "out/J-saved-spsr-thumb-dispatch/decode_g3cf.py"
       - name: Publish diagnostic artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GBARunner3-KH-I-hicode-thumb-dispatch
-          path: out/I-hicode-thumb-dispatch
+          name: GBARunner3-KH-J-saved-spsr-thumb-dispatch
+          path: out/J-saved-spsr-thumb-dispatch
