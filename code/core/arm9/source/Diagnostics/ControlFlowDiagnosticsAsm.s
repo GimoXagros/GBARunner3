@@ -1,6 +1,7 @@
 .section ".itcm", "ax"
 
 #include "AsmMacros.inc"
+#include "MemoryEmulator/RomDefs.h"
 
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
 arm_func cfdiag_recordArmBxTarget
