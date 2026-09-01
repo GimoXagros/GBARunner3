@@ -225,7 +225,14 @@ ITCM_CODE static u32 translateAddress(u32 address)
     return address;
 }
 
+#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+// Keep diagnostic-only DMA bookkeeping from overflowing the fixed 32 KiB
+// ITCM region. This helper runs only when a DMA control register is changed;
+// the transfer paths remain in ITCM.
+static u32 dmaIoBaseToChannel(const GbaDmaChannel* dmaIoBase)
+#else
 ITCM_CODE static u32 dmaIoBaseToChannel(const GbaDmaChannel* dmaIoBase)
+#endif
 {
     u32 regOffset = (u32)dmaIoBase - (u32)emu_ioRegisters;
     return (regOffset - GBA_REG_OFFS_DMA0SAD) / (GBA_REG_OFFS_DMA1SAD - GBA_REG_OFFS_DMA0SAD);
