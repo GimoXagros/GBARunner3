@@ -49,13 +49,26 @@ arm_func hic_undefinedHicodeMiss
 notHicodeMiss:
     // this is not a hicode miss, but a regular undefined instruction
     pop {r3,r12}
+    // Preserve the guest execution state selected above. High-ROM Thumb JIT
+    // substitutes (for example the 0xB100 trap used for BX) also arrive here;
+    // routing their halfword through the ARM decoder combines it with the
+    // preceding halfword and eventually reaches armJitNotImplemented().
+    tst r13, #0x20 // spsr thumb bit
     ldr r13,= vm_undefinedInstructionAddr
     str lr, [r13]
     msr cpsr_c, #0xD1 // switch to fiq mode
     ldr r8,= vm_undefinedInstructionAddr
-    mrc p15, 3, lr, c15, c3, 0 // read data
     ldr r11, [r8]
-    b vm_undefinedArmInstructionInLR
+    mrc p15, 3, lr, c15, c3, 0 // read aligned instruction data
+    beq vm_undefinedArmInstructionInLR
+
+    // High-ROM is instruction-cache mapped, so do not reload the Thumb
+    // halfword through a normal data access. Select it from the aligned cache
+    // word and enter the Thumb dispatcher after its usual ldrh.
+    tst r11, #2 // exception LR is Thumb instruction address + 2
+    moveq lr, lr, lsr #16
+    sub r11, r11, #2
+    b vm_undefinedThumbInstructionInLR
 
 .bss
 

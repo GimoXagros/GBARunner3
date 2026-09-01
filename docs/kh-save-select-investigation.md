@@ -93,51 +93,67 @@ The decoder rejects truncated or corrupt checkpoints and chooses the greatest va
 
 The normal ARM9 ITCM image already fills its 32 KiB region. In the diagnostic build only, the large ARM undefined C fallback is linked in EWRAM to make room for the control-flow breadcrumbs without moving fixed-address VM code. This changes diagnostic-path timing but not emulated instruction or address semantics; normal and nightly builds retain the original ITCM placement.
 
+## H hardware trace result
+
+Both submitted H checkpoints are complete 12,352-byte `G3CF` v1 files with
+valid FNV-1a checksums and game code `B8CJ`.
+
+| File | SHA-256 | Sequence | Status | Reason |
+| --- | --- | ---: | --- | --- |
+| `.g3diag.a` | `3F0242A16D4F1BDB924E5E62312B869C6516D670533CA0B382030CD7E8E49C15` | 3 | checkpoint | periodic |
+| `.g3diag.b` | `606EEA6836AB5D82095A8FBF66787ABE0CFB3D08BC9B5F929097CFAA3C26D42B` | 4 | emergency | not-implemented |
+
+The decoder therefore selects `.g3diag.b`. The periodic `.a` proves that H
+armed and persisted without the Select stall seen in G. The emergency `.b`
+captures the failure rather than only a late black-screen sample.
+
 ## Last valid control flow
 
 ```text
-Source guest PC: unknown
-Source execution PC: unknown
-Instruction: unknown
-Instruction type: unknown
-ARM/Thumb: unknown
-CPSR: unknown
-LR: unknown
-
-Raw target: unknown
-Normalized guest target: unknown
-Final execution target: unknown
-
-Source ROM block: unknown
-Target ROM block: unknown
-Source cache block: unknown
-Target cache block: unknown
-
-JIT state: unknown
-Hicode state: unknown
-MPU state: unknown
+0x080656C2 Thumb MOV pc,r0
+-> raw/guest target 0x09ED3561
+-> prefetch abort at 0x09ED3560
+-> high-ROM block mapped
+-> guest bytes at 0x09ED3570: 01 BC 00 47
+   (Thumb POP {r0}; BX r0)
+-> JIT patches BX 0x4700 to Thumb undefined trap 0xB100
 ```
 
 ## First divergence
 
-Unknown. The A-F artifacts contain no trace records, and the mGBA reference has not yet been aligned to a valid G checkpoint.
+`hic_undefinedHicodeMiss` correctly recognizes that the high-ROM block is
+already mapped, but its `notHicodeMiss` path unconditionally branches to
+`vm_undefinedArmInstructionInLR`. The saved CPSR is `0x20000030`, whose Thumb
+bit is set. The handler nevertheless reads the aligned 32-bit value at
+`0x09ED3570`, combining `0xBC01` with the JIT trap `0xB100` into
+`0xB100BC01`, and sends it to the ARM decoder.
 
 ## Failure type
 
-Unknown. No listed failure category is selected without a valid transition trace.
+CPU control-flow failure: high-ROM Thumb undefined-dispatch state loss. It is
+not a display-only black frame and the trace does not identify save emulation,
+DMA, VRAM, RTC, or video playback as the first failing subsystem.
 
 ## Root cause
 
-**Root cause not proven.**
+The generic high-ROM undefined dispatcher loses the guest ARM/Thumb state on a
+mapped-block non-miss. The resulting fake ARM instruction is unsupported and
+ends at `armJitNotImplemented()` (`memu_inst_addr = 0x03006DB0`).
 
-No emulator-core behavior has been changed by inference. Save emulation remains lower priority unless a trace proves that both emulators reach the same Save Slot initialization path and first diverge on a save access.
+The correction tests the saved SPSR Thumb bit in `notHicodeMiss`. ARM traps
+retain the existing 32-bit path. Thumb traps select the proper 16-bit halfword
+from the aligned I-cache word and enter the Thumb dispatcher after its normal
+memory load, avoiding an invalid high-ROM data read. It does not change
+high-ROM mapping, SD cache addressing, RTC, save paths, or the established RC5
+entry branch behavior.
 
 ## Next evidence gate
 
-1. Collect both G checkpoint files using the hardware procedure.
-2. Decode the latest valid sequence.
-3. Align its final control-flow events with the mGBA Main Menu-to-Save-Slot reference checkpoints.
-4. Identify the first differing instruction, target, state, mapping, or cache generation.
-5. Only then implement a generic fix and a synthetic regression that contains no commercial ROM data.
+1. Build the I diagnostic artifact with the generic dispatcher correction.
+2. Verify Main Menu -> New Game -> Save Slot on 3DS + DSpico.
+3. If Save Slot appears, select a slot and verify continued progression.
+4. Decode the new `.g3diag.a/.b` pair and confirm that the previous
+   `0x09ED3570 -> NOT_IMPLEMENTED` terminal sequence is absent.
+5. Recheck the established RC5 hardware baseline before promotion.
 
 **Hardware verification required.**

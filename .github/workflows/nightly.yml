@@ -23,6 +23,7 @@ jobs:
           submodules: recursive
       - name: Make application and test ROM
         run: |
+          python3 tools/diagnostics/test_hicode_undefined_dispatch.py
           make -C code debug
       - name: Prepare for build publishing
         run: |
