@@ -1,4 +1,4 @@
-# Kingdom Hearts save-selection control-flow hardware test
+# Kingdom Hearts save-selection H control-flow hardware test
 
 This is a diagnostic-only build for the corrected transition:
 
@@ -8,7 +8,7 @@ It does not change JIT, DMA, VRAM, save, RTC, IRQ, or high-ROM emulation semanti
 
 ## Before testing
 
-1. Copy `GBARunner3-KH-G-control-flow-pretrigger.nds` and the supplied `_gba/configs` directory to the DSpico SD card using the same layout as the current working installation.
+1. Copy `GBARunner3-KH-H-control-flow-vblank-arm.nds` and the supplied `_gba/configs` directory to the DSpico SD card using the same layout as the current working installation.
 2. Keep the same GBA BIOS and the same patched `B8CJ` ROM used for A-F.
 3. Back up, then remove every older sidecar whose name ends in `.g3diag`, `.g3diag.a`, or `.g3diag.b` next to that ROM.
 4. Do not rename or modify the ROM between the test and collection.
@@ -17,7 +17,7 @@ ROM and BIOS files are not included in the artifact or repository.
 
 ## Exact test procedure
 
-1. Start the G diagnostic NDS and boot the patched `B8CJ` ROM.
+1. Start the H diagnostic NDS and boot the patched `B8CJ` ROM.
 2. Reach the game's **Main Menu**.
 3. Press **Select once** to arm the diagnostic.
 4. Wait about **one second** at the Main Menu.
@@ -31,6 +31,8 @@ ROM and BIOS files are not included in the artifact or repository.
     - `<ROM name>.g3diag.b`
 
 Both files are required because the build alternates checksummed checkpoints. One may be older or incomplete if execution stopped during a write; the decoder selects the newest valid copy.
+
+H observes Select and A only from the DS VBlank diagnostic callback, using a dedicated diagnostic stack. It does not call diagnostic code from the emulated game's KEYINPUT load handler and performs no filesystem write when Select is pressed. The first periodic full checkpoint is delayed until 60 VBlanks after the first A press following arm.
 
 ## Expected files
 

@@ -1,4 +1,4 @@
-name: Build KH control-flow diagnostic
+name: Build KH H control-flow diagnostic
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20241104
-    name: G-control-flow-pretrigger
+    name: H-control-flow-vblank-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,13 +27,13 @@ jobs:
       - name: Prepare hardware-test artifact
         shell: bash
         run: |
-          mkdir -p "out/G-control-flow-pretrigger/_gba"
-          cp code/bootstrap/GBARunner3.nds "out/G-control-flow-pretrigger/GBARunner3-KH-G-control-flow-pretrigger.nds"
-          cp -r configs "out/G-control-flow-pretrigger/_gba/"
-          cp docs/kh-save-select-control-flow-test.md "out/G-control-flow-pretrigger/HARDWARE-TEST.md"
-          cp tools/diagnostics/decode_g3cf.py "out/G-control-flow-pretrigger/decode_g3cf.py"
+          mkdir -p "out/H-control-flow-vblank-arm/_gba"
+          cp code/bootstrap/GBARunner3.nds "out/H-control-flow-vblank-arm/GBARunner3-KH-H-control-flow-vblank-arm.nds"
+          cp -r configs "out/H-control-flow-vblank-arm/_gba/"
+          cp docs/kh-save-select-control-flow-test.md "out/H-control-flow-vblank-arm/HARDWARE-TEST.md"
+          cp tools/diagnostics/decode_g3cf.py "out/H-control-flow-vblank-arm/decode_g3cf.py"
       - name: Publish diagnostic artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GBARunner3-KH-G-control-flow-pretrigger
-          path: out/G-control-flow-pretrigger
+          name: GBARunner3-KH-H-control-flow-vblank-arm
+          path: out/H-control-flow-vblank-arm

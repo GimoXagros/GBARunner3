@@ -13,4 +13,15 @@ arm_func cfdiag_recordArmBxTarget
     b cfdiag_armBxTargetReturn
 #endif
 
+.section ".ewram.bss", "aw", %nobits
+
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+.balign 8
+.global cfdiag_stack
+cfdiag_stack:
+    .space 2048
+.global cfdiag_stackEnd
+cfdiag_stackEnd:
+#endif
+
 .end

@@ -83,9 +83,11 @@ This audit identifies plausible generic defects. It does not show which instruct
 - GamePak mirrors are normalized consistently for diagnostic identity.
 - Existing ARM PC+8 behavior and `EA7B4FFE -> 0x09ED4000` are unchanged.
 
-## G diagnostic design
+## G hardware result and H diagnostic design
 
-`G-control-flow-pretrigger` keeps baseline emulation semantics. Select arms it at the Main Menu. It records a 128-event control-flow/cache ring in RAM and alternates checksummed `.g3diag.a` / `.g3diag.b` checkpoints. Periodic persistence and emergency persistence do not depend on input after failure.
+Hardware testing found that G stopped when Select was pressed at the Main Menu. Without Select, the original New Game black screen still reproduced. G therefore introduced a separate diagnostic regression and produced no root-cause evidence. Its guest KEYINPUT hook and Select-triggered immediate full checkpoint are not used for diagnosis.
+
+`H-control-flow-vblank-arm` keeps baseline emulation semantics. Select and A are observed only from the DS VBlank callback; the guest KEYINPUT load path is untouched. The diagnostic callback uses a dedicated 2 KiB EWRAM stack instead of the 288-byte IRQ scratch stack. Select only arms the RAM ring and performs no filesystem write. The first full checkpoint is delayed until 60 VBlanks after the first A press following arm, then alternates checksummed `.g3diag.a` / `.g3diag.b` files once per second. Emergency persistence does not depend on input after failure.
 
 The decoder rejects truncated or corrupt checkpoints and chooses the greatest valid checkpoint sequence. The instrumentation contains no `B8CJ` game-code branch, ROM offset workaround, save-slot skip, or title-specific config.
 

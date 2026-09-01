@@ -21,7 +21,10 @@ constexpr u32 RingCapacity = 128;
 constexpr u16 KeyA = 1 << 0;
 constexpr u16 KeySelect = 1 << 2;
 constexpr u32 InvalidValue = 0xFFFFFFFF;
-constexpr u32 PersistFrameInterval = 15;
+// Delay the first full checkpoint until one second after the transition input.
+// This keeps all filesystem work out of the Select arm path and limits the
+// diagnostic to one 12 KiB sync per second while the transition is observed.
+constexpr u32 PersistFrameInterval = 60;
 
 enum class DiagnosticStatus : u32
 {
@@ -153,6 +156,7 @@ u32 sLastHicodeMissAddress;
 u32 sRepeatedHicodeMissCount;
 u16 sLastKeysDown;
 bool sArmed;
+bool sTransitionObserved;
 bool sForcePersist;
 bool sWritePathB;
 FRESULT sLastFileResult;
@@ -495,6 +499,7 @@ extern "C" CFDIAG_EWRAM void cfdiag_initialize(
     sRepeatedHicodeMissCount = 0;
     sLastKeysDown = 0;
     sArmed = false;
+    sTransitionObserved = false;
     sForcePersist = false;
     sWritePathB = false;
     sLastFileResult = FR_OK;
@@ -516,9 +521,11 @@ extern "C" CFDIAG_EWRAM void cfdiag_observeKeys(u16 keyInput)
         sWriteIndex = 0;
         sTotalEvents = 0;
         sEventSequence = 0;
+        sFrameCount = 0;
         sArmed = true;
+        sTransitionObserved = false;
         sStatus = DiagnosticStatus::Armed;
-        sForcePersist = true;
+        sForcePersist = false;
         pushEvent(EventType::Arm, memu_inst_addr, 0, 0, vm_cpsr, 0, 0, keyInput, false);
         sArmSequence = sEventSequence;
         return;
@@ -528,7 +535,11 @@ extern "C" CFDIAG_EWRAM void cfdiag_observeKeys(u16 keyInput)
     {
         pushEvent(EventType::Input, memu_inst_addr, 0, 0, vm_cpsr, 0, 0, keyInput, false);
         if (newlyPressed & KeyA)
-            sForcePersist = true;
+        {
+            sTransitionObserved = true;
+            sFrameCount = 0;
+            sForcePersist = false;
+        }
     }
 }
 
@@ -540,12 +551,13 @@ extern "C" CFDIAG_EWRAM void cfdiag_sampleVBlank()
         return;
 
     ++sFrameCount;
-    if (sForcePersist || (sFrameCount % PersistFrameInterval) == 0)
+    if (sTransitionObserved &&
+        (sForcePersist || (sFrameCount % PersistFrameInterval) == 0))
     {
         pushEvent(
             EventType::VBlank, memu_inst_addr, 0, 0, vm_cpsr, vm_irqSavedLR,
             0, keys, false);
-        const PersistReason reason = sForcePersist ? PersistReason::Input : PersistReason::Periodic;
+        const PersistReason reason = sForcePersist ? sPersistReason : PersistReason::Periodic;
         sForcePersist = false;
         persist(reason, false);
     }
@@ -640,8 +652,9 @@ extern "C" CFDIAG_EWRAM void cfdiag_recordPrefetchAbort(
     pushEvent(
         EventType::PrefetchAbort, faultAddress, 0, StateRuntime,
         cpsr, lr, faultAddress, sRepeatedPrefetchCount, false);
+    sPersistReason = PersistReason::RepeatedPrefetchAbort;
     sForcePersist = true;
-    if (sArmed && sRepeatedPrefetchCount == 4)
+    if (sArmed && sTransitionObserved && sRepeatedPrefetchCount == 4)
         persist(PersistReason::RepeatedPrefetchAbort, true);
 }
 
@@ -658,8 +671,9 @@ extern "C" CFDIAG_EWRAM void cfdiag_recordHicodeMiss(u32 faultAddress)
     pushEvent(
         EventType::HicodeMiss, faultAddress, 0, StateRuntime,
         vm_cpsr, 0, faultAddress, sRepeatedHicodeMissCount, false);
+    sPersistReason = PersistReason::RepeatedHicodeMiss;
     sForcePersist = true;
-    if (sArmed && sRepeatedHicodeMissCount == 4)
+    if (sArmed && sTransitionObserved && sRepeatedHicodeMissCount == 4)
         persist(PersistReason::RepeatedHicodeMiss, true);
 }
 

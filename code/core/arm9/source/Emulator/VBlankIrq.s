@@ -8,7 +8,9 @@ arm_func emu_vblankIrq
     ldr sp,= dtcmIrqStackEnd
     push {r0-r3,r12}
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    ldr sp,= cfdiag_stackEnd
     bl cfdiag_sampleVBlank
+    ldr sp,= (dtcmIrqStackEnd - 5 * 4)
 #else
     bl diag_sampleVBlank
 #endif
