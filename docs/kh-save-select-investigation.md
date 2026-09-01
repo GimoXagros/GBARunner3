@@ -89,6 +89,8 @@ This audit identifies plausible generic defects. It does not show which instruct
 
 The decoder rejects truncated or corrupt checkpoints and chooses the greatest valid checkpoint sequence. The instrumentation contains no `B8CJ` game-code branch, ROM offset workaround, save-slot skip, or title-specific config.
 
+The normal ARM9 ITCM image already fills its 32 KiB region. In the diagnostic build only, the large ARM undefined C fallback is linked in EWRAM to make room for the control-flow breadcrumbs without moving fixed-address VM code. This changes diagnostic-path timing but not emulated instruction or address semantics; normal and nightly builds retain the original ITCM placement.
+
 ## Last valid control flow
 
 ```text

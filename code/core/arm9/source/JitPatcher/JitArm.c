@@ -229,7 +229,14 @@ void jit_processArmBlock(u32* ptr)
     } while ((u32)++ptr < (u32)blockEnd);
 }
 
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+// The normal ITCM image is intentionally packed to 32 KiB. Keep the large C
+// fallback in EWRAM for the diagnostic build so breadcrumb trampolines do not
+// displace any fixed-address VM code. Instruction semantics are unchanged.
+[[gnu::section(".ewram")]]
+#else
 [[gnu::section(".itcm")]]
+#endif
 u32* jit_handleArmUndefined(u32 instruction, u32* instructionPtr, u32* registers, u32 cpsr)
 {
     // if ((instruction & 0x0F000000) == 0x0C000000)
