@@ -8,6 +8,7 @@ arm_func cfdiag_recordArmBxTarget
     mov r0, r8
     bl cfdiag_recordControlFlowTarget
     pop {r0-r3,r12,lr}
+    sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
     b cfdiag_armBxTargetReturn
 #endif
 

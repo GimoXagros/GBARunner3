@@ -28,10 +28,11 @@ ensureJittedCommonHiReg:
 ensureJittedCommon:
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
     b cfdiag_recordArmBxTarget
+#else
+    sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
+#endif
 .global cfdiag_armBxTargetReturn
 cfdiag_armBxTargetReturn:
-#endif
-    sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
     cmp r9, #ROM_LINEAR_SIZE
         addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
 
