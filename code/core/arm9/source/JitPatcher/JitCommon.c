@@ -7,6 +7,9 @@
 #include "JitArm.h"
 #include "JitThumb.h"
 #include "JitCommon.h"
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 [[gnu::section(".ewram.bss")]]
 jit_state_t gJitState;
@@ -119,6 +122,9 @@ bool jit_isBlockJitted(void* ptr)
 void* jit_ensureBlockJitted(void* ptr)
 {
     void* const executablePtr = ptr;
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    cfdiag_recordControlFlowTarget((u32)executablePtr);
+#endif
     u32 address = (u32)ptr;
     if (address >= ROM_LINEAR_GBA_ADDRESS && address < ROM_LINEAR_END_GBA_ADDRESS)
     {

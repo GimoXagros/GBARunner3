@@ -25,6 +25,19 @@ arm_func vm_undefined
 arm_func vm_undefinedArm
     ldr lr, [r11, #-4] // lr = instruction
 arm_func vm_undefinedArmInstructionInLR
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    push {r0-r3,r12,lr}
+    sub sp, sp, #4
+    stmia sp, {lr}^ // guest LR
+    nop
+    sub r0, r11, #4
+    mov r1, lr
+    ldr r2, DTCM(vm_undefinedSpsr)
+    ldr r3, [sp]
+    bl cfdiag_recordArmUndefined
+    add sp, sp, #4
+    pop {r0-r3,r12,lr}
+#endif
     ldr r12, DTCM(vm_undefinedArmTableAddr)
     and r8, lr, #0x0FF00000
     and r9, lr, #0x810

@@ -52,6 +52,9 @@
 #ifdef GBAR3_RUNTIME_DIAGNOSTICS
 #include "Diagnostics/RuntimeDiagnostics.h"
 #endif
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 #define DEFAULT_ROM_FILE_PATH           "/rom.gba"
 #define BIOS_FILE_PATH                  "/_gba/bios.bin"
@@ -529,6 +532,13 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
 #ifdef GBAR3_RUNTIME_DIAGNOSTICS
     auto diagnosticPath = createSidecarPath(romPath, ".g3diag");
     diag_initialize(diagnosticPath.get(), gRomHeader.gameCode, static_cast<u32>(f_size(&gFile)));
+#endif
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    auto controlFlowDiagnosticPathA = createSidecarPath(romPath, ".g3diag.a");
+    auto controlFlowDiagnosticPathB = createSidecarPath(romPath, ".g3diag.b");
+    cfdiag_initialize(
+        controlFlowDiagnosticPathA.get(), controlFlowDiagnosticPathB.get(),
+        gRomHeader.gameCode, static_cast<u32>(f_size(&gFile)));
 #endif
     const RtcPersistence::Identity rtcIdentity
     {

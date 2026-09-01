@@ -5,6 +5,9 @@
 #include "Cpsr.h"
 #include "SdCache/SdCache.h"
 #include "HiCodeCacheMapping.h"
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 [[gnu::section(".dtcm")]]
 struct
@@ -107,11 +110,17 @@ ITCM_CODE void hic_mapRomBlock(u32 gbaAddress)
     u32 region4Config = mpu_getRegion4();
     if ((region4Config & 1) && (gHicodeState.lastHicodeBlock & ~0x7FF) == (gbaAddress & ~0x7FF))
     {
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+        cfdiag_recordHicodeMap(gbaAddress, 1);
+#endif
         // load extra code in the current cache segment 0
         addBlock(gbaAddress, romBlockData);
     }
     else
     {
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+        cfdiag_recordHicodeMap(gbaAddress, 0);
+#endif
         // clear cache segment 0 and load new hicode block
         mapNewBlock(gbaAddress, romBlockData);
     }

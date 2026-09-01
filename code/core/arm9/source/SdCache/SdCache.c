@@ -8,6 +8,9 @@
 #include "Cpsr.h"
 #include "SdCache.h"
 #include "JitPatcher/JitCommon.h"
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 typedef struct
 {
@@ -183,6 +186,9 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
         sdc_romBlockToCacheBlock[oldRomBlock] = NULL;
         sCacheBlockToRomBlock[cacheBlock] = SDC_ROM_BLOCK_INVALID;
     }
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    cfdiag_recordSdCache(oldRomBlock, romBlock, cacheBlock);
+#endif
 
     FsWaitToken waitToken;
     if (sector != 0)
@@ -286,3 +292,35 @@ void sdc_init(void)
         logAddress(result);
     }
 }
+
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+u32 sdc_getCacheBlockIndexForPointer(const void* pointer)
+{
+    const u32 address = (u32)pointer;
+    const u32 cacheStart = (u32)&sdc_cache[0][0];
+    if (address < cacheStart || address >= cacheStart + SDC_SIZE)
+        return 0xFFFFFFFF;
+    return (address - cacheStart) >> SDC_BLOCK_SHIFT;
+}
+
+u32 sdc_getRomAddressForCachePointer(const void* pointer)
+{
+    const u32 cacheBlock = sdc_getCacheBlockIndexForPointer(pointer);
+    if (cacheBlock == 0xFFFFFFFF)
+        return 0xFFFFFFFF;
+    const u32 romBlock = sCacheBlockToRomBlock[cacheBlock];
+    if (romBlock == SDC_ROM_BLOCK_INVALID)
+        return 0xFFFFFFFF;
+    const u32 cacheStart = (u32)&sdc_cache[0][0];
+    const u32 cacheOffset = ((u32)pointer - cacheStart) & SDC_BLOCK_MASK;
+    return 0x08000000 + (romBlock << SDC_BLOCK_SHIFT) + cacheOffset;
+}
+
+u32 sdc_getCacheBlockIndexForRomBlock(u32 romBlock)
+{
+    if (romBlock >= SDC_ROM_BLOCK_COUNT)
+        return 0xFFFFFFFF;
+    const void* pointer = sdc_romBlockToCacheBlock[romBlock];
+    return pointer ? sdc_getCacheBlockIndexForPointer(pointer) : 0xFFFFFFFF;
+}
+#endif

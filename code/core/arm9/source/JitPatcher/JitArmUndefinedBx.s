@@ -26,6 +26,12 @@ ensureJittedCommonHiReg:
     ldr r8, [sp, #-4]
 
 ensureJittedCommon:
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    push {r0-r3,r12,lr}
+    mov r0, r8
+    bl cfdiag_recordControlFlowTarget
+    pop {r0-r3,r12,lr}
+#endif
     sub r9, r8, #ROM_LINEAR_GBA_ADDRESS
     cmp r9, #ROM_LINEAR_SIZE
         addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)

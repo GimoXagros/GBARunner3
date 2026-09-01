@@ -9,6 +9,19 @@ arm_func jit_thumbEnsureJittedHiReg
     ldr r8, [sp, #-4]
 
 arm_func jit_thumbEnsureJitted
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    push {r0-r3,r12,lr}
+    sub sp, sp, #4
+    stmia sp, {lr}^ // fifth argument: guest LR
+    nop
+    mov r0, r11
+    ldrh r1, [r11]
+    mov r2, r8
+    mov r3, r10
+    bl cfdiag_recordThumbControlFlow
+    add sp, sp, #4
+    pop {r0-r3,r12,lr}
+#endif
     sub lr, r8, #ROM_LINEAR_GBA_ADDRESS
     cmp lr, #ROM_LINEAR_SIZE
         addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)

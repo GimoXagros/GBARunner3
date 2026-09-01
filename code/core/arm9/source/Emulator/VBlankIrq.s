@@ -4,10 +4,14 @@
 #include "AsmMacros.inc"
 
 arm_func emu_vblankIrq
-#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+#if defined(GBAR3_RUNTIME_DIAGNOSTICS) || defined(GBAR3_CONTROL_FLOW_DIAGNOSTICS)
     ldr sp,= dtcmIrqStackEnd
     push {r0-r3,r12}
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    bl cfdiag_sampleVBlank
+#else
     bl diag_sampleVBlank
+#endif
     pop {r0-r3,r12}
     mov r13, #0x04000000 // restore the IRQ handler's scratch/base value
 #endif

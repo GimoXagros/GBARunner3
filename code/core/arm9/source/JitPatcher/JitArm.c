@@ -4,16 +4,25 @@
 #include "MemoryEmulator/MemoryLoadStore.h"
 #include "MemoryEmulator/RomDefs.h"
 #include "JitArm.h"
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 [[gnu::noreturn]]
 static void armJitNotImplemented()
 {
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    cfdiag_recordNotImplemented();
+#endif
     asm volatile ("bkpt #0");
 }
 
 bool jit_processArmInstruction(u32* ptr)
 {
     u32 instruction = *ptr;
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    cfdiag_recordJitPatchArm(ptr, instruction);
+#endif
     if ((instruction & 0x0E000000) == 0x0A000000)
     {
         // B and BL imm

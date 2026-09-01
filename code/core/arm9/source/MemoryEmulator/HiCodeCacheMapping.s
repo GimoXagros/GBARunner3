@@ -35,6 +35,12 @@ arm_func hic_undefinedHicodeMiss
 1:
     pop {r3,r12}
     mrc p15, 3, lr, c15, c0, 0 // get index (=instruction address)
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    push {r0-r3,r12,lr}
+    mov r0, lr
+    bl cfdiag_recordHicodeMiss
+    pop {r0-r3,r12,lr}
+#endif
     push {r0-r3,r12,lr}
     mov r0, lr
     bl hic_mapRomBlock

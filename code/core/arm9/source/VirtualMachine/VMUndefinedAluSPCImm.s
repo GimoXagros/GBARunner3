@@ -72,6 +72,12 @@ vm_finishAlusImmNoIrq:
     orr r10, r10, r11
     and r11, r12, #0x20
     orr r10, r10, r11
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    push {r0-r3,r12,lr}
+    mov r0, r8
+    bl cfdiag_recordControlFlowTarget
+    pop {r0-r3,r12,lr}
+#endif
     msr spsr, r10
     movs pc, r8
 

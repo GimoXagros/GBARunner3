@@ -22,7 +22,15 @@ arm_func memu_prefetchAbort
 #ifdef GBAR3_HICODE_CACHE_MAPPING
     ldr sp,= dtcmHicodeStackEnd
     push {r0-r3, r12, lr}
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
     mov r0, lr
+    mrs r1, spsr
+    mov r2, lr
+    bl cfdiag_recordPrefetchAbort
+    ldr r0, [sp, #20]
+#else
+    mov r0, lr
+#endif
     bl hic_mapRomBlock
     ldmfd sp, {r0-r3, r12, pc}^
 #else

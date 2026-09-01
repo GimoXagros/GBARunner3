@@ -78,6 +78,12 @@ static inline void sdc_setIrqForbiddenReplacementRange(u32 romAddress, u32 lengt
 /// @brief Initializes the sd cache.
 void sdc_init(void);
 
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+u32 sdc_getRomAddressForCachePointer(const void* pointer);
+u32 sdc_getCacheBlockIndexForPointer(const void* pointer);
+u32 sdc_getCacheBlockIndexForRomBlock(u32 romBlock);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -3,12 +3,18 @@
 #include "cp15.h"
 #include "JitCommon.h"
 #include "JitThumb.h"
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#include "Diagnostics/ControlFlowDiagnostics.h"
+#endif
 
 // #define TRACE_THUMB_UNDEFINED
 
 [[gnu::noreturn]]
 static inline void thumbJitNotImplemented()
 {
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    cfdiag_recordNotImplemented();
+#endif
     asm volatile ("bkpt #0");
 }
 
@@ -32,6 +38,9 @@ void jit_processThumbBlock(u16* ptr)
             jitBits++;
         u32 auxBitIdx = (u32)ptr & 0xF;
         u32 instruction = *ptr;
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+        cfdiag_recordJitPatchThumb(ptr, instruction);
+#endif
         if ((instruction & 0xFF00) == 0xDF00)
         {
             // SWI

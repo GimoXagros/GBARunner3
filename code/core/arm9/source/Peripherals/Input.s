@@ -5,6 +5,18 @@
 
 arm_func emu_regKeyInputLoad16
     ldrh r9, [r8]
+#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+    tst r9, #(1 << 2) // Select, active low
+    beq 2f
+    tst r9, #(1 << 0) // A, active low
+    bne 1f
+2:
+    push {r0-r3,r9,r12,lr}
+    mov r0, r9
+    bl cfdiag_observeKeys
+    pop {r0-r3,r9,r12,lr}
+1:
+#endif
     bx lr
 
 arm_func emu_regKeyInputKeyControlLoad32
