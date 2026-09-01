@@ -6,9 +6,9 @@
 #include <string.h>
 #include "Cpsr.h"
 #include "Fat/ff.h"
-#include "JitPatcher/JitCommon.h"
 #include "MemoryEmulator/RomDefs.h"
 #include "SdCache/SdCache.h"
+#include "JitPatcher/JitCommon.h"
 #include "VirtualMachine/VMDtcm.h"
 
 namespace
