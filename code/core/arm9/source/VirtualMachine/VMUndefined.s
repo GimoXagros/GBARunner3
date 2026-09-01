@@ -27,15 +27,11 @@ arm_func vm_undefinedArm
 arm_func vm_undefinedArmInstructionInLR
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
     push {r0-r3,r12,lr}
-    sub sp, sp, #4
-    stmia sp, {lr}^ // guest LR
-    nop
     sub r0, r11, #4
     mov r1, lr
     ldr r2, DTCM(vm_undefinedSpsr)
-    ldr r3, [sp]
+    mov r3, #0 // guest LR is not materialized in this fixed-size handler
     bl cfdiag_recordArmUndefined
-    add sp, sp, #4
     pop {r0-r3,r12,lr}
 #endif
     ldr r12, DTCM(vm_undefinedArmTableAddr)
