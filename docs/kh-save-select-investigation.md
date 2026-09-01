@@ -125,6 +125,27 @@ saved-state diagnosis: I tested `r13` inside `notHicodeMiss` after
 pointer. J instead reloads `vm_undefinedSpsr` from DTCM after switching to the
 FIQ register bank.
 
+## J hardware trace result
+
+Both J checkpoints are complete and checksummed periodic checkpoints. No
+emergency persistence occurred.
+
+| File | SHA-256 | Sequence | Status |
+| --- | --- | ---: | --- |
+| `.g3diag.a` | `228F222C9CA708699698BE9153E3E965168BC9EEAF02AD447D625A87424C8BC4` | 79 | periodic checkpoint |
+| `.g3diag.b` | `5AF0B7B00A5E3066A4C388BC4AAA0C84722E4F0C9992AD8AD7D690E6F41E4774` | 80 | periodic checkpoint |
+
+The decoder selects `.g3diag.b`. The former terminal signature
+`0x09ED3570`, `0xB100BC01`, `NOT_IMPLEMENTED` is absent. Execution reaches a
+later high-ROM block (`0x09EE76C0`), VBlank persistence continues for about 80
+seconds after the transition input, and the latest record is a normal periodic
+VBlank rather than an emergency. This verifies that reloading
+`vm_undefinedSpsr` removes the first proven CPU control-flow failure.
+
+The trace alone does not establish whether the Save Slot UI was visible or
+whether selecting a slot reached subsequent gameplay. That remains a required
+human hardware observation before closing the original black-screen issue.
+
 ## Last valid control flow
 
 ```text
@@ -167,11 +188,11 @@ entry branch behavior.
 
 ## Next evidence gate
 
-1. Build the J diagnostic artifact with the corrected saved-SPSR reload.
-2. Verify Main Menu -> New Game -> Save Slot on 3DS + DSpico.
-3. If Save Slot appears, select a slot and verify continued progression.
-4. Decode the new `.g3diag.a/.b` pair and confirm that the previous
-   `0x09ED3570 -> NOT_IMPLEMENTED` terminal sequence is absent.
-5. Recheck the established RC5 hardware baseline before promotion.
+1. Record whether J displays the Save Slot screen on 3DS + DSpico.
+2. If Save Slot appears, select a slot and verify continued progression.
+3. If the screen remains black, treat the now-live CPU/VBlank path as a new
+   display or polling investigation rather than reverting the proven dispatch
+   correction.
+4. Recheck the established RC5 hardware baseline before promotion.
 
 **Hardware verification required.**
