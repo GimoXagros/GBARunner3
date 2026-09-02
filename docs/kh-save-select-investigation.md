@@ -149,7 +149,7 @@ VBlank continue for about 80 seconds, the remaining symptom is now investigated
 as a live display, peripheral-completion, or guest polling failure. The proven
 saved-SPSR correction remains in place.
 
-## Last valid control flow
+## H/I failure: last valid control flow
 
 ```text
 0x080656C2 Thumb MOV pc,r0
@@ -161,7 +161,7 @@ saved-SPSR correction remains in place.
 -> JIT patches BX 0x4700 to Thumb undefined trap 0xB100
 ```
 
-## First divergence
+## H/I failure: first divergence (resolved by J)
 
 `hic_undefinedHicodeMiss` correctly recognizes that the high-ROM block is
 already mapped, but its `notHicodeMiss` path unconditionally branches to
@@ -170,13 +170,13 @@ bit is set. The handler nevertheless reads the aligned 32-bit value at
 `0x09ED3570`, combining `0xBC01` with the JIT trap `0xB100` into
 `0xB100BC01`, and sends it to the ARM decoder.
 
-## Failure type
+## H/I failure type (not the remaining J/K symptom)
 
 CPU control-flow failure: high-ROM Thumb undefined-dispatch state loss. It is
 not a display-only black frame and the trace does not identify save emulation,
 DMA, VRAM, RTC, or video playback as the first failing subsystem.
 
-## Root cause
+## H/I root cause (resolved by J)
 
 The generic high-ROM undefined dispatcher loses the guest ARM/Thumb state on a
 mapped-block non-miss. The resulting fake ARM instruction is unsupported and
@@ -188,6 +188,27 @@ from the aligned I-cache word and enter the Thumb dispatcher after its normal
 memory load, avoiding an invalid high-ROM data read. It does not change
 high-ROM mapping, SD cache addressing, RTC, save paths, or the established RC5
 entry branch behavior.
+
+## K submitted hardware result — 2026-09-02
+
+Both submitted K sidecars are exactly 64 bytes: G3DG v3 ready headers,
+sequence 0, totalSamples 0, status Ready. Both SHA-256 values are
+`E369FEBC7B9E602F692DECA35EEB2EDC65B361398DCD4A9B9C3F9E6B95EB17DA`.
+They do not contain the 64-record runtime ring (a complete file is 15,680
+bytes). No PC, DMA, timer, IRQ, or display conclusion can be drawn from them.
+
+User observation: still black before the Save Slot screen, with a short
+mechanical noise every few seconds. This does not prove that game audio or
+the game CPU continued. The user is unavailable for hardware testing for
+several hours and requested autonomous melonDS validation, without another
+hardware round now.
+
+Static instrumentation finding: the K VBlank hook puts five words on an
+8-byte-aligned diagnostic stack before calling C. This violates the 8-byte
+call-boundary alignment. The L diagnostic preserves six words instead. This
+is an instrumentation correctness fix, **not an established cause of the K
+missing checkpoints or the game's black screen**. No JIT, mapping, DMA, RTC,
+save-path, or game configuration change is included.
 
 ## Next evidence gate
 

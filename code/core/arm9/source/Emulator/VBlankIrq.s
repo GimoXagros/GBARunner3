@@ -6,13 +6,15 @@
 arm_func emu_vblankIrq
 #if defined(GBAR3_RUNTIME_DIAGNOSTICS) || defined(GBAR3_CONTROL_FLOW_DIAGNOSTICS)
     ldr sp,= diag_stackEnd
-    push {r0-r3,r12}
+    // diag_stackEnd is 8-byte aligned. Six words preserve AAPCS alignment
+    // at the diagnostic C call; five words would misalign it by four bytes.
+    push {r0-r3,r12,lr}
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
     bl cfdiag_sampleVBlank
 #else
     bl diag_sampleVBlank
 #endif
-    pop {r0-r3,r12}
+    pop {r0-r3,r12,lr}
     mov r13, #0x04000000 // restore the IRQ handler's scratch/base value
 #endif
     // For center and mask display capture has to be enabled every frame
