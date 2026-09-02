@@ -210,6 +210,94 @@ is an instrumentation correctness fix, **not an established cause of the K
 missing checkpoints or the game's black screen**. No JIT, mapping, DMA, RTC,
 save-path, or game configuration change is included.
 
+## Autonomous melonDS lab — 2026-09-02
+
+The submitted hardware failure is still **unresolved**. No game-compatibility
+fix is inferred from the following lab success. A small headless frontend runs
+the GBARunner3 NDS application inside the official melonDS core; see
+[`tools/melonds`](../tools/melonds/README.md) for exact source, lab patches,
+commands, and known limitations. ROM/BIOS/save contents remain local.
+
+Stock melonDS 1.1 lacks required cache-debug operations. Experimental cache
+history also required lab corrections: a 4 GiB MPU-region overflow, cache-tag
+write fallthrough, debug-tag index reconstruction, and a denied STM continuing
+in privileged exception mode. ROM-free tests cover these host-emulator cases.
+None is evidence of the reported hardware fault, and none changes GBARunner3
+mapping, JIT, DMA, RTC, or save handling. The final successful pinned host is
+`cce3e49252392801da758ad41ed66d5f730d9a07` plus `cache-lab.patch`.
+
+### Inputs and observations
+
+- 32 MiB B8CJ ROM SHA-256:
+  `0B3670F3A08BD763D153ECE802FEDF71D03DF40D0B2E004DE2835856266586C3`.
+  Local D:, N:, and isolated lab copies match. Hardware sidecars do not store
+  the ROM hash, so identity with the actual historical hardware run is not
+  independently proven by those sidecars.
+- GBA BIOS SHA-256:
+  `FD2547724B505F487E6DCB29EC2ECFF3AF35A841A77AB2E85FD87350ABD36570`;
+  the D: and lab BIOS match.
+- Input save SHA-256:
+  `2D864C0B789A43214EEE8524D3182075125E5CA2CD527F3582EC87FFD94076BC`;
+  the D: and lab input saves match. Only isolated copies are used for writes.
+- No `/_gba/gbarunner3.json` or matching B8CJ title configuration exists on
+  the inspected D: card. The lab therefore uses the current built-in defaults.
+- An mGBA 0.10.5 cross-check displayed the Korean introductory notice and
+  sampled its key-poll code at `0x09ED40F4`. This was input sanity checking,
+  **not** a GBARunner3 pass or a complete mGBA New Game validation. Initial
+  zeros near `0x09ED4000` are not evidence of ROM corruption: executable code
+  follows them and both emulators reached the notice.
+
+### Application and diagnostic results
+
+| Build | NDS SHA-256 | Patched melonDS result |
+| --- | --- | --- |
+| K, exact `5824056` rebuild | `4782FA5DC82431DEA7DCC0A1FA87BFD350D9A09A0CAB6A7FB0BFCC58FBABE87B` | Matches the submitted K binary; title, menu, New Game, Save Slot visible; selecting a slot subsequently displayed intro footage. |
+| L, aligned diagnostic stack | `159B567F919DC6B980A070E27EDF8895D6F121D746D4287059FF1D59CC3B9DF7` | Independent run using copies of D: inputs; title, menu, New Game, Save Slot visible after 600 post-input frames. |
+
+Both lab runs wrote complete 15,680-byte runtime checkpoints with valid
+checksums. K's final sequence was 17 after entering footage; L's was 10 while
+the Save Slot screen was visible. This does not explain why submitted K
+hardware files contain only Ready headers. K/L do not diverge at Save Slot in
+this lab, so L is an instrumentation fix only, not a confirmed game fix.
+
+The exact J binary (SHA-256
+`3663811864E6D07D4262C38EC25033ABE2CFC212D468AB58676CF1AF476A9A56`)
+did not complete the initial 900-frame command in the same host environment;
+its last periodic heartbeat was at frame 780, before any menu input. A repeat
+showed the same limit. This is earlier than J's hardware failure and remains an
+undiagnosed host/application interaction. It further limits the use of this
+experimental melonDS environment as a hardware substitute. Do not label it
+the first divergence of the user's New Game failure.
+
+Local L checkpoint SHA-256 values: sequence 9
+`ADA8A6D703F0740D353E648928CA8396E3F087D8AC4FF67FD862C532E423D0E0`,
+sequence 10
+`5EDE6A8AEFC78043C899E126658BA7A7278EBE9A8FB25AED1674A2BF7BC8234E`.
+The associated Save Slot screenshot SHA-256 is
+`FEEA793889C2BAB344AA57191E1C5F41C33A8C48C3B185392B8DCDE176734DA3`.
+Payloads and screenshots stay in the local lab, not the repository.
+
+At L's visible Save Slot checkpoint: guest DISPCNT `0x1B40`, DS DISPCNT
+`0x00011B10`, mapped hicode block `0x09ED3580`, timer 0 counter changing,
+and DMA-start delta 22 across the retained 64 samples. Repeated interrupt PCs
+`0x06898348` / emulated-instruction marker `0x0689834C` coincide with a
+visible, responsive screen and are not evidence of CPU freeze. VCOUNT is
+sampled at a fixed VBlank phase; one VCOUNT value cannot prove it stopped.
+
+Video completion, actual gameplay, sustained A/V synchronization, and the
+other RC5 hardware regression titles have **not** been verified in this run.
+Do not promote a release from these results.
+
+### Build/test status
+
+- Diagnostic K/L CI run `33625717299`: success; exact K hash reproduced.
+- Application/test-ROM build run `33625717333`: success.
+- Runtime/CF decoder, saved-SPSR dispatch, and diagnostic-stack tests: pass.
+- Patched melonDS ROM-free selftests: pass. These are not GBARunner3 core
+  regression tests proving the hardware root cause.
+- GoogleTest test-ROM execution on hardware: not performed.
+- No A-F game configuration changes were applied during the K/L runs.
+
 ## Next evidence gate
 
 The K runtime-state build preserves J behavior and records the most recent 64
@@ -219,9 +307,14 @@ sound controls, high-ROM mapping, and SD-cache exclusion state. It alternates
 checksummed `.g3diag.a` / `.g3diag.b` checkpoints once per second after the New
 Game input; no post-failure hotkey is required.
 
-The next hardware trace must determine whether the black interval has changing
-PC/timers/DMA with an incorrect display configuration, or a stable polling PC
-waiting for a DMA/timer/IRQ condition. Only the first divergent subsystem will
-be changed. Recheck the established RC5 hardware baseline before promotion.
+The lab now reaches the Save Slot UI, but the hardware interval has no K
+runtime samples to compare against it. Preserve this successful lab checkpoint
+and the prior J hardware control-flow trace. Investigate remaining DS/3DS,
+storage, cache/timing, and instrumentation differences without assigning a
+game root cause from host-emulator defects. Do not request another hardware
+round while the user is unavailable. Ultimately a valid black-interval trace
+must distinguish display state from DMA/timer/IRQ polling. Only the first
+proven divergent subsystem will be changed. Recheck the established RC5
+hardware baseline before promotion.
 
 **Hardware verification required.**

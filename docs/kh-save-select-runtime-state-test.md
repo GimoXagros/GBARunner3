@@ -1,11 +1,15 @@
-# Kingdom Hearts save-selection K runtime-state hardware test
+# Kingdom Hearts save-selection K/L runtime-state hardware test
 
 This diagnostic follows the verified J saved-SPSR Thumb-dispatch fix. It does
 not change VRAM, DMA, JIT, RTC, save-path, or high-ROM compatibility settings.
 Its only purpose is to distinguish a live black display from a guest polling or
 peripheral-completion failure before the save-selection screen.
 
-Hardware verification is required.
+L changes only the diagnostic VBlank C-call stack alignment. It is not a
+confirmed fix for the game or for K's missing hardware checkpoints. Both K
+and L reached Save Slot in the experimental melonDS lab on 2026-09-02.
+Hardware verification is required; no additional hardware round is requested
+while the user is unavailable.
 
 ## Files written
 
@@ -21,8 +25,9 @@ not contain ROM, BIOS, VRAM, or save payload data.
 
 1. Keep the ROM and its existing `.sav` in their normal locations. Back up and
    remove older `.g3diag`, `.g3diag.a`, and `.g3diag.b` files beside the ROM.
-2. Start `GBARunner3-KH-K-runtime-state.nds` through the same 3DS + DSpico path
-   used for J.
+2. Start the NDS in the selected diagnostic artifact (K baseline or L aligned
+   stack) through the same 3DS + DSpico path used for J. Record its exact name
+   and SHA-256; do not mix builds or overwrite an existing release.
 3. Reach the Kingdom Hearts main menu and highlight `New Game`.
 4. Press and release **Select once**. This only arms the in-memory ring; it does
    not write a file and must not pause the game.
@@ -43,4 +48,3 @@ python decode_g3diag.py "<ROM name>.g3diag.a" "<ROM name>.g3diag.b" -o kh-k-runt
 
 The decoder selects the newest valid sequence, verifies its checksum, writes a
 CSV, and summarizes PC variation, display modes, DMA starts, and live timers.
-

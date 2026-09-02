@@ -1,0 +1,113 @@
+diff --git a/src/ARM.cpp b/src/ARM.cpp
+index f7d0967..5112e38 100644
+--- a/src/ARM.cpp
++++ b/src/ARM.cpp
+@@ -33,6 +33,7 @@ namespace melonDS
+ {
+ using Platform::Log;
+ using Platform::LogLevel;
++extern void ProbeInstruction(ARMv5*);
+ 
+ #ifdef GDBSTUB_ENABLED
+ void ARM::GdbCheckA()
+@@ -582,6 +583,7 @@ void ARMv5::DataAbort()
+     R_ABT[2] = oldcpsr;
+     R[14] = R[15] + (oldcpsr & 0x20 ? 4 : 0);
+     JumpTo(ExceptionBase + 0x10);
++    throw InterpreterDataAbort{};
+ }
+ 
+ void ARM::CheckGdbIncoming()
+@@ -657,6 +659,7 @@ void ARMv5::Execute()
+         else
+ #endif
+         {
++            try {
+             if (CPSR & 0x20) // THUMB
+             {
+                 if constexpr (mode == CPUExecuteMode::InterpreterGDB)
+@@ -670,6 +673,7 @@ void ARMv5::Execute()
+                 else             NextInstr[1] = CodeRead32(R[15], false);
+ 
+                 // actually execute
++                ProbeInstruction(this);
+                 u32 icode = (CurInstr >> 6) & 0x3FF;
+                 ARMInterpreter::THUMBInstrTable[icode](this);
+             }
+@@ -685,6 +689,7 @@ void ARMv5::Execute()
+                 NextInstr[1] = CodeRead32(R[15], false);
+ 
+                 // actually execute
++                ProbeInstruction(this);
+                 if (CheckCondition(CurInstr >> 28))
+                 {
+                     u32 icode = ((CurInstr >> 4) & 0xF) | ((CurInstr >> 16) & 0xFF0);
+@@ -698,6 +703,9 @@ void ARMv5::Execute()
+                     AddCycles_C();
+             }
+ 
++            } catch (const InterpreterDataAbort&) {
++                AddCycles_C();
++            }
+             // TODO optimize this shit!!!
+             if (Halted)
+             {
+diff --git a/src/ARM.h b/src/ARM.h
+index ea91a90..fffc6b9 100644
+--- a/src/ARM.h
++++ b/src/ARM.h
+@@ -33,6 +33,7 @@
+ 
+ namespace melonDS
+ {
++struct InterpreterDataAbort {};
+ inline u32 ROR(u32 x, u32 n)
+ {
+     return (x >> (n&0x1F)) | (x << ((32-n)&0x1F));
+diff --git a/src/CP15.cpp b/src/CP15.cpp
+index 7d51f83..d7eff93 100644
+--- a/src/CP15.cpp
++++ b/src/CP15.cpp
+@@ -220,10 +220,10 @@ void ARMv5::UpdatePURegion(const u32 n)
+         return;
+     }
+ 
+-    u32 start = (rgn & CP15_REGION_BASE_MASK) >> CP15_MAP_ENTRYSIZE_LOG2;
+-    u32 sz = 2 << ((rgn & CP15_REGION_SIZE_MASK) >> 1);
+-    u32 end = start + (sz >> CP15_MAP_ENTRYSIZE_LOG2);
+-    // TODO: check alignment of start
++    u32 pageShift = std::max(int((rgn & CP15_REGION_SIZE_MASK) >> 1) + 1
++                            - int(CP15_MAP_ENTRYSIZE_LOG2), 0);
++    u32 start = ((rgn >> CP15_MAP_ENTRYSIZE_LOG2) >> pageShift) << pageShift;
++    u32 end = start + (1u << pageShift);
+ 
+     u8 usermask = CP15_MAP_NOACCESS;
+     u8 privmask = CP15_MAP_NOACCESS;
+@@ -1332,8 +1332,13 @@ void ARMv5::CP15Write(const u32 id, const u32 val)
+             uint8_t segment = (CacheDebugRegisterIndex >> (32-ICACHE_SETS_LOG2)) & (ICACHE_SETS-1);
+             uint8_t wordAddress = (CacheDebugRegisterIndex & (ICACHE_LINELENGTH-1)) >> 2;
+             uint8_t index = (CacheDebugRegisterIndex >> ICACHE_LINELENGTH_LOG2) & (ICACHE_LINESPERSET-1);
+-            ICacheTags[(index << ICACHE_SETS_LOG2) + segment] = val;
++            // Internal tags include the row address; the hardware debug tag
++            // contains only bits 31:11 plus flags for an 8 KiB cache.
++            constexpr u32 rowMask = (ICACHE_LINESPERSET-1) << ICACHE_LINELENGTH_LOG2;
++            ICacheTags[(index << ICACHE_SETS_LOG2) + segment] =
++                (val & ~rowMask) | (u32(index) << ICACHE_LINELENGTH_LOG2);
+         }
++        return;
+ 
+     case 0xF20:
+         // data cache Tag register
+@@ -1345,8 +1350,11 @@ void ARMv5::CP15Write(const u32 id, const u32 val)
+             uint8_t segment = (CacheDebugRegisterIndex >> (32-DCACHE_SETS_LOG2)) & (DCACHE_SETS-1);
+             uint8_t wordAddress = (CacheDebugRegisterIndex & (DCACHE_LINELENGTH-1)) >> 2;
+             uint8_t index = (CacheDebugRegisterIndex >> DCACHE_LINELENGTH_LOG2) & (DCACHE_LINESPERSET-1);
+-            DCacheTags[(index << DCACHE_SETS_LOG2) + segment] = val;
++            constexpr u32 rowMask = (DCACHE_LINESPERSET-1) << DCACHE_LINELENGTH_LOG2;
++            DCacheTags[(index << DCACHE_SETS_LOG2) + segment] =
++                (val & ~rowMask) | (u32(index) << DCACHE_LINELENGTH_LOG2);
+         }
++        return;
+ 
+ 
+     case 0xF30:

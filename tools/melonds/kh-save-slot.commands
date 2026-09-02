@@ -1,0 +1,16 @@
+run 900 0
+screen disclaimer.bmp
+run 6 8
+run 420 0
+run 6 8
+run 180 0
+screen title.bmp
+run 6 8
+run 90 0
+screen menu.bmp
+run 6 4
+run 60 0
+run 6 1
+run 600 0
+screen save-slot.bmp
+quit
