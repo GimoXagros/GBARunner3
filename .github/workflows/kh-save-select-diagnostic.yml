@@ -44,8 +44,8 @@ jobs:
           cp docs/kh-save-select-runtime-state-test.md "out/${{ matrix.variant }}/HARDWARE-TEST.md"
           cp tools/diagnostics/decode_g3diag.py "out/${{ matrix.variant }}/decode_g3diag.py"
           cp code/core/arm9/arm9.elf "out/${{ matrix.variant }}/symbols/"
-          arm-none-eabi-nm -n -C code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-nm.txt"
-          arm-none-eabi-objdump -d code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-disassembly.txt"
+          "$DEVKITARM/bin/arm-none-eabi-nm" -n -C code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-nm.txt"
+          "$DEVKITARM/bin/arm-none-eabi-objdump" -d code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-disassembly.txt"
           git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD > "out/${{ matrix.variant }}/SOURCE.txt"
           sha256sum code/bootstrap/GBARunner3.nds > "out/${{ matrix.variant }}/SHA256.txt"
       - name: Publish diagnostic artifact
