@@ -46,7 +46,7 @@ jobs:
           cp code/core/arm9/arm9.elf "out/${{ matrix.variant }}/symbols/"
           "$DEVKITARM/bin/arm-none-eabi-nm" -n -C code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-nm.txt"
           "$DEVKITARM/bin/arm-none-eabi-objdump" -d code/core/arm9/arm9.elf > "out/${{ matrix.variant }}/symbols/arm9-disassembly.txt"
-          git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD > "out/${{ matrix.variant }}/SOURCE.txt"
+          printf '%s\n' '${{ matrix.variant == 'K-baseline' && '58240561b413e6078d3bab6a204f7ff364d283be' || github.sha }}' > "out/${{ matrix.variant }}/SOURCE.txt"
           sha256sum code/bootstrap/GBARunner3.nds > "out/${{ matrix.variant }}/SHA256.txt"
       - name: Publish diagnostic artifact
         uses: actions/upload-artifact@v4
