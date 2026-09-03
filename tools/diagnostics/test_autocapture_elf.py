@@ -228,7 +228,7 @@ def test_trampolines(elf):
         assert m.stopped and m.alignment_checks >= 1
         assert u.reg_read(UC_ARM_REG_SP) == 0x03007FFC and u.reg_read(UC_ARM_REG_R4) == 0x12345678
         if name == 'diag_setEnvironment':
-            haddr = next(v for k, v in m.s.items() if k.endswith('_1hE'))
+            haddr = next(v for k, v in m.s.items() if k.endswith('1hE'))
             assert m.word(haddr + SCHEMA['header'].index('clock_control') * 4) == 0x31415926
         results.append(dict(path=name, result='PASS', incoming_sp='0x03007ffc'))
     return results
