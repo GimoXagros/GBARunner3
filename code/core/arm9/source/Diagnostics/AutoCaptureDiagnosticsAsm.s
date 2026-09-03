@@ -63,8 +63,19 @@ arm_func diag_irqReturnTarget
     b diag_irqReturnTargetReturn
 
 arm_func diag_prefetchEntry
+    // ABT SP is not guaranteed to address a stack on exception entry.
+    // Preserve it without touching a shared guest register or dereferencing it.
+    str sp, diag_prefetchSavedSp
+    ldr sp,= diag_prefetchScratchEnd
     sub lr, lr, #4
     low_trace 8, lr
+    ldr sp, diag_prefetchSavedSp
     b diag_prefetchEntryReturn
 .pool
+.balign 4
+diag_prefetchSavedSp: .word 0
+.global diag_prefetchScratch
+diag_prefetchScratch: .word 0xA93D57AC
+    .space 28
+diag_prefetchScratchEnd:
 #endif

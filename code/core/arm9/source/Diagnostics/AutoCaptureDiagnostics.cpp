@@ -18,6 +18,7 @@
 extern "C" {
 extern u32 vm_irqSavedLR, memu_inst_addr, gHicodeState[2];
 extern u32 diag_stack[], diag_stackEnd[], diag_eventStack[], diag_eventStackEnd[];
+extern u32 diag_prefetchScratch[];
 volatile DiagnosticSramState gDiagSramState = {};
 volatile u32 gDiagTraceKinds = 0;
 }
@@ -192,7 +193,8 @@ DIAG_EWRAM u32 instruction(u32 pc, u32& valid)
 DIAG_EWRAM void checkStack()
 {
     h.stack_flags = (diag_stack[0] == Canary ? 0 : 1) |
-                    (diag_eventStack[0] == Canary ? 0 : 2);
+                    (diag_eventStack[0] == Canary ? 0 : 2) |
+                    (diag_prefetchScratch[0] == Canary ? 0 : 4);
     const u32* p = diag_stack + 1;
     while (p < diag_stackEnd && *p == Fill) ++p;
     const u32 used = reinterpret_cast<const char*>(diag_stackEnd) - reinterpret_cast<const char*>(p);

@@ -1,4 +1,9 @@
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+// M-only placement: its out-of-range trace veneers exceed the ITCM budget.
+.section ".ewram", "ax"
+#else
 .section ".itcm", "ax"
+#endif
 .arm
 
 #include "AsmMacros.inc"
