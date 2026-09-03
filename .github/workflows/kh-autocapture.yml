@@ -28,3 +28,31 @@ jobs:
         with:
           name: M-internal-build
           path: out
+  verify:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: M-internal-build
+          path: out
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install unicorn==2.1.4 pyelftools==0.32 capstone==5.0.7
+      - name: Format and existing diagnostic regressions
+        run: |
+          python tools/diagnostics/generate_autocapture_format.py --check
+          python -m unittest discover -s tools/diagnostics -p 'test_*.py'
+          python tools/diagnostics/test_decode_g3diag.py
+          python tools/diagnostics/test_decode_g3cf.py
+          python tools/diagnostics/test_hicode_undefined_dispatch.py
+      - name: Execute linked M diagnostics and saved-SPSR dispatch
+        run: |
+          python tools/diagnostics/test_autocapture_elf.py out/symbols/arm9.elf --output out/M-semantic-tests.json
+          python tools/diagnostics/test_hicode_dispatch_elf.py out/symbols/arm9.elf --output out/hicode-semantic-tests.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M-semantic-test-results
+          path: out/*tests.json

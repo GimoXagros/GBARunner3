@@ -25,6 +25,22 @@ class DiagnosticStackTest(unittest.TestCase):
         self.assertIn(".balign 8\n.global diag_stack", stack)
         self.assertIn(".space 2048", stack)
 
+    def test_m_sizes_and_separate_event_stack(self):
+        import json
+        schema = json.loads((ROOT / 'tools/diagnostics/autocapture_schema.json').read_text())
+        source = (ROOT / 'code/core/arm9/source/Diagnostics/ControlFlowDiagnosticsAsm.s').read_text()
+        self.assertIn(f".space {schema['stack_size']}", source)
+        self.assertIn(f".space {schema['event_stack_size']}", source)
+        event = (ROOT / 'code/core/arm9/source/Diagnostics/AutoCaptureDiagnosticsAsm.s').read_text()
+        call = event.split('ldr sp,= diag_eventStackEnd')[1].split('bl diag_recordLowTarget')[0]
+        self.assertIn('push {r0,r1}', call)
+        self.assertNotIn('push {r0-r3,lr}', event)
+        self.assertIn('str sp, diag_prefetchSavedSp', event)
+        cpp = (ROOT / 'code/core/arm9/source/Diagnostics/AutoCaptureDiagnostics.cpp').read_text()
+        self.assertIn('diag_prefetchScratch[0] == Canary', cpp)
+        self.assertIn('diag_eventStack[0] == Canary', cpp)
+        self.assertNotRegex(event, r'(?m)^\s*mcr\s')
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,16 @@
 .section ".ewram", "ax"
 .arm
 
+// The legacy hicode C call chain can enter with SP == 4 mod 8. Do not inherit
+// that ABI defect in the new SD metadata call or change the production stack.
+arm_func diag_recordSdLoad
+    push {r4,lr}
+    mov r4, sp
+    bic sp, sp, #7
+    bl diag_recordSdLoadAligned
+    mov sp, r4
+    pop {r4,pc}
+
 // Every C call switches to the aligned, separate event stack. The incoming
 // FIQ/ABT scratch stack can be 4 mod 8; no C call uses that stack here.
 // Only the generic low-address self-return interval is traced. No title PC.

@@ -268,8 +268,11 @@ extern "C" DIAG_EWRAM void diag_initialize(const char* a, const char* b, u32 cod
     for (u32* p = diag_stack; p < diag_stackEnd; ++p) *p = Fill;
     for (u32* p = diag_eventStack; p < diag_eventStackEnd; ++p) *p = Fill;
     diag_stack[0] = diag_eventStack[0] = Canary;
-    h.file_result = writeFile(false); sPathIndex = 1;
-    h.file_result = writeFile(false); sPathIndex = 0;
+    for (sPathIndex = 0; sPathIndex < 2; ++sPathIndex) {
+        h.file_result = writeFile(false);
+        if (h.file_result != FR_OK) { ++h.fs_failures; h.status = 4; h.stages |= WriteFailed; }
+    }
+    sPathIndex = 0;
 }
 extern "C" DIAG_EWRAM void diag_setEnvironment(u32 hash, u32 saveSize, u32 device, u32 dsi, u32 clock)
 {
@@ -288,7 +291,7 @@ extern "C" DIAG_EWRAM void diag_recordConfig(const char* path, bool loaded)
     while (f_read(&file, buffer, sizeof(buffer), &n) == FR_OK && n) hash = fnv1a(buffer, n, hash);
     f_close(&file); h.config_data_hash = hash;
 }
-extern "C" DIAG_EWRAM void diag_recordSdLoad(u32 oldBlock, u32 newBlock, u32 cacheBlock)
+extern "C" DIAG_EWRAM void diag_recordSdLoadAligned(u32 oldBlock, u32 newBlock, u32 cacheBlock)
 {
     sSdOld = oldBlock; sSdNew = newBlock; sSdCache = cacheBlock; ++sSdLoads;
 }

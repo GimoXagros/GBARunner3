@@ -77,6 +77,9 @@ def read_checkpoint(path: Path) -> Checkpoint:
     magic, version, header_size, record_size, capacity, write_index, total = header[:7]
     if magic != MAGIC:
         raise ValueError(f"{path}: not a G3DG diagnostic checkpoint")
+    if version == 4:
+        from autocapture_format import read_auto
+        return read_auto(path, data)
     if version not in (1, 2, 3) or header_size != HEADER.size:
         raise ValueError(f"{path}: unsupported diagnostic format version {version}")
     if capacity == 0 or capacity & (capacity - 1) or write_index >= capacity:
@@ -167,7 +170,7 @@ def summarize(checkpoint: Checkpoint) -> None:
         if len(values) > 1:
             timer_changes.append(str(timer))
     print(
-        f"runtime summary: unique_pc={len(pcs)} modes={sorted(modes)} "
+        f"runtime summary: unique_last_emulation_marker={len(pcs)} modes={sorted(modes)} "
         f"vcount_values={len(vcounts)} dma_start_delta={dma_delta} "
         f"changing_timers={','.join(timer_changes) or 'none'}"
     )
@@ -189,17 +192,24 @@ def main() -> int:
             3: "checkpoint" if version == 3 else "captured",
             4: "write-failed",
         }
+        if version == 4:
+            status_names = {1: "ready", 2: "stage-only", 3: "checkpoint", 4: "write-failed"}
         status = status_names.get(checkpoint.header[11], f"unknown-{checkpoint.header[11]}")
-        integrity = "checksum=ok" if version == 3 and checkpoint.rows else "legacy/no-ring"
+        integrity = "checksum=ok" if version == 4 or (version == 3 and checkpoint.rows) else "legacy/no-ring"
         print(
             f"{path}: version={version} sequence={checkpoint.checkpoint_sequence} "
             f"status={status} samples={len(checkpoint.rows)} {integrity}"
         )
         checkpoints.append(checkpoint)
+        if version == 4:
+            import json
+            print(json.dumps(checkpoint.metadata, ensure_ascii=False))
 
     if not checkpoints:
         raise SystemExit("no valid G3DG checkpoint")
-    checkpoint = max(checkpoints, key=lambda item: item.checkpoint_sequence)
+    from autocapture_format import select_pair
+    newest, payload, _ = select_pair(args.dumps)
+    checkpoint = payload or newest
     output = args.output or checkpoint.path.with_suffix(".csv")
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
@@ -216,7 +226,7 @@ def main() -> int:
         )
         if flags & (1 << bit)
     ]
-    variant = ",".join(enabled) if enabled else "baseline"
+    variant = "M-autocapture" if checkpoint.header[1] == 4 else (",".join(enabled) if enabled else "baseline")
     print(
         f"selected {checkpoint.path} sequence={checkpoint.checkpoint_sequence} "
         f"for {game_code} ({variant}); wrote {len(checkpoint.rows)} samples to {output}"
