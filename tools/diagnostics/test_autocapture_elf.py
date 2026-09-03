@@ -50,7 +50,7 @@ class Machine:
         self.u.reg_write(UC_ARM_REG_R0, value)
         self.u.reg_write(UC_ARM_REG_PC, self.u.reg_read(UC_ARM_REG_LR))
     def hook(self, u, pc, size, _):
-        if pc == self.s.get('diag_recordSdLoadAligned'):
+        if pc in [self.s.get(n) for n in ('diag_recordSdLoadAligned', 'diag_recordDmaStartAligned', 'diag_setEnvironmentAligned', 'diag_recordConfigAligned', 'diag_initializeMetadata', 'diag_writeReadyFiles')]:
             assert u.reg_read(UC_ARM_REG_SP) % 8 == 0
             self.alignment_checks += 1
         if pc == self.boundary or pc == 0x0300F000:
@@ -104,7 +104,7 @@ class Machine:
         u = self.u
         u.reg_write(UC_ARM_REG_CPSR, 0xD2)
         u.reg_write(UC_ARM_REG_SPSR, 0x60000030)
-        u.reg_write(UC_ARM_REG_SP, 0x03008000 if boot else self.s['diag_stackEnd'] - 24)
+        u.reg_write(UC_ARM_REG_SP, 0x03007FFC if boot else self.s['diag_stackEnd'] - 24)
         for reg, value in zip(REGS, args): u.reg_write(reg, value)
         u.reg_write(UC_ARM_REG_LR, 0x0300F000)
         self.stopped = False
@@ -112,7 +112,9 @@ class Machine:
         assert self.stopped, (name, hex(u.reg_read(UC_ARM_REG_PC)))
 
     def initialize(self):
+        before = bytes(self.u.mem_read(0x20, 0x40))
         self.call('diag_initialize', 0x03009000, 0x03009008, 0x4A433842, 0x02000000, boot=True)
+        assert bytes(self.u.mem_read(0x20, 0x40)) == before, 'boot metadata damaged the VM vector/dispatcher'
         self.put('vm_irqSavedLR', 0x03000104)
         self.put('memu_inst_addr', 0x03000200)
         self.put('gHicodeState', 0x09ED3000)
@@ -212,6 +214,23 @@ def test_trampolines(elf):
         assert m.stopped and m.alignment_checks == 1
         assert u.reg_read(UC_ARM_REG_SP) == 0x03007FFC and u.reg_read(UC_ARM_REG_R4) == 0x12345678
         results.append(dict(path='diag_recordSdLoad', result='PASS', incoming_sp='0x03007ffc'))
+    for name in ('diag_recordConfig', 'diag_setEnvironment', 'diag_recordDmaStart'):
+        m = Machine(elf)
+        u = m.u
+        u.reg_write(UC_ARM_REG_CPSR, 0xDF)
+        u.reg_write(UC_ARM_REG_SP, 0x03007FFC)
+        u.reg_write(UC_ARM_REG_LR, 0x0300F000)
+        u.reg_write(UC_ARM_REG_R0, 0x03009000 if name == 'diag_recordConfig' else 1)
+        u.reg_write(UC_ARM_REG_R1, 0)
+        u.reg_write(UC_ARM_REG_R4, 0x12345678)
+        u.mem_write(0x03007FFC, struct.pack('<I', 0x31415926))
+        u.emu_start(m.s[name], 0xFFFFFFFF, count=30000)
+        assert m.stopped and m.alignment_checks >= 1
+        assert u.reg_read(UC_ARM_REG_SP) == 0x03007FFC and u.reg_read(UC_ARM_REG_R4) == 0x12345678
+        if name == 'diag_setEnvironment':
+            haddr = next(v for k, v in m.s.items() if k.endswith('_1hE'))
+            assert m.word(haddr + SCHEMA['header'].index('clock_control') * 4) == 0x31415926
+        results.append(dict(path=name, result='PASS', incoming_sp='0x03007ffc'))
     return results
 
 def main():

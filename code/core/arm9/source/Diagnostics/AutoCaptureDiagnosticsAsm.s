@@ -5,6 +5,48 @@
 .section ".ewram", "ax"
 .arm
 
+// The boot SYS stack is also 4 mod 8. Over-aligned FIL locals require the real
+// ABI guarantee: otherwise their memset can overwrite saved registers.
+arm_func diag_initialize
+    push {r4,lr}
+    mov r4, sp
+    bic sp, sp, #7
+    bl diag_initializeMetadata
+    // Metadata initialization fills this stack, before anything uses it.
+    ldr sp,= diag_stackEnd
+    bl diag_writeReadyFiles
+    mov sp, r4
+    pop {r4,pc}
+
+arm_func diag_recordConfig
+    push {r4,lr}
+    mov r4, sp
+    // Config is read before diag_initialize. Do not fill the diagnostic stack
+    // here; it has no active frames and the later initialization adds canaries.
+    ldr sp,= diag_stackEnd
+    bl diag_recordConfigAligned
+    mov sp, r4
+    pop {r4,pc}
+
+arm_func diag_setEnvironment
+    ldr r12, [sp] // fifth argument on the original caller stack
+    push {r4,lr}
+    mov r4, sp
+    bic sp, sp, #7
+    sub sp, sp, #8
+    str r12, [sp]
+    bl diag_setEnvironmentAligned
+    mov sp, r4
+    pop {r4,pc}
+
+arm_func diag_recordDmaStart
+    push {r4,lr}
+    mov r4, sp
+    bic sp, sp, #7
+    bl diag_recordDmaStartAligned
+    mov sp, r4
+    pop {r4,pc}
+
 // The legacy hicode C call chain can enter with SP == 4 mod 8. Do not inherit
 // that ABI defect in the new SD metadata call or change the production stack.
 arm_func diag_recordSdLoad

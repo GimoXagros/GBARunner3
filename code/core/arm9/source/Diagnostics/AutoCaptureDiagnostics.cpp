@@ -251,7 +251,7 @@ DIAG_EWRAM void persist(bool full)
 }
 }
 
-extern "C" DIAG_EWRAM void diag_initialize(const char* a, const char* b, u32 code, u32 size)
+extern "C" DIAG_EWRAM void diag_initializeMetadata(const char* a, const char* b, u32 code, u32 size)
 {
     strncpy(sPath[0], a, 511); strncpy(sPath[1], b, 511);
     h.magic = 0x47443347; h.version = 4;
@@ -268,18 +268,21 @@ extern "C" DIAG_EWRAM void diag_initialize(const char* a, const char* b, u32 cod
     for (u32* p = diag_stack; p < diag_stackEnd; ++p) *p = Fill;
     for (u32* p = diag_eventStack; p < diag_eventStackEnd; ++p) *p = Fill;
     diag_stack[0] = diag_eventStack[0] = Canary;
+}
+extern "C" DIAG_EWRAM void diag_writeReadyFiles()
+{
     for (sPathIndex = 0; sPathIndex < 2; ++sPathIndex) {
         h.file_result = writeFile(false);
         if (h.file_result != FR_OK) { ++h.fs_failures; h.status = 4; h.stages |= WriteFailed; }
     }
     sPathIndex = 0;
 }
-extern "C" DIAG_EWRAM void diag_setEnvironment(u32 hash, u32 saveSize, u32 device, u32 dsi, u32 clock)
+extern "C" DIAG_EWRAM void diag_setEnvironmentAligned(u32 hash, u32 saveSize, u32 device, u32 dsi, u32 clock)
 {
     h.rom_header_hash = hash; h.save_size = saveSize; h.mount_device = device;
     h.dsi_mode = dsi; h.clock_control = clock; h.env_valid = 0x1F;
 }
-extern "C" DIAG_EWRAM void diag_recordConfig(const char* path, bool loaded)
+extern "C" DIAG_EWRAM void diag_recordConfigAligned(const char* path, bool loaded)
 {
     if (strcmp(path, "/_gba/gbarunner3.json") == 0) h.app_config_loaded = loaded ? 1 : 2;
     else h.title_config_loaded = loaded ? 1 : 2;
@@ -295,7 +298,7 @@ extern "C" DIAG_EWRAM void diag_recordSdLoadAligned(u32 oldBlock, u32 newBlock, 
 {
     sSdOld = oldBlock; sSdNew = newBlock; sSdCache = cacheBlock; ++sSdLoads;
 }
-extern "C" DIAG_EWRAM void diag_recordDmaStart(u32 channel, const GbaDmaChannel*, u32)
+extern "C" DIAG_EWRAM void diag_recordDmaStartAligned(u32 channel, const GbaDmaChannel*, u32)
 {
     ++sDmaStarts; sLastDma = channel;
 }
