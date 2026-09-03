@@ -8,6 +8,9 @@
 #include "Cpsr.h"
 #include "SdCache.h"
 #include "JitPatcher/JitCommon.h"
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+#include "Diagnostics/AutoCaptureDiagnostics.h"
+#endif
 #ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
 #include "Diagnostics/ControlFlowDiagnostics.h"
 #endif
@@ -181,6 +184,9 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
         }
     }
     u32 oldRomBlock = sCacheBlockToRomBlock[cacheBlock];
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    diag_recordSdLoad(oldRomBlock, romBlock, cacheBlock);
+#endif
     if (oldRomBlock != SDC_ROM_BLOCK_INVALID)
     {
         sdc_romBlockToCacheBlock[oldRomBlock] = NULL;

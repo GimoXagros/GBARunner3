@@ -26,7 +26,9 @@ ensureJittedCommonHiReg:
     ldr r8, [sp, #-4]
 
 ensureJittedCommon:
-#ifdef GBAR3_CONTROL_FLOW_DIAGNOSTICS
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    b diag_armBxTarget
+#elif defined(GBAR3_CONTROL_FLOW_DIAGNOSTICS)
     b cfdiag_recordArmBxTarget
 #else
     sub r9, r8, #ROM_LINEAR_GBA_ADDRESS

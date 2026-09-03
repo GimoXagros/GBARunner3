@@ -48,6 +48,9 @@
 #include "MemoryEmulator/HiCodeCacheMapping.h"
 #include "VirtualMachine/VMNestedIrq.h"
 #include "arm9Clock.h"
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+#include "Diagnostics/AutoCaptureDiagnostics.h"
+#endif
 #include "Peripherals/RomGpio/RomGpio.h"
 #ifdef GBAR3_RUNTIME_DIAGNOSTICS
 #include "Diagnostics/RuntimeDiagnostics.h"
@@ -591,6 +594,12 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     setupIWramDataCache();
     setupEWramDataCache();
     setupArm9Clock();
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    diag_setEnvironment(
+        rtcIdentity.headerHash, gSaveFile.obj.fs ? static_cast<u32>(f_size(&gSaveFile)) : 0,
+        gFile.obj.fs ? gFile.obj.fs->pdrv : 0xFFFFFFFF,
+        Environment::IsDsiMode(), Environment::IsDsiMode() ? *(vu16*)0x04004004 : 0);
+#endif
 
     hic_initialize();
     vm_nestedIrqLevel = 0;  // restore nested irq level

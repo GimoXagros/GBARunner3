@@ -6,7 +6,13 @@
 #include "MemoryEmulator/RomDefs.h"
 
 arm_func memu_prefetchAbort
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    b diag_prefetchEntry
+.global diag_prefetchEntryReturn
+diag_prefetchEntryReturn:
+#else
     sub lr, lr, #4
+#endif
     cmp lr, #0x03000000
         addlo lr, lr, #(ROM_LINEAR_GBA_ADDRESS - ROM_LINEAR_DS_ADDRESS) // relative rom
     cmp lr, #0x07000000

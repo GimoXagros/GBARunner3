@@ -78,7 +78,13 @@ vm_finishAlusImmNoIrq:
     bl cfdiag_recordControlFlowTarget
     pop {r0-r3,r12,lr}
 #endif
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    b diag_irqReturnTarget
+.global diag_irqReturnTargetReturn
+diag_irqReturnTargetReturn:
+#else
     msr spsr, r10
+#endif
     movs pc, r8
 
 .section ".dtcm", "aw"

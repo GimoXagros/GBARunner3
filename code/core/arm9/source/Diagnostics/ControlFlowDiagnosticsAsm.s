@@ -21,11 +21,23 @@ arm_func cfdiag_recordArmBxTarget
 diag_stack:
 .global cfdiag_stack
 cfdiag_stack:
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    .space 8192
+#else
     .space 2048
+#endif
 .global diag_stackEnd
 diag_stackEnd:
 .global cfdiag_stackEnd
 cfdiag_stackEnd:
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+.balign 8
+.global diag_eventStack
+diag_eventStack:
+    .space 2048
+.global diag_eventStackEnd
+diag_eventStackEnd:
+#endif
 #endif
 
 .end

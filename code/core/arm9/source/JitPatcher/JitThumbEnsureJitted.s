@@ -22,7 +22,13 @@ arm_func jit_thumbEnsureJitted
     add sp, sp, #4
     pop {r0-r3,r12,lr}
 #endif
+#ifdef GBAR3_DIAG_AUTOCAPTURE
+    b diag_thumbTarget
+.global diag_thumbTargetReturn
+diag_thumbTargetReturn:
+#else
     sub lr, r8, #ROM_LINEAR_GBA_ADDRESS
+#endif
     cmp lr, #ROM_LINEAR_SIZE
         addlo r8, r8, #(ROM_LINEAR_DS_ADDRESS - ROM_LINEAR_GBA_ADDRESS)
     sub lr, r8, #ROM_LINEAR_DS_ADDRESS

@@ -1,6 +1,6 @@
 #include "RuntimeDiagnostics.h"
 
-#ifdef GBAR3_RUNTIME_DIAGNOSTICS
+#if defined(GBAR3_RUNTIME_DIAGNOSTICS) && !defined(GBAR3_DIAG_AUTOCAPTURE)
 
 #include <cstddef>
 #include <string.h>

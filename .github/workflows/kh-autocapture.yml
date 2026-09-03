@@ -1,0 +1,30 @@
+name: Build M automatic hardware diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/kh-hardware-divergence-autocapture]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20241104
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Verify format generation
+        run: python3 tools/diagnostics/generate_autocapture_format.py --check
+      - name: Build M application and test NDS
+        run: make -C code debug GBAR3_RUNTIME_DIAGNOSTICS=1 GBAR3_DIAG_AUTOCAPTURE=1 GBAR3_BUILD_ID=${{ github.sha }}
+      - name: Preserve internal build for semantic and lab gates
+        run: |
+          mkdir -p out/symbols out/tests
+          cp code/bootstrap/GBARunner3.nds out/M.nds
+          cp code/core/arm9/arm9.elf out/symbols/arm9.elf
+          cp code/test/test.nds out/tests/test.nds
+          "$DEVKITARM/bin/arm-none-eabi-objdump" -d code/core/arm9/arm9.elf > out/symbols/arm9-disassembly.txt
+          "$DEVKITARM/bin/arm-none-eabi-gcc" --version > out/toolchain.txt
+          printf '%s\n' '${{ github.sha }}' > out/SOURCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: M-internal-build
+          path: out

@@ -1,0 +1,21 @@
+{
+  "version": 4,
+  "runtime_capacity": 64,
+  "phase_capacity": 16,
+  "event_capacity": 8,
+  "stack_size": 8192,
+  "event_stack_size": 2048,
+  "persist_interval": 60,
+  "header": [
+    "magic", "version", "header_size", "record_size", "capacity", "write_index", "total_samples", "game_code", "rom_size", "sequence", "flags", "status", "file_result", "checksum", "first_vblank_sample", "transition_sample",
+    "stages", "first_a_sample", "a_count", "last_success_sample", "first_low_sample", "low_event_count", "event_count", "phase_write_index", "phase_total", "phase_capacity", "event_capacity", "event_record_size", "complete_size", "rom_header_hash", "save_size", "dsi_mode", "mount_device", "clock_control", "app_config_loaded", "title_config_loaded", "config_path_hash", "config_data_hash", "env_valid", "stack_flags", "stack_used", "write_start_vcount", "write_end_vcount",
+    "build_id_0", "build_id_1", "build_id_2", "build_id_3", "build_id_4", "build_id_5", "build_id_6", "build_id_7", "build_id_8", "build_id_9",
+    "first_low_target", "first_low_source", "first_low_spsr", "first_low_kind", "fs_failures", "last_attempt_sample", "stack_size", "event_stack_size", "reserved0", "reserved1", "reserved2"
+  ],
+  "extra": [
+    "native_spsr", "ds_ime", "mpu_region4", "icache_lockdown", "cp15_control", "vm_spsr_irq", "vm_lr_irq", "vm_sp_irq", "nested_irq_level", "ds_master_brightness", "ds_capture_control", "ds_vram_abcd", "ds_vram_efg", "stages", "fs_result", "last_success_sample", "transition_sample", "sd_old_block", "sd_new_block", "sd_cache_block", "sd_load_count", "write_start_vcount", "write_end_vcount", "stack_flags", "stack_used", "native_irq_lr", "first_low_target", "event_count", "key_edges", "anchor_reason", "source_instruction", "source_instruction_valid"
+  ],
+  "event": ["sample", "kind", "source", "target", "native_spsr", "virtual_cpsr", "irq_spsr", "irq_lr", "irq_sp", "marker", "hicode_block", "mpu_region4", "icache_lockdown", "instruction", "instruction_valid", "sequence"],
+  "stages": {"READY": 1, "FIRST_VBLANK": 2, "SAMPLING": 4, "TRANSITION_KEY_OBSERVED": 8, "CHECKPOINT_WRITTEN": 16, "WRITE_FAILED": 32},
+  "anchor_reasons": {"FIRST_VBLANK": 1, "A_EDGE": 2, "DISPLAY_CHANGE": 4, "FIRST_LOW_TARGET": 8}
+}
