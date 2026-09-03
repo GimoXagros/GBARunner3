@@ -42,6 +42,7 @@ arm_func vm_undefinedArmInstructionInLR
 
 arm_func vm_undefinedThumb
     ldrh lr, [r11, #-2]!
+arm_func vm_undefinedThumbInstructionInLR
     ldr r10, DTCM(vm_undefinedSpsr)
     ldr r12, DTCM(vm_undefinedThumbTableAddr)
     mov r8, lr, lsl #19
