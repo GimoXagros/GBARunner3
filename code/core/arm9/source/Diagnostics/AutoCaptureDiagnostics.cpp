@@ -9,13 +9,14 @@
 #include "GbaIoRegOffsets.h"
 #include "Peripherals/DmaTransfer.h"
 #include "VirtualMachine/VMDtcm.h"
+#include "VirtualMachine/VMNestedIrq.h"
 #include "SdCache/SdCache.h"
 #ifndef GBAR3_BUILD_ID
 #error M diagnostics require the exact compile-time build ID
 #endif
 #define DIAG_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
 extern "C" {
-extern u32 vm_irqSavedLR, memu_inst_addr, gHicodeState[2], vm_spsr_irq, vm_regs_irq[2], vm_nestedIrqLevel;
+extern u32 vm_irqSavedLR, memu_inst_addr, gHicodeState[2];
 extern u32 diag_stack[], diag_stackEnd[], diag_eventStack[], diag_eventStackEnd[];
 volatile DiagnosticSramState gDiagSramState = {};
 volatile u32 gDiagTraceKinds = 0;
