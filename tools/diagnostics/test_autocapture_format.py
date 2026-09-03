@@ -78,5 +78,12 @@ class FormatTest(unittest.TestCase):
         trace = inspect([self.a])
         self.assertEqual(compare(trace, trace)['classification'], 'NO_RUNTIME_CHECKPOINT')
 
+    def test_all_invalid_still_produces_failure_evidence(self):
+        self.a.write_bytes(fixture()[:-1])
+        trace = inspect([self.a, self.b])
+        r = compare(trace, trace)
+        self.assertEqual(r['classification'], 'FILESYSTEM_OR_DIAGNOSTIC_FAILURE')
+        self.assertIn('no valid checkpoint', r['findings'][0]['evidence']['validation_error'])
+
 if __name__ == '__main__':
     unittest.main()

@@ -79,7 +79,12 @@ def instruction_evidence(row, elf=None, rom=None, marker=False):
     return evidence
 
 def inspect(paths, elf=None, rom=None):
-    newest, payload, rejected = select_pair(paths)
+    try:
+        newest, payload, rejected = select_pair(paths)
+    except ValueError as error:
+        return dict(metadata=dict(status=4, validation_error=str(error), build_id=None),
+                    newest_file=None, rejected_files=[str(error)], payload_file=None,
+                    phases={}, events=[], instruction_evidence=[])
     metadata = getattr(newest, 'metadata', dict(version=newest.header[1], status=newest.header[11], sequence=newest.checkpoint_sequence,
                                                transition_sample=newest.header[15], build_id=None))
     result = dict(metadata=metadata, newest_file=str(newest.path), rejected_files=rejected,
@@ -110,7 +115,7 @@ def compare(hardware, lab):
     def add(category, evidence):
         findings.append(dict(classification=category, evidence=evidence, certainty='OBSERVED BUT NOT ROOT CAUSE'))
     if hm.get('status') == 4 or hm.get('fs_failures', 0) or hm.get('stack_flags', 0):
-        add('FILESYSTEM_OR_DIAGNOSTIC_FAILURE', {k: hm.get(k) for k in ('status', 'file_result', 'fs_failures', 'stack_flags')})
+        add('FILESYSTEM_OR_DIAGNOSTIC_FAILURE', {k: hm.get(k) for k in ('status', 'file_result', 'fs_failures', 'stack_flags', 'validation_error')})
     if not hardware['payload_file']:
         add('NO_RUNTIME_CHECKPOINT', dict(durable_stages=hm.get('stage_names'), rejected=hardware['rejected_files']))
     identity_match = bool(hm.get('build_id')) and hm.get('build_id') == lm.get('build_id')
