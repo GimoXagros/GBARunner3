@@ -43,6 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate packaged configs and repository invariants
+        run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v4
         with:
           name: GBARunner3
