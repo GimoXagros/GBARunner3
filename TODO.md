@@ -244,3 +244,8 @@ the current hicode branch instead of duplicating title configuration.
 
 - [Pinned/parallel build audit and official Actions](docs/build-reproducibility.md) implemented.
 - Latest-toolchain libtwl/calico API migration remains blocked; existing source/assembly warnings remain classified and visible.
+
+## EEPROM V124 source audit (2026-09-05)
+
+- [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
+- Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.

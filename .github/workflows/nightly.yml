@@ -49,6 +49,8 @@ jobs:
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
       - name: Test release upload without network mutations
         run: node tools/tests/test_release_upload.cjs
+      - name: Execute EEPROM source-selection audit
+        run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v8
