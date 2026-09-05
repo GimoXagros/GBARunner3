@@ -112,6 +112,8 @@ else
 #---------------------------------------------------------------------------------
 # main targets
 #---------------------------------------------------------------------------------
+main.o: gbarunner9.bin.o three.h threeGlow.h splashBg.h runner.h
+
 $(ARM9ELF)	:	$(OFILES)
 	@echo linking $(notdir $@)
 	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
@@ -130,7 +132,7 @@ $(ARM9ELF)	:	$(OFILES)
 # add additional rules like this for each image extension
 # you use in the graphics folders
 #---------------------------------------------------------------------------------
-%.s %.h: %.png %.grit
+%.s %.h &: %.png %.grit
 #---------------------------------------------------------------------------------
 	grit $< -fts -o$*
 

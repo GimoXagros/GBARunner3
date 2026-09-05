@@ -18,7 +18,7 @@ jobs:
     name: Build with Docker using devkitARM
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Make application and test ROM
@@ -35,7 +35,7 @@ jobs:
           cp code/core/arm9/arm9.elf out/tests/
           cp /tmp/hex-address.elf out/tests/
       - name: Publish build to GH Actions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           path: out
           name: GBARunner3
@@ -44,12 +44,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Execute host serializer regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
+      - name: Test release upload without network mutations
+        run: node tools/tests/test_release_upload.cjs
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: GBARunner3
           path: out
@@ -59,7 +61,7 @@ jobs:
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
       - name: Execute linked ARM dispatch and negative controls
         run: python3 tools/tests/test_hicode_dispatch_elf.py out/tests/arm9.elf --output dispatch-results.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: hicode-dispatch-results
           path: dispatch-results.json
