@@ -80,6 +80,12 @@ switches, manual JIT/self-modifying-code patch addresses, BIOS-intro skipping,
 DS-mode ARM9 clock selection, and forced save type. See the JSON files in
 [`configs`](configs) for per-title examples.
 
+Development builds after `custom-v0.1.2` validate external patch-address strings
+strictly: 1–8 hexadecimal digits with optional `0x`/`0X`. A malformed address or
+non-string entry rejects that entire array and preserves its previous/default
+value. See [patch-address format](docs/config-patch-addresses.md). The published
+`custom-v0.1.2` binary retains its original behavior.
+
 ## Hardware verification
 
 The v0.1.2 NDS above was verified on Nintendo 3DS in DS mode using DSpico with
