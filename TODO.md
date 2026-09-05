@@ -49,7 +49,8 @@ input and route have not been verified on rc5.
   [#173](https://github.com/Gericom/GBARunner3/issues/173),
   [#198](https://github.com/Gericom/GBARunner3/issues/198), and
   [#206](https://github.com/Gericom/GBARunner3/issues/206). rc5 safely creates
-  and initializes adjacent save files, but EEPROM V124 still has a source TODO,
+  and initializes adjacent save files on the normal path; failure recovery is
+  incomplete, EEPROM V124 still has a source TODO,
   slow in-game save operations and reload behavior are separate consumer paths.
 - [ ] **Obtain a repository-wide licensing decision** — Unresolved
   [#200](https://github.com/Gericom/GBARunner3/issues/200) and
@@ -81,15 +82,19 @@ input and route have not been verified on rc5.
   audio clicks in other tested games. Continue through slot selection, intro,
   gameplay, save, restart, and load, then broaden the title matrix. Keep these
   extended checks separate from the now-fixed reported transition.
-- [ ] **Reject malformed JSON patch addresses before applying them.** Shipped
-  configs contain 2,513 valid hexadecimal addresses, but the runtime
-  `parseHexString()` helper does not reject non-hex characters or more than eight
-  digits. Define the failure behavior and add target-side parser tests before
-  changing production settings semantics.
-- [ ] **Finish high-ROM save-signature scanning across 4 KiB boundaries.** The
-  current search explicitly cannot match a 16-byte signature split between two
-  SD-cache blocks. Add a boundary-safe comparison and unit vectors without
-  assuming cache blocks are contiguous.
+- [x] **Reject malformed JSON patch addresses before applying them.** Merged in
+  PR #4. Strict 1–8-digit parsing and per-array atomic replacement preserve
+  existing/default values on invalid input; all 304 configs and 2,513 addresses
+  match. See [format and tests](docs/config-patch-addresses.md).
+- [ ] **Finish high-ROM save-signature scanning across 4 KiB boundaries.**
+  [Draft PR #5](https://github.com/GimoXagros/GBARunner3/pull/5) contains the
+  bounded candidate, 19-signature host corpus and 494 linked ARM cases.
+  Underlying SD I/O failure propagation remains a conditional merge gate.
+- [ ] **Complete save I/O failure recovery.**
+  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) demonstrates 14
+  remaining integrity failures after limited byte-access guards. Deferred state,
+  bounded retry/ARM7 acknowledgment, interrupted initialization and cleanup
+  recovery remain open; green matrix CI is not a complete-integrity claim.
 - [ ] **Add ROM-hack source-profile handling** —
   [#185](https://github.com/Gericom/GBARunner3/issues/185) for non-standard
   headers and [#202](https://github.com/Gericom/GBARunner3/issues/202) /
@@ -249,3 +254,9 @@ the current hicode branch instead of duplicating title configuration.
 
 - [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
 - Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.
+
+## Autonomous maintenance result index (2026-09-05)
+
+See the [task results, evidence and single hardware queue](docs/autonomous-maintenance-20260905.md)
+for merged changes, retained drafts and remaining gates. Software-only tests do
+not extend the release's hardware verification scope.
