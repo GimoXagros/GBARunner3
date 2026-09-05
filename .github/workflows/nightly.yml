@@ -24,7 +24,7 @@ jobs:
       - name: Make application and test ROM
         run: |
           make -C code debug
-          arm-none-eabi-g++ -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
       - name: Prepare for build publishing
         run: |
           mkdir -p out/_gba/
