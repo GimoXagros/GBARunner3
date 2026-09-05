@@ -68,3 +68,18 @@ No global suppression or `-w` is added, and no runtime source is modified by thi
 build task. See the [complete warning inventory](build-warning-inventory-20260905.md)
 for the measured pinned baseline and classification. Warnings that require JIT,
 DMA or test-runtime semantics remain visible for a separate focused change.
+
+## Final integration verification
+
+PR #7 head `78b445e` passed both push and PR workflows: nightly runs
+[33944206580](https://github.com/GimoXagros/GBARunner3/actions/runs/33944206580) /
+[33944208056](https://github.com/GimoXagros/GBARunner3/actions/runs/33944208056), and
+reproducibility runs
+[33944206579](https://github.com/GimoXagros/GBARunner3/actions/runs/33944206579) /
+[33944208050](https://github.com/GimoXagros/GBARunner3/actions/runs/33944208050).
+Two clean serial, -j2 and -j4 builds succeeded. Application/test NDS hashes match
+one another and the pre-build-change serial baseline; see the
+[maintenance result](autonomous-maintenance-20260905.md) for exact hashes.
+Merged as `8a0ab62`. Latest-toolchain execution is manual/non-blocking; ordinary
+Makefile/matrix PRs run only the pinned matrix and documentation-only changes do
+not rerun that matrix. No real release was created, changed or dispatched.
