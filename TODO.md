@@ -234,3 +234,8 @@ the current hicode branch instead of duplicating title configuration.
 - Never attach or commit commercial ROMs, patched ROM images, BIOS files, or
   copyrighted saves. Record hashes and lawful patch/reproduction instructions
   instead.
+
+## High-ROM save-function search (2026-09-05)
+
+- Candidate bounded overlap search and synthetic regression coverage are documented in [save-signature boundary analysis](docs/save-signature-boundary.md).
+- Underlying SD I/O failure propagation and hardware behavior remain unverified; do not mark EEPROM V124 fixed.
