@@ -2,7 +2,7 @@
 
 This draft now passes the original 14 failed invariants at the FatFs seam.
 The expanded host suite compiles actual Save.cpp, ARM7 save service and exit
-handling code. It reports 70 PASS with **no accepted failures**; CI runs
+handling code. It reports 73 PASS with **no accepted failures**; CI runs
 `test_save_io_host.py --require-fixed`. It models sticky FIL errors, combined
 operation/close failures and a finite operation schedule. It is not a physical
 SD, FAT metadata durability or simultaneous CPU model.
@@ -74,5 +74,5 @@ No guessed shared storage/IRQ protocol change is included here.
 Other gates: stopped-emulation recovery UI and original-path/medium identity,
 actual simultaneous ARM7/ARM9 behavior, reset/power-off cancellation on hardware,
 FAT metadata/power-cut recovery, and complete target retry/cleanup transactions.
-The 70 passing tests do not close these gates. Save protocol and SWI signatures
+The 73 passing tests do not close these gates. Save protocol and SWI signatures
 are unchanged. This candidate is not part of develop or custom-v0.1.2.

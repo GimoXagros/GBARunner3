@@ -204,4 +204,15 @@ int main() {
     result("file_backed_error_cancels_exit", sState==Arm7State::Idle && exits==0);
     sGbaSaveIpcService._saveShared=nullptr;
     result("arm7_unconfigured_clean", sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Clean);
+
+    for(unsigned failedChunk : {2u,3u}) {
+        reset(11); SaveTypeInfo large{131072,0}; failAt["write"]=failedChunk;
+        const bool failed=!sav_initializeSave(&large,"synthetic.sav");
+        const size_t partial=disk.size(); failAt.clear();
+        result((std::string("multi_chunk_fill_retry_")+std::to_string(failedChunk)).c_str(), failed && partial<131072 && sav_initializeSave(&large,"synthetic.sav") && disk.size()==131072 &&
+            std::all_of(disk.begin(),disk.begin()+11,[](u8 b){return b==0x35;}) &&
+            std::all_of(disk.begin()+11,disk.end(),[](u8 b){return b==255;}));
+    }
+    reset(); init(); opens=openCalls; const unsigned closes=closeCalls;
+    result("retry_rejects_clean_or_null", !sav_retryFailedWrite("synthetic.sav") && !sav_retryFailedWrite(nullptr) && openCalls==opens && closeCalls==closes);
 }

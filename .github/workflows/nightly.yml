@@ -33,7 +33,7 @@ jobs:
           mkdir -p out/tests
           cp code/test/test.nds out/tests/
           cp code/core/arm9/arm9.elf out/tests/
-          cp code/core/arm7/arm7.elf out/tests/
+          cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7

@@ -90,7 +90,7 @@ input and route have not been verified on rc5.
   bounded candidate, 19-signature host corpus and 494 linked ARM cases.
   Underlying SD I/O failure propagation remains a conditional merge gate.
 - [ ] **Complete save I/O failure recovery.**
-  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) now passes 70 FatFs-seam/ARM7 host cases, including the original 14 failures.
+  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) now passes 73 FatFs-seam/ARM7 host cases, including the original 14 failures.
   Lower-level SD result propagation, target retry transactions, a stopped-emulation
   recovery control and hardware exit/error behavior remain open.
 - [ ] **Add ROM-hack source-profile handling** —
