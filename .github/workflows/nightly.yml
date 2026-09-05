@@ -47,6 +47,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Execute host serializer regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
+      - name: Execute EEPROM source-selection audit
+        run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v4

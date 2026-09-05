@@ -239,3 +239,8 @@ the current hicode branch instead of duplicating title configuration.
 
 - Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
 - Shipped 304 configs / 2,513 addresses retain their values. Patch mapping and hardware compatibility remain separate checks.
+
+## EEPROM V124 source audit (2026-09-05)
+
+- [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
+- Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.
