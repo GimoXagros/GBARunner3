@@ -33,6 +33,7 @@ jobs:
           mkdir -p out/tests
           cp code/test/test.nds out/tests/
           cp code/core/arm9/arm9.elf out/tests/
+          cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
@@ -51,6 +52,12 @@ jobs:
         run: node tools/tests/test_release_upload.cjs
       - name: Execute EEPROM source-selection audit
         run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
+      - name: Verify save I/O invariants and ARM7 error acknowledgments
+        run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --require-fixed --output save-io-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-results
+          path: save-io-results.json
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v8
@@ -59,6 +66,12 @@ jobs:
           path: out
       - name: Install instruction-test dependencies
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
+      - name: Execute linked save I/O and ARM7 acknowledgments
+        run: python3 tools/tests/test_save_io_elf.py out/tests/arm9.elf --arm7 out/tests/arm7.elf --output save-io-linked-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-linked-results
+          path: save-io-linked-results.json
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
       - name: Execute linked JIT metadata and address regressions
