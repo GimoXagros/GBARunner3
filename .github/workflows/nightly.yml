@@ -24,7 +24,7 @@ jobs:
       - name: Make application and test ROM
         run: |
           make -C code debug
-          "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -fno-builtin -Wl,-e,search_probe,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/save_search_probe.cpp code/core/arm9/source/MemFastSearch.s -o /tmp/save-search.elf
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -fno-builtin -fno-exceptions -fno-unwind-tables -Wl,-e,search_probe,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/save_search_probe.cpp code/core/arm9/source/MemFastSearch.s -o /tmp/save-search.elf
       - name: Prepare for build publishing
         run: |
           mkdir -p out/_gba/
