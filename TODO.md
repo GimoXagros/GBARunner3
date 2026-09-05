@@ -15,6 +15,22 @@ code. `Partial` means an implementation exists but a stated condition is still
 missing. `Retest` means the branch could affect the symptom, but the exact issue
 input and route have not been verified on rc5.
 
+## custom-v0.1.3-rc1 release status
+
+- [x] Audit release base `504a2d67177d6e4432c51addfeabaa07b9996654` and prepare
+  RC documentation without changing runtime, configs or submodule revisions.
+- [ ] Publish `custom-v0.1.3-rc1` as a Pre-release after required build/test gates,
+  then independently verify the public ZIP and record its exact identity in
+  [CUSTOM_BUILD.md](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate).
+- [ ] Complete new RC hardware validation: B8CJ slot selection after Save Slot,
+  intro, gameplay, save, restart and load; RTC cold start and interrupted-write
+  recovery; wider compatibility. No additional hardware pass is claimed.
+- [ ] Keep Draft PR #5 and #6 excluded until their own outstanding gates pass.
+  Their production changes and tests are outside this RC.
+
+`custom-v0.1.2` remains the current stable release. RC publication is an
+automated-verification milestone, not a new hardware compatibility certification.
+
 ## Completed in custom-v0.1.2
 
 - [x] **Fix the reported B8CJ New Game transition.** The generic fix preserves
@@ -90,10 +106,12 @@ input and route have not been verified on rc5.
   bounded candidate, 19-signature host corpus and 494 linked ARM cases.
   Underlying SD I/O failure propagation remains a conditional merge gate.
 - [ ] **Complete save I/O failure recovery.**
-  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) demonstrates 14
-  remaining integrity failures after limited byte-access guards. Deferred state,
-  bounded retry/ARM7 acknowledgment, interrupted initialization and cleanup
-  recovery remain open; green matrix CI is not a complete-integrity claim.
+  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6), audited at
+  `7cdc3bf35032515573ad1888f9eeb80bfea19150`, reports 73 host and 45 linked save
+  cases passing after its earlier 14-failure draft. It remains excluded from
+  this RC. Physical storage-error propagation, target recovery integration,
+  interrupted-write durability and hardware exit/concurrency policy remain open;
+  passing draft tests are not a complete-integrity claim.
 - [ ] **Add ROM-hack source-profile handling** —
   [#185](https://github.com/Gericom/GBARunner3/issues/185) for non-standard
   headers and [#202](https://github.com/Gericom/GBARunner3/issues/202) /
