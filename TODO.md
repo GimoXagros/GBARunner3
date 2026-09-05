@@ -19,9 +19,11 @@ input and route have not been verified on rc5.
 
 - [x] Audit release base `504a2d67177d6e4432c51addfeabaa07b9996654` and prepare
   RC documentation without changing runtime, configs or submodule revisions.
-- [ ] Publish `custom-v0.1.3-rc1` as a Pre-release after required build/test gates,
-  then independently verify the public ZIP and record its exact identity in
+- [x] Publish [custom-v0.1.3-rc1](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
+  as a Pre-release after required build/test gates; independently downloaded and
+  verified its public ZIP. Exact source, workflow and hashes are recorded in
   [CUSTOM_BUILD.md](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate).
+  This completion record is a documentation update after the immutable RC tag.
 - [ ] Complete new RC hardware validation: B8CJ slot selection after Save Slot,
   intro, gameplay, save, restart and load; RTC cold start and interrupted-write
   recovery; wider compatibility. No additional hardware pass is claimed.

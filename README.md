@@ -37,11 +37,12 @@ That baseline was verified on Nintendo 3DS in DS mode using DSpico.
 
 ## Current release candidate
 
-`custom-v0.1.3-rc1` is the Pre-release candidate for configuration and build
-hardening. Publication is pending the release checks; use its
-[Release page](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
-only once the published asset is available. `custom-v0.1.2` remains the current
-stable release.
+[`custom-v0.1.3-rc1`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
+is the published Pre-release candidate for configuration and build hardening.
+Its public ZIP has passed independent download, hash and content verification;
+the exact source, workflow and hashes are recorded in
+[CUSTOM_BUILD.md](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate).
+`custom-v0.1.2` remains the current stable release.
 
 The RC includes strict external JSON patch-address validation and atomic
 rejection of malformed arrays, expanded automated regressions, reproducible
