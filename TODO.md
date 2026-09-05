@@ -234,3 +234,8 @@ the current hicode branch instead of duplicating title configuration.
 - Never attach or commit commercial ROMs, patched ROM images, BIOS files, or
   copyrighted saves. Record hashes and lawful patch/reproduction instructions
   instead.
+
+## Strict external patch addresses (2026-09-05)
+
+- Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
+- Shipped 304 configs / 2,513 addresses retain their values. Patch mapping and hardware compatibility remain separate checks.
