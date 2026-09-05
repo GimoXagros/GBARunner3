@@ -14,15 +14,21 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 ## Current custom release
 
 The current supported custom build is
-[`custom-v0.1.1`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.1).
+[`custom-v0.1.2`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.2).
 The broken rc2 and rc4 release entries have been withdrawn.
 
-- Release source: tag `custom-v0.1.1`
+- Release tag and merge commit: `custom-v0.1.2` at
+  `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`
+- High-ROM fix implementation commit:
+  `9b991ac9c89e1952b8573f4bf8bc9708bcade92b`
+- `GBARunner3.zip` SHA-256:
+  `13AE1E2252ECF2245AD2236FF13EBEA3BA558C7B4E6EA7FB4F021CB25834CE77`
 - `GBARunner3.nds` SHA-256:
-  `14FD5FB8AAB3A6236CAAAEBEECBB3E2615D981D054472896636F53DDB8F4FC32`
-- Automated verification: application and test NDS build successfully
-- Hardware status: RTC cold-start persistence and recovery require DSpico/3DS
-  verification
+  `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`
+- Automated verification: ARM7, ARM9, bootstrap, application NDS, GoogleTest
+  NDS, and linked high-ROM dispatch semantics build successfully
+- Hardware verification: Nintendo 3DS in DS mode with DSpico passed the B8CJ
+  route `Main Menu -> New Game -> Save Slot`
 
 The immutable hardware regression baseline remains `custom-v0.1.0-rc5` at
 commit `967730a0db710f9d90dbd70907223d3f75e25a81`, with NDS SHA-256
@@ -34,6 +40,11 @@ That baseline was verified on Nintendo 3DS in DS mode using DSpico.
 - Enables the upstream high-ROM instruction-cache mapping work and fixes ARM
   B/BL/BX transitions across the 2 MiB linear ROM window.
 - Resets high-ROM JIT metadata when an SD-cache block is reused.
+- Preserves ARM/Thumb state for undefined instructions in mapped high-ROM code
+  and selects the correct Thumb halfword.
+- Resolves dynamic Thumb JIT metadata and patch writes to the loaded SD-cache
+  backing block.
+- Unmaps the hicode MPU region before whole instruction-cache invalidation.
 - Implements cartridge GPIO RTC transactions using the DS clock through ARM7
   IPC.
 - Persists RTC offset, weekday, status, and interrupt state in a validated
@@ -47,7 +58,7 @@ That baseline was verified on Nintendo 3DS in DS mode using DSpico.
 
 ## Installation
 
-1. Download the `custom-v0.1.1` ZIP from the current custom release.
+1. Download `GBARunner3.zip` from the `custom-v0.1.2` release.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Merge the included `_gba/configs` directory into `/_gba/configs` on the SD
    card.
@@ -71,6 +82,23 @@ DS-mode ARM9 clock selection, and forced save type. See the JSON files in
 
 ## Hardware verification
 
+The v0.1.2 NDS above was verified on Nintendo 3DS in DS mode using DSpico with
+Kingdom Hearts: Chain of Memories `[B8CJ][K]`:
+
+```text
+Main Menu -> New Game -> Save Slot
+```
+
+The black horizontal lines, screen flicker, and irregular audio clicks seen in
+a rejected diagnostic build were absent in the other games checked during this
+run. B8CJ exposed and verified a generic mapped high-ROM Thumb/JIT error; the
+production fix contains no title-specific path.
+
+The following B8CJ steps have not yet been verified with v0.1.2: slot selection,
+intro completion, gameplay, save, restart, load, and a full playthrough.
+
+### Historical rc5 regression baseline
+
 The following Korean-patched revisions were reported to start and run normally
 with the exact rc5 NDS above:
 
@@ -84,7 +112,7 @@ with the exact rc5 NDS above:
 | Pokémon Emerald | `BPEE` | 2026-06-13 |
 | Kingdom Hearts: Chain of Memories | `B8CJ` | Iyagi patch |
 
-This evidence covers normal startup and observed runtime only. It is not a
+The rc5 evidence covers normal startup and observed runtime only. It is not a
 full-playthrough, exhaustive save-format, or exhaustive RTC certification.
 Tales of the World: Narikiri Dungeon 2 is excluded because the tested patched
 image is suspected to be malformed; its save behavior belongs to a separate
@@ -118,11 +146,12 @@ docker run --rm -v "$PWD:/src" -w /src devkitpro/devkitarm:20241104 make -C code
 ```
 
 The application output is `code/bootstrap/GBARunner3.nds`; the `debug` target
-also builds the GoogleTest NDS. The exact rc5 release commit was built
-successfully by both the application and test targets in
-[CI](https://github.com/GimoXagros/GBARunner3/actions/runs/32963024490).
-The RTC-persistence candidate and custom NDS banner were also built successfully
-in [CI build 33248527389](https://github.com/GimoXagros/GBARunner3/actions/runs/33248527389).
+also builds the GoogleTest NDS. The v0.1.2 release source was built successfully
+by the application and test targets in the pinned container. The `develop` build
+and semantic test passed in
+[CI build 33939033107](https://github.com/GimoXagros/GBARunner3/actions/runs/33939033107),
+and the release packaging passed in
+[CI build 33939047544](https://github.com/GimoXagros/GBARunner3/actions/runs/33939047544).
 
 ## Contributing and issue reports
 

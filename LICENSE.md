@@ -1,6 +1,6 @@
 # Licensing status notice
 
-As of 2026-08-30, neither the upstream
+As of 2026-09-05, neither the upstream
 [`Gericom/GBARunner3`](https://github.com/Gericom/GBARunner3) repository nor the
 related `Gericom/GBARunner2` repository publishes a repository-wide open-source
 license. The question remains open in upstream issues
@@ -44,7 +44,7 @@ Commercial ROMs, patched commercial ROM images, saves, and BIOS files are not
 licensed or distributed by this repository. A compiled emulator binary does not
 grant rights to those materials.
 
-The `custom-v0.1.1` release includes source and binaries under this same
+The `custom-v0.1.2` release includes source and binaries under this same
 license-status notice; creating the tag or release does not add a new license
 grant.
 
