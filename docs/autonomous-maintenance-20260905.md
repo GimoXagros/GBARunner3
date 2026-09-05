@@ -2,6 +2,7 @@
 
 Starting fork develop: `4bc4d73b59976e828af1ae7865cec98bb2abfb19`.
 Release remains `custom-v0.1.2` at `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`.
+Runtime/build snapshot before this documentation-only update: `8a0ab62f9d7f7cd7c7211648b747bbf76181068a`.
 The requested fork is the local remote named `fork`; `origin` is Gericom upstream.
 Existing dirty investigation worktrees were preserved and separate task branches
 were created from the latest fetched fork develop.
@@ -11,7 +12,7 @@ were created from the latest fetched fork develop.
 | strict JSON patch addresses | MERGED | [#4](https://github.com/GimoXagros/GBARunner3/pull/4), merge `db97744` | patch mapping and full target NDS hardware run remain separate |
 | 4 KiB high-ROM save-function search | DRAFT PR | [#5](https://github.com/GimoXagros/GBARunner3/pull/5), 19 source signatures / 494 linked ARM cases | physical SD read-error propagation |
 | save I/O fault injection and byte guards | DRAFT PR | [#6](https://github.com/GimoXagros/GBARunner3/pull/6), 22 passing scenarios / 14 expected failures | failure state, bounded retry/acknowledgment, interrupted initialization, linked byte-I/O and hardware gates |
-| build/CI modernization | READY PR | [#7](https://github.com/GimoXagros/GBARunner3/pull/7), repeated pinned serial/j2/j4 builds | final merge and develop CI; latest-toolchain migration stays blocked |
+| build/CI modernization | MERGED | [#7](https://github.com/GimoXagros/GBARunner3/pull/7), merge `8a0ab62`, repeated pinned serial/j2/j4 builds | latest-toolchain migration stays blocked |
 | extended automatic regressions | MERGED | [#8](https://github.com/GimoXagros/GBARunner3/pull/8), merge `afe3a39`, 45 linked checks | full interworking instruction sequences and physical cache/timing |
 | EEPROM V124 research | MERGED / RESEARCH COMPLETE | [#9](https://github.com/GimoXagros/GBARunner3/pull/9), merge `a2de095` | a reproducible variant; no signature or protocol fix claimed |
 | source-profile lifecycle design | MERGED / RESEARCH COMPLETE | [#10](https://github.com/GimoXagros/GBARunner3/pull/10), merge `2c5ad0a` | logical-view ownership and upstream #205 integration evidence |
