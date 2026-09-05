@@ -6,6 +6,9 @@ on:
       - 'code/**/Makefile'
       - '.github/workflows/build-matrix.yml'
   pull_request:
+    paths:
+      - 'code/**/Makefile'
+      - '.github/workflows/build-matrix.yml'
   workflow_dispatch:
 
 jobs:
