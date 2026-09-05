@@ -30,10 +30,36 @@ are unchanged from audited develop `504a2d67177d6e4432c51addfeabaa07b9996654`.
 - Reference test NDS SHA-256:
   `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7`
 
-Publication and public-asset verification are pending. The exact release source
-commit, Build release run and downloaded ZIP hash will be recorded only after
-publication and independent download verification; the reference hashes above
-are not a claim that the public RC asset already exists.
+Published and independently verified public release:
+
+- [Release tag `custom-v0.1.3-rc1`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1):
+  Pre-release (`prerelease: true`, `draft: false`).
+- Release-preparation [PR #12](https://github.com/GimoXagros/GBARunner3/pull/12)
+  merged normally; exact source and tag commit:
+  `6503f9bd1e5143904be3769f930db9fd3fd8f466`.
+- Preparation Nightly: [33954976173](https://github.com/GimoXagros/GBARunner3/actions/runs/33954976173), success.
+- Build reproducibility: [33954977580](https://github.com/GimoXagros/GBARunner3/actions/runs/33954977580),
+  all six pinned builds passed and retained the two reference NDS hashes above.
+- Release-source Nightly: [33955459904](https://github.com/GimoXagros/GBARunner3/actions/runs/33955459904), success.
+- Build release: [33955691014](https://github.com/GimoXagros/GBARunner3/actions/runs/33955691014),
+  exact tag/source, build, package and automatic upload all passed.
+- Public `GBARunner3.zip` SHA-256:
+  `a2cbd9c0a6b70f1409e80e403bae71803b017fc4fc1bb9fd000696cb97dbe394`.
+- Packaged `GBARunner3.nds` SHA-256:
+  `9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2`.
+- Fresh public-asset download: GitHub API digest matches; 304 config files are
+  byte-identical to tagged source; only the top-level application NDS and
+  `_gba/configs` files are present. No ROM, BIOS, save, ELF, MAP, test NDS,
+  temporary log, diagnostic payload or source tree is included.
+
+This integrity record was added after the RC tag through a separate
+documentation PR. The immutable tag remains at the source commit above;
+its release-preparation documents recorded publication as pending. This later
+record changes no runtime, config, submodule or released binary.
+The full pinned builds and sanitizer tests ran on GitHub Actions because the
+local Windows host has no Docker/WSL or host C++ compiler; downloaded artifacts
+and linked ARM routines were also checked locally. The optional latest-image
+failure is the previously documented libtwl/calico `setVectorBase` mismatch.
 
 Hardware scope has not expanded. The earlier v0.1.2 B8CJ observation is
 `Main Menu -> New Game -> Save Slot`; no new RC hardware pass is complete.
