@@ -13,7 +13,7 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 
 ## Current custom release
 
-The current supported custom build is
+The current stable custom release is
 [`custom-v0.1.2`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.2).
 The broken rc2 and rc4 release entries have been withdrawn.
 
@@ -34,6 +34,28 @@ The immutable hardware regression baseline remains `custom-v0.1.0-rc5` at
 commit `967730a0db710f9d90dbd70907223d3f75e25a81`, with NDS SHA-256
 `E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`.
 That baseline was verified on Nintendo 3DS in DS mode using DSpico.
+
+## Current release candidate
+
+`custom-v0.1.3-rc1` is the Pre-release candidate for configuration and build
+hardening. Publication is pending the release checks; use its
+[Release page](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
+only once the published asset is available. `custom-v0.1.2` remains the current
+stable release.
+
+The RC includes strict external JSON patch-address validation and atomic
+rejection of malformed arrays, expanded automated regressions, reproducible
+pinned-toolchain builds, and guarded release uploads. EEPROM V124 and ROM-hack
+source-profile documents are research/design only. Draft PRs
+[#5](https://github.com/GimoXagros/GBARunner3/pull/5) and
+[#6](https://github.com/GimoXagros/GBARunner3/pull/6), including their tests, are
+excluded.
+
+Hardware validation is pending; no new RC hardware pass has been completed.
+The previous v0.1.2 B8CJ result ends at Save Slot. Slot selection, intro,
+gameplay, save/restart/load, RTC cold start, interrupted-write recovery, and
+wider compatibility remain open. See [RC build identity](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate)
+and [remaining work](TODO.md#custom-v013-rc1-release-status).
 
 ## Changes in this fork
 
@@ -58,7 +80,10 @@ That baseline was verified on Nintendo 3DS in DS mode using DSpico.
 
 ## Installation
 
-1. Download `GBARunner3.zip` from the `custom-v0.1.2` release.
+1. For the stable release, download `GBARunner3.zip` from `custom-v0.1.2`.
+   For RC hardware testing, explicitly choose the published
+   `custom-v0.1.3-rc1` Pre-release ZIP instead. Check that version's integrity
+   information before copying the files.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Merge the included `_gba/configs` directory into `/_gba/configs` on the SD
    card.
@@ -80,7 +105,7 @@ switches, manual JIT/self-modifying-code patch addresses, BIOS-intro skipping,
 DS-mode ARM9 clock selection, and forced save type. See the JSON files in
 [`configs`](configs) for per-title examples.
 
-Development builds after `custom-v0.1.2` validate external patch-address strings
+`custom-v0.1.3-rc1` validates external patch-address strings
 strictly: 1–8 hexadecimal digits with optional `0x`/`0X`. A malformed address or
 non-string entry rejects that entire array and preserves its previous/default
 value. See [patch-address format](docs/config-patch-addresses.md). The published
@@ -142,8 +167,13 @@ The issue comparison and prioritized work list are maintained in
 
 ## Building
 
-Clone recursively and use the same pinned devkitARM container as CI. Do not use
-parallel `make` until the dependency-order issues are fixed.
+Clone recursively and use the official reference toolchain,
+`devkitpro/devkitarm:20241104`, as in CI. The RC includes dependency-order fixes:
+two clean builds each at serial (`-j1`), `-j2`, and `-j4` produced identical
+application and test NDS files in the
+[build audit](docs/build-reproducibility.md). These parallel-build results apply
+to the corrected RC source. The latest toolchain remains an optional,
+non-blocking experiment.
 
 ```sh
 git clone --recursive https://github.com/GimoXagros/GBARunner3.git

@@ -4,6 +4,45 @@ The authoritative user and build documentation now lives in
 [`README.md`](README.md), and the issue comparison lives in
 [`TODO.md`](TODO.md).
 
+## custom-v0.1.3-rc1 release candidate
+
+This is a Pre-release candidate for configuration and build hardening.
+`custom-v0.1.2` remains the current stable release. The release-preparation
+change updates documentation only; runtime, configs and submodule revisions
+are unchanged from audited develop `504a2d67177d6e4432c51addfeabaa07b9996654`.
+
+- Included runtime change since v0.1.2: strict 1–8-digit hexadecimal JSON
+  patch-address strings with optional `0x`/`0X`, complete rejection of malformed
+  arrays, and atomic replacement preserving previous/default values on rejection.
+- Test/build changes: 304 configs / 2,513 unchanged addresses, serializer
+  ASan/UBSan, 19 linked ARM parser cases, 45 linked JIT/address/cache checks,
+  existing hicode dispatch and negative controls, EEPROM source-selection tests,
+  repeated pinned serial/`-j2`/`-j4` builds, modernized Actions and guarded upload.
+- EEPROM V124 and ROM-hack source-profile work is research/design only.
+- Draft PR #5 at `245a0dba82cef259f897002555221376f9ab97f1` and Draft PR #6 at
+  `7cdc3bf35032515573ad1888f9eeb80bfea19150` are excluded from the audited base;
+  neither head is an ancestor, their changed production files retain the
+  v0.1.2 blobs, and their added production/test files are absent.
+- Reference toolchain: `devkitpro/devkitarm:20241104`.
+- Baseline Nightly: [33944804396](https://github.com/GimoXagros/GBARunner3/actions/runs/33944804396), success.
+- Reference application NDS SHA-256:
+  `9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2`
+- Reference test NDS SHA-256:
+  `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7`
+
+Publication and public-asset verification are pending. The exact release source
+commit, Build release run and downloaded ZIP hash will be recorded only after
+publication and independent download verification; the reference hashes above
+are not a claim that the public RC asset already exists.
+
+Hardware scope has not expanded. The earlier v0.1.2 B8CJ observation is
+`Main Menu -> New Game -> Save Slot`; no new RC hardware pass is complete.
+Slot selection, intro, gameplay, save/restart/load, RTC cold start,
+interrupted-write recovery and wider compatibility remain unverified.
+Physical SD-error propagation and complete save recovery are not claimed.
+Existing `LICENSE.md`, file notices and submodule terms continue to apply;
+this RC does not add a repository-wide license.
+
 ## Verified build identity
 
 - Tag: `custom-v0.1.0-rc5`
