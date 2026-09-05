@@ -62,14 +62,13 @@ input and route have not been verified on rc5.
   [#148](https://github.com/Gericom/GBARunner3/issues/148),
   [#177](https://github.com/Gericom/GBARunner3/issues/177), and
   [#199](https://github.com/Gericom/GBARunner3/issues/199). Keep the known-good
-  `devkitpro/devkitarm:20241104` CI path while fixing dependency ordering,
-  documenting outputs, testing devkitARM r66 separately, and coordinating the
-  conflicting BlocksDS port in PR
-  [#178](https://github.com/Gericom/GBARunner3/pull/178). The pinned build is
-  currently green but reports existing macro redefinition, ignored-result,
-  qualifier, `noreturn`, and linker stub warnings. GitHub-hosted Actions also
-  report that Node.js 20 actions are being forced onto Node.js 24; update actions
-  and warning policy in a dedicated maintenance change.
+  `devkitpro/devkitarm:20241104` CI path. Clean serial, -j2 and -j4 builds
+  now produce matching NDS hashes after explicit dependency fixes. Official
+  Actions use Node 24; existing first-party/third-party warnings remain visible
+  in the [build audit and inventory](docs/build-reproducibility.md). The latest
+  GCC 16.1.0 image fails in libtwl/calico at `setVectorBase`; its separate manual
+  experiment is non-blocking. The conflicting BlocksDS port in PR
+  [#178](https://github.com/Gericom/GBARunner3/pull/178) remains separate.
 
 ## P1: compatibility work directly adjacent to the current custom release
 
