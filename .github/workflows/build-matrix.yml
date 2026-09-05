@@ -1,0 +1,72 @@
+name: Build reproducibility
+
+on:
+  push:
+    paths:
+      - 'code/**/Makefile'
+      - '.github/workflows/build-matrix.yml'
+  pull_request:
+    paths:
+      - 'code/**/Makefile'
+      - '.github/workflows/build-matrix.yml'
+  workflow_dispatch:
+
+jobs:
+  build-matrix:
+    name: ${{ matrix.label }} j${{ matrix.jobs }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 1, experimental: false}
+          - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 2, experimental: false}
+          - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 4, experimental: false}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Clean repeated builds and record identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          "$DEVKITARM/bin/arm-none-eabi-g++" --version > evidence/compiler.txt
+          for repetition in 1 2; do
+            make -C code clean > "evidence/clean-$repetition.log" 2>&1
+            make -C code -j${{ matrix.jobs }} debug 2>&1 | tee "evidence/build-$repetition.log"
+            sha256sum code/bootstrap/GBARunner3.nds code/test/test.nds > "evidence/hashes-$repetition.txt"
+            "$DEVKITARM/bin/arm-none-eabi-size" -A code/core/arm9/arm9.elf > "evidence/sections-$repetition.txt"
+          done
+          diff -u evidence/hashes-1.txt evidence/hashes-2.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: build-evidence-${{ matrix.label }}-j${{ matrix.jobs }}
+          path: evidence
+
+  latest-experimental:
+    if: github.event_name == 'workflow_dispatch'
+    name: latest toolchain (manual, non-blocking)
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Record latest compiler and attempt a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          "$DEVKITARM/bin/arm-none-eabi-g++" --version > evidence/compiler.txt
+          make -C code clean > evidence/clean.log 2>&1
+          make -C code debug 2>&1 | tee evidence/build.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: latest-toolchain-evidence
+          path: evidence

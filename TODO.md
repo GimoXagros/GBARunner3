@@ -61,14 +61,13 @@ input and route have not been verified on rc5.
   [#148](https://github.com/Gericom/GBARunner3/issues/148),
   [#177](https://github.com/Gericom/GBARunner3/issues/177), and
   [#199](https://github.com/Gericom/GBARunner3/issues/199). Keep the known-good
-  `devkitpro/devkitarm:20241104` CI path while fixing dependency ordering,
-  documenting outputs, testing devkitARM r66 separately, and coordinating the
-  conflicting BlocksDS port in PR
-  [#178](https://github.com/Gericom/GBARunner3/pull/178). The pinned build is
-  currently green but reports existing macro redefinition, ignored-result,
-  qualifier, `noreturn`, and linker stub warnings. GitHub-hosted Actions also
-  report that Node.js 20 actions are being forced onto Node.js 24; update actions
-  and warning policy in a dedicated maintenance change.
+  `devkitpro/devkitarm:20241104` CI path. Clean serial, -j2 and -j4 builds
+  now produce matching NDS hashes after explicit dependency fixes. Official
+  Actions use Node 24; existing first-party/third-party warnings remain visible
+  in the [build audit and inventory](docs/build-reproducibility.md). The latest
+  GCC 16.1.0 image fails in libtwl/calico at `setVectorBase`; its separate manual
+  experiment is non-blocking. The conflicting BlocksDS port in PR
+  [#178](https://github.com/Gericom/GBARunner3/pull/178) remains separate.
 
 ## P1: compatibility work directly adjacent to the current custom release
 
@@ -239,3 +238,18 @@ the current hicode branch instead of duplicating title configuration.
 
 - [Fault matrix and remaining gates](docs/save-io-fault-injection.md): bounded byte-access candidate; 14 explicitly tracked integrity failures remain.
 - Deferred-write retry/error acknowledgment and interrupted initialization recovery remain open.
+
+## Strict external patch addresses (2026-09-05)
+
+- Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
+- Shipped 304 configs / 2,513 addresses retain their values. Patch mapping and hardware compatibility remain separate checks.
+
+## ROM-hack source-profile design (2026-09-05)
+
+- [Lifecycle audit and upstream #205 conflict map](docs/romhack-source-profile-design.md) documented.
+- Source/effective metadata, patch-view transaction, profile selection and save/RTC migration are design proposals, not implemented support.
+
+## EEPROM V124 source audit (2026-09-05)
+
+- [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
+- Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.

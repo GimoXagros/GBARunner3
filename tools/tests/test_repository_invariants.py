@@ -24,7 +24,7 @@ RUN_KEYS = {
 GAME_KEYS = {"saveType"}
 BOOL_RUN_KEYS = RUN_KEYS - {"jitPatchAddresses", "selfModifyingPatchAddresses"}
 ADDRESS_KEYS = {"jitPatchAddresses", "selfModifyingPatchAddresses"}
-HEX_ADDRESS = re.compile(r"\A(?:0x)?[0-9A-Fa-f]{1,8}\Z")
+HEX_ADDRESS = re.compile(r"\A(?:0[xX])?[0-9A-Fa-f]{1,8}\Z")
 CONFIG_NAME = re.compile(r"\A[A-Z0-9]{4}[0-9]{2}\.json\Z")
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^]]+\]\(([^)]+)\)")
 
