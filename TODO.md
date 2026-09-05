@@ -234,3 +234,8 @@ the current hicode branch instead of duplicating title configuration.
 - Never attach or commit commercial ROMs, patched ROM images, BIOS files, or
   copyrighted saves. Record hashes and lawful patch/reproduction instructions
   instead.
+
+## Save I/O fault injection (2026-09-05)
+
+- [Fault matrix and remaining gates](docs/save-io-fault-injection.md): bounded byte-access candidate; 14 explicitly tracked integrity failures remain.
+- Deferred-write retry/error acknowledgment and interrupted initialization recovery remain open.

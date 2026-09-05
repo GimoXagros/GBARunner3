@@ -43,6 +43,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Report save I/O invariants and known failures
+        run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --output save-io-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: save-io-results
+          path: save-io-results.json
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v4

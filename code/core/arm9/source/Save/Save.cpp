@@ -210,18 +210,21 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
 extern "C" u8 sav_readSaveByteFromFile(u32 saveAddress)
 {
     vm_enableNestedIrqs();
-    u8 saveByte;
+    u8 saveByte = SAVE_DATA_FILL;
     if (Environment::IsIsNitroEmulator())
     {
         // save buffer in extended memory
-        saveByte = ISNITRO_SAVE_BUFFER[saveAddress];
+        if (saveAddress < ISNITRO_SAVE_BUFFER_SIZE)
+            saveByte = ISNITRO_SAVE_BUFFER[saveAddress];
     }
     else
     {
-        // write to file
-        f_lseek(&gSaveFile, saveAddress);
-        UINT bytesRead = 0;
-        f_read(&gSaveFile, &saveByte, 1, &bytesRead);
+        if (saveAddress < f_size(&gSaveFile) && f_lseek(&gSaveFile, saveAddress) == FR_OK)
+        {
+            UINT bytesRead = 0;
+            if (f_read(&gSaveFile, &saveByte, 1, &bytesRead) != FR_OK || bytesRead != 1)
+                saveByte = SAVE_DATA_FILL;
+        }
     }
     vm_disableNestedIrqs();
     return saveByte;
@@ -233,14 +236,16 @@ extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
     if (Environment::IsIsNitroEmulator())
     {
         // save buffer in extended memory
-        ISNITRO_SAVE_BUFFER[saveAddress] = data;
+        if (saveAddress < ISNITRO_SAVE_BUFFER_SIZE)
+            ISNITRO_SAVE_BUFFER[saveAddress] = data;
     }
     else
     {
-        // write to file
-        f_lseek(&gSaveFile, saveAddress);
-        UINT bytesWritten = 0;
-        f_write(&gSaveFile, &data, 1, &bytesWritten);
+        if (saveAddress < f_size(&gSaveFile) && f_lseek(&gSaveFile, saveAddress) == FR_OK)
+        {
+            UINT bytesWritten = 0;
+            f_write(&gSaveFile, &data, 1, &bytesWritten);
+        }
     }
     vm_disableNestedIrqs();
 }
