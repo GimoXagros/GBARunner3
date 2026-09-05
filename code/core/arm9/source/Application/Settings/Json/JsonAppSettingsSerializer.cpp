@@ -5,6 +5,7 @@
 #include "ArduinoJson.h"
 #include "../AppSettings.h"
 #include "JsonAppSettingsSerializer.h"
+#include "HexAddress.h"
 
 #pragma GCC optimize("Os")
 
@@ -176,59 +177,36 @@ JSON_SETTINGS_EWRAM static void readDisplaySettings(const JsonObjectConst& json,
     tryParseGbaBorderImage(json[KEY_DISPLAY_SETTINGS_BORDER_IMAGE], displaySettings.borderImage);
 }
 
-JSON_SETTINGS_EWRAM static u32 parseHexString(const char* hexString)
+// Validate before allocating or modifying either the pointer or its count.
+// A rejected property preserves its previous/default value; other settings apply.
+JSON_SETTINGS_EWRAM static bool tryParsePatchAddresses(const JsonVariantConst& value,
+    std::unique_ptr<u32[]>& addresses, u32& count, const char* key)
 {
-    if (hexString == nullptr || hexString[0] == 0)
+    if (!value.is<JsonArrayConst>())
     {
-        return 0;
-    }
-
-    if (hexString[0] == '0' && hexString[1] == 'x')
-    {
-        hexString += 2;
-    }
-
-    u32 value = 0;
-    char c;
-    while ((c = *hexString++) != 0)
-    {
-        // https://stackoverflow.com/a/57112610
-        c = ((c & 0xF) + (c >> 6)) | ((c >> 3) & 8);
-        value = (value << 4) | (c & 0xF);
-    }
-
-    return value;
-}
-
-JSON_SETTINGS_EWRAM static bool tryParseJitPatchAddresses(const JsonArrayConst& jitPatchAddresses, RunSettings& runSettings)
-{
-    if (jitPatchAddresses.isNull())
+        gLogger->Log(LogLevel::Debug, "Invalid patch address array: %s\n", key);
         return false;
-
-    runSettings.jitPatchAddresses = std::make_unique<u32[]>(jitPatchAddresses.size());
-    int i = 0;
-    for (const char* addressString : jitPatchAddresses)
-    {
-        runSettings.jitPatchAddresses[i++] = parseHexString(addressString);
     }
-
-    runSettings.jitPatchAddressCount = i;
-    return true;
-}
-
-JSON_SETTINGS_EWRAM static bool tryParseSelfModifyingPatchAddresses(const JsonArrayConst& selfModifyingPatchAddresses, RunSettings& runSettings)
-{
-    if (selfModifyingPatchAddresses.isNull())
-        return false;
-
-    runSettings.selfModifyingPatchAddresses = std::make_unique<u32[]>(selfModifyingPatchAddresses.size());
-    int i = 0;
-    for (const char* addressString : selfModifyingPatchAddresses)
+    const auto array = value.as<JsonArrayConst>();
+    for (JsonVariantConst element : array)
     {
-        runSettings.selfModifyingPatchAddresses[i++] = parseHexString(addressString);
+        u32 parsed;
+        const auto text = element.as<JsonString>();
+        if (!element.is<const char*>() || !tryParseHexString(text.c_str(), text.size(), parsed))
+        {
+            gLogger->Log(LogLevel::Debug, "Invalid patch address in %s; array preserved\n", key);
+            return false;
+        }
     }
-
-    runSettings.selfModifyingPatchAddressCount = i;
+    auto parsedAddresses = std::make_unique<u32[]>(array.size());
+    u32 i = 0;
+    for (JsonVariantConst element : array)
+    {
+        const auto text = element.as<JsonString>();
+        tryParseHexString(text.c_str(), text.size(), parsedAddresses[i++]);
+    }
+    addresses = std::move(parsedAddresses);
+    count = i;
     return true;
 }
 
@@ -236,14 +214,19 @@ JSON_SETTINGS_EWRAM static void readRunSettings(const JsonObjectConst& json, Run
 {
     if (json.isNull())
         return;
-    tryParseJitPatchAddresses(json[KEY_RUN_SETTINGS_JIT_PATCH_ADDRESSES], runSettings);
+    if (json.containsKey(KEY_RUN_SETTINGS_JIT_PATCH_ADDRESSES))
+        tryParsePatchAddresses(json[KEY_RUN_SETTINGS_JIT_PATCH_ADDRESSES],
+            runSettings.jitPatchAddresses, runSettings.jitPatchAddressCount, KEY_RUN_SETTINGS_JIT_PATCH_ADDRESSES);
     readBoolSetting(json[KEY_RUN_SETTINGS_ENABLE_JIT], runSettings.enableJit);
     readBoolSetting(json[KEY_RUN_SETTINGS_ENABLE_ROM_ICACHE], runSettings.enableRomInstructionCache);
     readBoolSetting(json[KEY_RUN_SETTINGS_ENABLE_WRAM_ICACHE], runSettings.enableWramInstructionCache);
     readBoolSetting(json[KEY_RUN_SETTINGS_ENABLE_IWRAM_DCACHE], runSettings.enableIWramDataCache);
     readBoolSetting(json[KEY_RUN_SETTINGS_ENABLE_EWRAM_DCACHE], runSettings.enableEWramDataCache);
     readBoolSetting(json[KEY_RUN_SETTINGS_ARM9_CLOCK_SPEED], runSettings.forceDSModeArm9ClockSpeed);
-    tryParseSelfModifyingPatchAddresses(json[KEY_RUN_SETTINGS_SELF_MODIFYING_PATCH_ADDRESSES], runSettings);
+    if (json.containsKey(KEY_RUN_SETTINGS_SELF_MODIFYING_PATCH_ADDRESSES))
+        tryParsePatchAddresses(json[KEY_RUN_SETTINGS_SELF_MODIFYING_PATCH_ADDRESSES],
+            runSettings.selfModifyingPatchAddresses, runSettings.selfModifyingPatchAddressCount,
+            KEY_RUN_SETTINGS_SELF_MODIFYING_PATCH_ADDRESSES);
     readBoolSetting(json[KEY_RUN_SETTINGS_SKIP_BIOS_INTRO], runSettings.skipBiosIntro);
 }
 

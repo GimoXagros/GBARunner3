@@ -24,6 +24,7 @@ jobs:
       - name: Make application and test ROM
         run: |
           make -C code debug
+          arm-none-eabi-g++ -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
       - name: Prepare for build publishing
         run: |
           mkdir -p out/_gba/
@@ -32,6 +33,7 @@ jobs:
           mkdir -p out/tests
           cp code/test/test.nds out/tests/
           cp code/core/arm9/arm9.elf out/tests/
+          cp /tmp/hex-address.elf out/tests/
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v4
         with:
@@ -43,6 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Execute host serializer regressions with sanitizers
+        run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v4
@@ -51,6 +55,8 @@ jobs:
           path: out
       - name: Install instruction-test dependencies
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
+      - name: Execute linked ARM parser
+        run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
       - name: Execute linked ARM dispatch and negative controls
         run: python3 tools/tests/test_hicode_dispatch_elf.py out/tests/arm9.elf --output dispatch-results.json
       - uses: actions/upload-artifact@v4
