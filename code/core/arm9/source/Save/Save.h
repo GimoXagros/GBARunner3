@@ -16,6 +16,8 @@ extern u32 emu_vblankIrqSkipSaveCheckInstruction;
 
 bool sav_tryPatchFunction(const u32* signature, u32 saveSwiNumber, void* patchFunction);
 bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath);
+// Stopped-emulation, explicit buffered-save recovery using the original path.
+bool sav_retryFailedWrite(const char* savePath);
 
 #ifdef __cplusplus
 extern "C" {

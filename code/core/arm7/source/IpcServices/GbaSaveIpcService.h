@@ -4,6 +4,8 @@
 #include "GbaSaveIpcCommand.h"
 #include "IpcChannels.h"
 
+enum class SaveFlushResult { Clean, Pending, Error };
+
 class GbaSaveIpcService : public IpcService
 {
     gba_save_shared_t* _saveShared = nullptr;
@@ -16,5 +18,5 @@ public:
     void OnMessageReceived(u32 data) override;
 
     void Update();
-    bool FlushSaveIfDirty();
+    SaveFlushResult FlushSaveIfDirty();
 };

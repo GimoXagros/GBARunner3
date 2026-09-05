@@ -168,9 +168,17 @@ static bool performExit(ExitMode exitMode)
 
 static void updateArm7ExitRequestedState()
 {
-    if (sGbaSaveIpcService.FlushSaveIfDirty())
+    const auto result = sGbaSaveIpcService.FlushSaveIfDirty();
+    if (result == SaveFlushResult::Clean)
     {
         performExit(sExitMode);
+    }
+    else if (result == SaveFlushResult::Error)
+    {
+        // Cancel this exit request instead of waiting forever or treating a
+        // failed save as durable. The failure remains latched in shared state.
+        sState = Arm7State::Idle;
+        snd_setMasterVolume(127);
     }
 }
 

@@ -1,60 +1,78 @@
-# Save I/O fault injection — 2026-09-05
+# Save I/O fault injection — follow-up 2026-09-05
 
-The harness compiles the exact scheduler and I/O functions extracted from
-`Save.cpp`. It substitutes a synthetic in-memory FatFs API, environment/IPC
-stubs and the real shared-state definitions. No real save or ROM is used.
-The stubs are a deterministic failure model, not emulation of SD timing,
-power-loss durability, FAT metadata or the ARM7/ARM9 concurrency protocol.
+This draft now passes the original 14 failed invariants at the FatFs seam.
+The expanded host suite compiles actual Save.cpp, ARM7 save service and exit
+handling code. It reports 70 PASS with **no accepted failures**; CI runs
+`test_save_io_host.py --require-fixed`. It models sticky FIL errors, combined
+operation/close failures and a finite operation schedule. It is not a physical
+SD, FAT metadata durability or simultaneous CPU model.
 
-Run `python3 tools/tests/test_save_io_host.py --require-fixed` for a failing
-invariant gate. Default mode checks the exact explicitly listed remaining
-failures; an unexpected pass or failure also fails CI so the matrix cannot drift
-silently. Green CI in default mode means the documented observations reproduced,
-not that save integrity is fixed. `SANITIZE=1` enables host ASan/UBSan.
+## Behavior in this candidate
 
-| Scenario | Expected | Before 4bc4d73 | Candidate after |
+- Append 0xFF bytes before building the fast-seek cluster map. Removing the
+  seek-to-final-size preallocation means a failed append does not leave an
+  apparently initialized full-size hole. Existing prefixes and oversized saves
+  are preserved. A power cut during FAT metadata updates is still unproven.
+- Retain a live file object when cleanup close fails; do not memset or reopen
+  over it on another initialization attempt. Check rewind and buffer bounds.
+- Check seek, write result, byte count and sync before declaring CLEAN. A failed
+  attempt ends in ERROR (4); the existing CLEAN/DIRTY/WAIT/WRITE values and shared
+  struct offsets do not change. ERROR disables automatic VBlank retries.
+- Keep failed byte writes latched across later successful syncs; a successful
+  sync cannot reconstruct a byte payload that was never written.
+- The explicit `sav_retryFailedWrite(originalSavePath)` entry point supports
+  only the buffered SRAM path, while emulation is stopped. It closes/reopens
+  the existing file, checks size and cluster map, then writes and syncs RAM.
+  It never clears FIL.err by hand, truncates or reloads disk over pending RAM.
+  This API is not wired to a user-facing recovery control yet and may be removed
+  from the production link by dead-code elimination. No automatic retry or
+  EEPROM/FLASH byte-payload reconstruction is claimed.
+- ARM7 returns Clean/Pending/Error separately. A failed save cancels the current
+  reset/power-off request, restores the existing normal volume and retains the
+  error instead of waiting indefinitely or treating failure as a durable save.
+  This changes the error-path exit policy and **requires hardware review**.
+
+## Scenario / Expected / Before / After
+
+| Scenario | Expected | Prior draft d7d9693 | Follow-up |
 | --- | --- | --- | --- |
-| normal create | full 0xFF initialization | PASS | PASS |
-| short-file extension | preserve prefix, append 0xFF | PASS | PASS |
-| oversized existing file | no truncate | PASS | PASS |
-| open/seek/map/read failure at init | reject and close | PASS | PASS |
-| short read at init | reject and close | PASS | PASS |
-| short write/write/sync/full/read-only at create | reject and close | PASS | PASS |
-| whole write/close/reopen | data preserved | PASS | PASS |
-| deferred seek/write/short-write/sync/full/read-only | retain failure/dirty state | FAIL (6) | FAIL (6) |
-| retry each deferred failure | persist data and perform a new sync | FAIL (6) | FAIL (6) |
-| byte read seek failure | return 0xFF, not wrong-position data | FAIL | PASS |
-| byte write seek failure | do not modify wrong-position byte | FAIL | PASS |
-| byte write outside file | do not extend the file | FAIL | PASS |
-| byte read error/short read/out-of-range | deterministic 0xFF | uninitialized/unchecked source path | PASS (3) |
-| interrupted initialization then retry | fill extension with 0xFF | FAIL | FAIL |
-| standalone flush failure | visible error state | FAIL | FAIL |
-| close failure | observable failure and still-open handle | PASS (fake API observation) | PASS |
-| repeated VBlank after error | bounded calls | PASS, but error lost | same limitation |
+| normal create, short extension, oversized existing | initialized suffix / preserved data | PASS | PASS |
+| deferred seek/write/short-write/sync/full/read-only | terminal error, retained RAM | FAIL (6) | PASS (6) |
+| retry after each failure | explicit reopen/write/sync without losing RAM | FAIL (6) | PASS (6), stopped-emulation API |
+| interrupted append then retry | 0xFF suffix with old prefix unchanged | FAIL | PASS |
+| standalone sync error | visible error | FAIL | PASS |
+| byte error, short read, invalid offset | deterministic 0xFF / no wrong write | PASS | PASS |
+| successful flush after lost byte | retain error | untested | PASS |
+| init read+close failure then repeated init | retain live handle until successful close | untested | PASS |
+| retry close/open/map/write/sync failures | preserve error and RAM, finite attempt | untested | PASS |
+| 120 VBlank / ARM7 updates after failure | no automatic I/O retry | error lost before | PASS, ERROR retained |
+| ARM7 Clean/Pending/Error, buffered and file-backed | explicit acknowledgment; no false clean exit | error unavailable | PASS |
+| init/Nitro/shared-size bounds | no memory overrun | incomplete | PASS |
 
-Baseline: 16 passing scenarios, 17 failing invariants. Candidate: 22 passing
-scenarios including three added read checks, 14 explicitly tracked failures.
-The byte helper changes initialize reads, validate range/seek, reject incomplete
-reads and prevent failed-seek writes. Save protocols, SWI signatures, shared-state
-ABI and retry scheduling are unchanged. A write or flush still has no result in
-the public void API; this candidate does not claim to make those failures visible.
+`test_save_io_elf.py` executes actual linked ARM9 byte/deferred functions and
+ARM7 Update/Flush methods with controlled FatFs outcomes. It checks stack and
+callee-saved registers, range rejection and error latching. CP15 and nested IRQ
+boundaries are mocked; no physical cache coherence claim follows. Full retry
+reopening and initialization are tested at the source/FatFs host seam, not as
+complete target FAT transactions.
 
-## Blockers and next evidence
+## Remaining gates — keep DRAFT
 
-- `sav_writeSaveToFile` unconditionally marks CLEAN after write/sync failure.
-  Simply leaving WRITE set can cause continuous VBlank I/O. ARM7's
-  `FlushSaveIfDirty` waits for CLEAN, so changing this needs an explicit bounded
-  retry/error/acknowledgment design and linked/concurrency verification. No such
-  state-machine change is guessed here.
-- Preallocation extends the file before fill. A failed fill can leave
-  unspecified bytes in an apparently full-size file; next startup cannot infer
-  which bytes belong to a valid save. Transactional initialization requires a
-  recovery identity/sidecar or allocation-order design, not blanket overwriting.
-- The fake close failure is observable but does not prove production recovery
-  after a failed cleanup close. Add combined failure scheduling before changing
-  cleanup lifecycle. Physical read-only/full-media and interrupted writes remain
-  hardware checks.
-- The production byte-access candidate remains a draft: linked target byte-I/O
-  semantics, all failure paths and hardware/performance gates are not complete.
-  Sanitizers do not detect every uninitialized read; the baseline seek failure
-  is deterministic evidence and source audit identifies the uninitialized local.
+The follow-up in PR #5 compiles actual ARM7 storage handlers, ARM9 FsIpc,
+FatFs diskio and SdCache. It demonstrates that DLDI/DSi read/write errors are
+still discarded below this suite's FatFs seam. Four driver-to-diskio failure
+propagations and two stale-signature rejection cases fail. Physical errors
+therefore cannot yet reliably reach this candidate's ERROR state.
+
+Fixing that requires a separately reviewed transaction-result channel: publish
+ARM7 result before completion acknowledgment, capture it in the matching ARM9
+wait token before nested transactions reuse the command, translate it in
+diskio and prevent failed cache publication/permanent patch allocation. JIT,
+DMA and ordinary cache callers must have an explicit non-null failure policy.
+No guessed shared storage/IRQ protocol change is included here.
+
+Other gates: stopped-emulation recovery UI and original-path/medium identity,
+actual simultaneous ARM7/ARM9 behavior, reset/power-off cancellation on hardware,
+FAT metadata/power-cut recovery, and complete target retry/cleanup transactions.
+The 70 passing tests do not close these gates. Save protocol and SWI signatures
+are unchanged. This candidate is not part of develop or custom-v0.1.2.

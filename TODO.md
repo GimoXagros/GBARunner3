@@ -90,10 +90,9 @@ input and route have not been verified on rc5.
   bounded candidate, 19-signature host corpus and 494 linked ARM cases.
   Underlying SD I/O failure propagation remains a conditional merge gate.
 - [ ] **Complete save I/O failure recovery.**
-  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) demonstrates 14
-  remaining integrity failures after limited byte-access guards. Deferred state,
-  bounded retry/ARM7 acknowledgment, interrupted initialization and cleanup
-  recovery remain open; green matrix CI is not a complete-integrity claim.
+  [Draft PR #6](https://github.com/GimoXagros/GBARunner3/pull/6) now passes 70 FatFs-seam/ARM7 host cases, including the original 14 failures.
+  Lower-level SD result propagation, target retry transactions, a stopped-emulation
+  recovery control and hardware exit/error behavior remain open.
 - [ ] **Add ROM-hack source-profile handling** —
   [#185](https://github.com/Gericom/GBARunner3/issues/185) for non-standard
   headers and [#202](https://github.com/Gericom/GBARunner3/issues/202) /
@@ -264,3 +263,8 @@ the current hicode branch instead of duplicating title configuration.
 See the [task results, evidence and single hardware queue](docs/autonomous-maintenance-20260905.md)
 for merged changes, retained drafts and remaining gates. Software-only tests do
 not extend the release's hardware verification scope.
+
+## Save I/O follow-up (2026-09-05, draft #6)
+
+- FatFs-seam failure state, explicit buffered retry, append-before-map initialization and close lifetime tests pass.
+- Keep DRAFT: physical storage propagation, recovery UI and simultaneous CPU/hardware gates remain.
