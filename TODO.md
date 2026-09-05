@@ -239,6 +239,11 @@ the current hicode branch instead of duplicating title configuration.
   copyrighted saves. Record hashes and lawful patch/reproduction instructions
   instead.
 
+## High-ROM save-function search (2026-09-05)
+
+- Candidate bounded overlap search and synthetic regression coverage are documented in [save-signature boundary analysis](docs/save-signature-boundary.md).
+- Underlying SD I/O failure propagation and hardware behavior remain unverified; do not mark EEPROM V124 fixed.
+
 ## Strict external patch addresses (2026-09-05)
 
 - Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
@@ -259,3 +264,9 @@ the current hicode branch instead of duplicating title configuration.
 See the [task results, evidence and single hardware queue](docs/autonomous-maintenance-20260905.md)
 for merged changes, retained drafts and remaining gates. Software-only tests do
 not extend the release's hardware verification scope.
+
+## Save-search storage audit follow-up (2026-09-05, draft #5)
+
+- Boundary suite: 513 linked ARM cases; immediate null-fetch termination and failed permanent lookup checks.
+- Actual ARM7/FsIpc/diskio/SdCache failure injection: 13 positive observations, 6 tracked failures.
+- Keep DRAFT until transaction results reach FatFs/cache consumers and failed data cannot be published.
