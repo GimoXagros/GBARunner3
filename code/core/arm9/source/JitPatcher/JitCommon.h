@@ -108,6 +108,15 @@ void* jit_findBlockStart(const void* ptr);
 void* jit_findBlockEnd(const void* ptr);
 
 bool jit_isBlockJitted(void* ptr);
+
+/// @brief Resolves an executable ROM address to the memory that backs its JIT
+///        instruction and auxiliary-bit data.
+/// @param ptr Executable address used by the guest.
+/// @return The relocated linear-ROM or loaded SD-cache address. Non-ROM
+///         addresses and high-ROM addresses whose block is not loaded are
+///         returned unchanged.
+void* jit_getBackingAddress(void* ptr);
+
 /// @brief JIT-processes the block containing ptr and returns the address that
 ///        the ARM9 must execute. Static ROM is already relocated by callers;
 ///        high ROM remains a GBA virtual address backed by the hicode map.
