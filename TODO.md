@@ -244,3 +244,8 @@ the current hicode branch instead of duplicating title configuration.
 
 - [Lifecycle audit and upstream #205 conflict map](docs/romhack-source-profile-design.md) documented.
 - Source/effective metadata, patch-view transaction, profile selection and save/RTC migration are design proposals, not implemented support.
+
+## EEPROM V124 source audit (2026-09-05)
+
+- [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
+- Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.
