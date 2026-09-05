@@ -21,7 +21,6 @@ jobs:
           - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 1, experimental: false}
           - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 2, experimental: false}
           - {label: pinned, image: 'devkitpro/devkitarm:20241104', jobs: 4, experimental: false}
-          - {label: latest-experimental, image: 'devkitpro/devkitarm:latest', jobs: 1, experimental: true}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,4 +42,28 @@ jobs:
         if: always()
         with:
           name: build-evidence-${{ matrix.label }}-j${{ matrix.jobs }}
+          path: evidence
+
+  latest-experimental:
+    if: github.event_name == 'workflow_dispatch'
+    name: latest toolchain (manual, non-blocking)
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Record latest compiler and attempt a clean build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          "$DEVKITARM/bin/arm-none-eabi-g++" --version > evidence/compiler.txt
+          make -C code clean > evidence/clean.log 2>&1
+          make -C code debug 2>&1 | tee evidence/build.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: latest-toolchain-evidence
           path: evidence

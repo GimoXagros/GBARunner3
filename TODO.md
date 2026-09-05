@@ -239,3 +239,8 @@ the current hicode branch instead of duplicating title configuration.
 
 - Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
 - Shipped 304 configs / 2,513 addresses retain their values. Patch mapping and hardware compatibility remain separate checks.
+
+## Build reproducibility (2026-09-05)
+
+- [Pinned/parallel build audit and official Actions](docs/build-reproducibility.md) implemented.
+- Latest-toolchain libtwl/calico API migration remains blocked; existing source/assembly warnings remain classified and visible.
