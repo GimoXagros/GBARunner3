@@ -264,3 +264,9 @@ the current hicode branch instead of duplicating title configuration.
 See the [task results, evidence and single hardware queue](docs/autonomous-maintenance-20260905.md)
 for merged changes, retained drafts and remaining gates. Software-only tests do
 not extend the release's hardware verification scope.
+
+## Save-search storage audit follow-up (2026-09-05, draft #5)
+
+- Boundary suite: 513 linked ARM cases; immediate null-fetch termination and failed permanent lookup checks.
+- Actual ARM7/FsIpc/diskio/SdCache failure injection: 13 positive observations, 6 tracked failures.
+- Keep DRAFT until transaction results reach FatFs/cache consumers and failed data cannot be published.

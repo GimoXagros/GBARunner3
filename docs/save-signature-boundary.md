@@ -39,3 +39,50 @@ synthetic results.
 buffer. The previous maintenance report called the function-signature boundary
 problem a SaveTagScanner defect; that label was inaccurate. This change targets
 `Save.cpp::searchHiCode`, not textual tags or EEPROM protocol compatibility.
+
+
+## Follow-up: actual storage failure propagation (2026-09-05)
+
+The boundary helper now also tests first-fetch, next-fetch and repeated-fetch
+failure with immediate termination and no permanent pin. A failed permanent
+patch lookup returns null. The linked ARM corpus includes first-block failure
+for all 19 signatures (513 cases total).
+
+`tools/tests/test_storage_failure_host.py` compiles the actual ARM7 DLDI/DSi
+handlers, ARM9 FsIpc (default non-IRQ-yielding configuration), diskio and SdCache
+loader. Only hardware registers, cache-maintenance calls and device drivers are
+fake. The production search helper runs over actual one-slot cache replacement.
+It observes **13 passing checks and 6 explicitly tracked failures**:
+
+| Device | Disk read error reaches FatFs | Disk write error reaches FatFs | Failed cached read rejects stale boundary signature |
+| --- | --- | --- | --- |
+| DLDI | FAIL | FAIL | FAIL |
+| DSi SD | FAIL | FAIL | FAIL |
+
+The driver reports failure but ARM7 unconditionally acknowledges completion.
+FsWaitToken records completion only; diskio returns RES_OK. SdCache finishFetch
+publishes stale bytes and the search can accept a stale cross-boundary pattern.
+Normal read/write and pending/completed handshakes remain positive controls.
+Default CI requires these exact six observations; `--require-fixed` deliberately
+fails. Green observation CI is not proof of error propagation or safe media I/O.
+
+### Required prerequisite, not a search-helper workaround
+
+A transaction-result channel must be reviewed before changing the runtime:
+
+1. ARM7 publishes a DLDI/DSi result before acknowledging the same transaction.
+2. ARM9 invalidates/reads that result and captures it in the matching wait token
+   before nested transactions reuse the command. Completion and success remain
+   distinct; both aligned and bounce-buffer paths need checks.
+3. diskio maps unsuccessful operations to RES_ERROR. Failed cache loads must
+   not publish a valid map entry or consume a permanent patch slot.
+4. All ordinary/JIT/DMA cache consumers need an explicit failure policy before
+   a loader that currently guarantees a pointer can start returning null.
+5. Verify cache ownership, nested completion ordering, ABI/cache-line placement,
+   target-linked callers and physical SD failures. Do not infer these from a
+   host synchronous driver model.
+
+This reaches outside save-function search into shared storage/IRQ/cache policy.
+No guessed protocol or JIT/DMA failure behavior is added to this draft. PR #6's
+FatFs-seam ERROR handling also depends on this prerequisite. Keep both drafts;
+no hardware verification or release promotion is claimed.

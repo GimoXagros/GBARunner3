@@ -55,6 +55,12 @@ jobs:
         run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
       - name: Execute save-search regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_save_search_host.py
+      - name: Audit physical storage failure propagation (known failures)
+        run: SANITIZE=1 python3 tools/tests/test_storage_failure_host.py --output storage-failure-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: storage-failure-results
+          path: storage-failure-results.json
       - name: Validate packaged configs and repository invariants
         run: python3 tools/tests/test_repository_invariants.py
       - uses: actions/download-artifact@v8

@@ -12,13 +12,14 @@ constexpr u32 SDC_BLOCK_SIZE = 4096;
 std::vector<uint8_t> rom;
 alignas(32) uint8_t slots[3][8192], permanent[4096];
 unsigned slot = 0, loads = 0;
-bool reuse = false;
+bool reuse = false, rejectPin = false;
+unsigned rejectLoad = UINT32_MAX;
 u32 pinnedAddress = 0, rejectBlock = UINT32_MAX;
 const void* sdc_getRomBlock(u32 address) {
     u32 offset = (address & 0x01FFFFFF) & ~4095u;
     assert(offset < rom.size());
     ++loads;
-    if (offset == rejectBlock) return nullptr;
+    if (offset == rejectBlock || loads == rejectLoad) return nullptr;
     auto* result = slots[reuse ? 0 : slot++ % 3];
     std::memset(result, 0xCD, 8192);
     std::memcpy(result, rom.data() + offset, std::min<size_t>(4096, rom.size() - offset));
@@ -26,6 +27,7 @@ const void* sdc_getRomBlock(u32 address) {
 }
 void* sdc_loadRomBlockForPatching(u32 address) {
     pinnedAddress = address;
+    if (rejectPin) return nullptr;
     u32 offset = address & 0x01FFFFFF;
     std::memcpy(permanent, rom.data() + (offset & ~4095u), std::min<size_t>(4096, rom.size() - (offset & ~4095u)));
     return permanent + (offset & 4095);
@@ -39,7 +41,7 @@ const u32* mem_fastSearch16(const u32* data, u32 length, const u32* pattern) {
 #include "production_search.h"
 #include "signatures.h"
 void check(const u32* sig, u32 start, u32 end, u32 expected) {
-    pinnedAddress = 0;
+    pinnedAddress = 0; loads = 0;
     auto* result = searchHiCode(sig, 0x08000000 + start, 0x08000000 + end);
     if (expected == UINT32_MAX) assert(!result && !pinnedAddress);
     else {
@@ -80,6 +82,19 @@ int main() {
             rejectBlock = 4096;
             check(sig, 0, rom.size(), UINT32_MAX);
             rejectBlock = UINT32_MAX;
+            rom.assign(8192, 0xA5);
+            std::memcpy(rom.data() + 8000, sig, 16);
+            for (unsigned failedLoad : {1u, 2u, 3u}) {
+                rejectLoad = failedLoad;
+                check(sig, 0, rom.size(), UINT32_MAX);
+                assert(loads == failedLoad); // stop immediately, no pin or later reads
+            }
+            rejectLoad = UINT32_MAX;
+            rejectPin = true; pinnedAddress = 0;
+            assert(searchHiCode(sig, 0x08000000, 0x08002000) == nullptr);
+            assert(pinnedAddress == 0x08000000 + 8000);
+            rejectPin = false;
+
         }
     }
     std::cout << "search boundary, 4-byte alignment, bounded ranges, cache replacement and permanent patch backing PASS\n";

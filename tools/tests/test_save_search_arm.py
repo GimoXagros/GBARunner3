@@ -71,4 +71,6 @@ for signature in corpus:
         count += 1
     run(signature, rom, 0, 4108, None, reject=4096)
     count += 1
+    run(signature, rom, 0, 4108, None, reject=0)
+    count += 1
 print(f"PASS: {count} linked ARM search cases, {len(corpus)} source signatures, one-slot eviction, ROM/range read bounds")
