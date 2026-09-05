@@ -57,6 +57,12 @@ jobs:
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
+      - name: Execute linked JIT metadata and address regressions
+        run: python3 tools/tests/test_jit_core_elf.py out/tests/arm9.elf --output jit-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jit-core-results
+          path: jit-results.json
       - name: Execute linked ARM dispatch and negative controls
         run: python3 tools/tests/test_hicode_dispatch_elf.py out/tests/arm9.elf --output dispatch-results.json
       - uses: actions/upload-artifact@v4
