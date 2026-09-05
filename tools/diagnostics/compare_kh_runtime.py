@@ -12,8 +12,15 @@ from autocapture_format import UNKNOWN, select_pair
 
 CATEGORIES = ('NO_RUNTIME_CHECKPOINT', 'LIVE_CPU_DISPLAY_BLANK', 'GUEST_POLLING_LOOP',
               'IRQ_WAIT_OR_MASK_MISMATCH', 'DMA_COMPLETION_STALL', 'TIMER_STALL',
-              'HICODE_OR_CACHE_MAPPING_DIVERGENCE', 'SAVE_ACCESS_DIVERGENCE',
+              'LOW_ADDRESS_CONTROL_FLOW_DIVERGENCE', 'HICODE_OR_CACHE_MAPPING_DIVERGENCE', 'SAVE_ACCESS_DIVERGENCE',
               'FILESYSTEM_OR_DIAGNOSTIC_FAILURE', 'INSUFFICIENT_EVIDENCE')
+
+def phase_for_sample(sample, first_a, transition):
+    if first_a == UNKNOWN or sample < first_a:
+        return 'before_first_A'
+    if transition != UNKNOWN and sample >= transition:
+        return 'after_last_A'
+    return 'between_A_inputs'
 
 def values(rows, name):
     return sorted({r[name] for r in rows if name in r})
@@ -98,11 +105,12 @@ def inspect(paths, elf=None, rom=None):
     first_a = metadata.get('first_a_sample', transition)
     groups = {'before_first_A': [], 'between_A_inputs': [], 'after_last_A': []}
     for _, row in sorted(all_rows.items()):
-        key = 'before_first_A' if first_a == UNKNOWN or row['sample'] < first_a else ('after_last_A' if row['sample'] >= transition else 'between_A_inputs')
+        key = phase_for_sample(row['sample'], first_a, transition)
         groups[key].append(row)
     result['phases'] = {key: summarize(group) for key, group in groups.items() if group}
     result['anchors'] = [{k: r[k] for k in ('sample', 'irq_pc', 'dispcnt', 'ds_dispcnt', 'anchor_reason', 'transition_sample') if k in r} for r in anchors]
-    result['events'] = getattr(payload, 'events', [])
+    result['events'] = [dict(event, phase=phase_for_sample(event['sample'], first_a, transition))
+                        for event in getattr(payload, 'events', [])]
     for pc, _ in collections.Counter(r['irq_pc'] for r in rows).most_common(3):
         result['instruction_evidence'].append(instruction_evidence(next(r for r in rows if r['irq_pc'] == pc), elf, rom))
     for pc, _ in collections.Counter(r['emulated_pc'] for r in rows).most_common(2):
@@ -120,6 +128,12 @@ def compare(hardware, lab):
         add('NO_RUNTIME_CHECKPOINT', dict(durable_stages=hm.get('stage_names'), rejected=hardware['rejected_files']))
     identity_match = bool(hm.get('build_id')) and hm.get('build_id') == lm.get('build_id')
     differences = {}
+    for event in hardware['events']:
+        if 0 < event.get('target', 0) < 0x02000000:
+            add('LOW_ADDRESS_CONTROL_FLOW_DIVERGENCE',
+                dict(phase=event['phase'], first_event=event,
+                     caveat='The first retained low-address event identifies the failed control-flow boundary, not the instruction that originally corrupted the target.'))
+            break
     for phase in hardware['phases'].keys() & lab['phases'].keys():
         h, l = hardware['phases'][phase], lab['phases'][phase]
         diff = {k: {'hardware': v, 'lab': l['registers'][k]} for k, v in h['registers'].items() if v != l['registers'][k]}
@@ -129,8 +143,9 @@ def compare(hardware, lab):
         # Only classify cache mapping divergence with a captured first target event
         # and native mapping evidence. Different UI phases alone are insufficient.
         mapping = {k: diff[k] for k in ('hicode_block', 'mpu_region4', 'icache_lockdown') if k in diff and diff[k]['hardware'] and diff[k]['lab']}
-        if identity_match and phase == 'after_last_A' and hardware['events'] and mapping and not lab['events']:
-            add('HICODE_OR_CACHE_MAPPING_DIVERGENCE', dict(phase=phase, first_event=hardware['events'][0], mapping=mapping,
+        phase_events = [event for event in hardware['events'] if event['phase'] == phase]
+        if identity_match and phase_events and mapping and not lab['events']:
+            add('HICODE_OR_CACHE_MAPPING_DIVERGENCE', dict(phase=phase, first_event=phase_events[0], mapping=mapping,
                                                          caveat='Observed mapping/control-flow divergence; hardware coherence defect is not yet proven.'))
     if not findings:
         add('INSUFFICIENT_EVIDENCE', dict(reason='No conservative classification threshold met. Stationary PC/marker or differing counters alone do not prove a wait or subsystem stall.', matching_build=identity_match))
