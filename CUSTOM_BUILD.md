@@ -38,12 +38,18 @@ cold-start and recovery paths complete DSpico/3DS verification.
 ## custom-v0.1.2 release identity
 
 - Tag: `custom-v0.1.2`
+- Tag/release merge commit:
+  `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`
 - Binary-producing implementation commit:
   `9b991ac9c89e1952b8573f4bf8bc9708bcade92b`
-- Hardware-tested `GBARunner3.nds` SHA-256:
+- `GBARunner3.zip` SHA-256:
+  `13AE1E2252ECF2245AD2236FF13EBEA3BA558C7B4E6EA7FB4F021CB25834CE77`
+- Packaged and hardware-tested `GBARunner3.nds` SHA-256:
   `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`
 - Candidate CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33936711193>
-- PR CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33938366058>
+- Final PR CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33938862970>
+- `develop` CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33939033107>
+- Release CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33939047544>
 
 This release fixes mapped high-ROM Thumb undefined dispatch, resolves Thumb JIT
 metadata and patch writes to the loaded SD-cache backing block, and unmaps the
@@ -51,4 +57,6 @@ hicode MPU region before whole instruction-cache invalidation. Nintendo 3DS +
 DSpico hardware testing passed `[B8CJ][K]` from Main Menu through New Game to the
 Save Slot screen. The black scanlines, screen flicker, and irregular audio clicks
 introduced by the rejected diagnostic build were absent. Extended progression
-and wider compatibility checks are tracked in `TODO.md`.
+and wider compatibility checks are tracked in `TODO.md`. The implementation
+commit identifies the tested runtime change; the release tag points to the later
+merge commit that adds release documentation without changing the produced NDS.

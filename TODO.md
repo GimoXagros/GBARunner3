@@ -5,6 +5,8 @@ Snapshot date: 2026-09-05
 Compared baselines:
 
 - upstream `Gericom/GBARunner3:develop`: `ecaa817815d9761745606592f04affe5ee9c3731`
+- current custom release `custom-v0.1.2`:
+  `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`
 - hardware-verified custom rc5: `967730a0db710f9d90dbd70907223d3f75e25a81`
 - 95 open upstream issues at the snapshot date
 
@@ -12,6 +14,16 @@ An open issue is not marked fixed merely because this branch contains related
 code. `Partial` means an implementation exists but a stated condition is still
 missing. `Retest` means the branch could affect the symptom, but the exact issue
 input and route have not been verified on rc5.
+
+## Completed in custom-v0.1.2
+
+- [x] **Fix the reported B8CJ New Game transition.** The generic fix preserves
+  mapped high-ROM Thumb state, selects the correct cached halfword, resolves
+  dynamic Thumb JIT metadata and patch writes to the SD-cache backing block, and
+  unmaps hicode before whole instruction-cache invalidation. Nintendo 3DS +
+  DSpico testing passed `Main Menu -> New Game -> Save Slot` with NDS SHA-256
+  `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`.
+  Later progression remains a separate open verification item below.
 
 ## P0: release and integration blockers
 
@@ -52,9 +64,13 @@ input and route have not been verified on rc5.
   `devkitpro/devkitarm:20241104` CI path while fixing dependency ordering,
   documenting outputs, testing devkitARM r66 separately, and coordinating the
   conflicting BlocksDS port in PR
-  [#178](https://github.com/Gericom/GBARunner3/pull/178).
+  [#178](https://github.com/Gericom/GBARunner3/pull/178). The pinned build is
+  currently green but reports existing macro redefinition, ignored-result,
+  qualifier, `noreturn`, and linker stub warnings. GitHub-hosted Actions also
+  report that Node.js 20 actions are being forced onto Node.js 24; update actions
+  and warning policy in a dedicated maintenance change.
 
-## P1: compatibility work directly adjacent to rc5
+## P1: compatibility work directly adjacent to the current custom release
 
 - [ ] **Extend hardware regression coverage for the high-ROM Thumb/JIT fix.**
   Nintendo 3DS + DSpico testing of build
@@ -65,6 +81,11 @@ input and route have not been verified on rc5.
   audio clicks in other tested games. Continue through slot selection, intro,
   gameplay, save, restart, and load, then broaden the title matrix. Keep these
   extended checks separate from the now-fixed reported transition.
+- [ ] **Reject malformed JSON patch addresses before applying them.** Shipped
+  configs contain 2,513 valid hexadecimal addresses, but the runtime
+  `parseHexString()` helper does not reject non-hex characters or more than eight
+  digits. Define the failure behavior and add target-side parser tests before
+  changing production settings semantics.
 - [ ] **Finish high-ROM save-signature scanning across 4 KiB boundaries.** The
   current search explicitly cannot match a 16-byte signature split between two
   SD-cache blocks. Add a boundary-safe comparison and unit vectors without
