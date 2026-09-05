@@ -112,11 +112,11 @@ else
 #---------------------------------------------------------------------------------
 # main targets
 #---------------------------------------------------------------------------------
-main.o: gbarunner9.bin.o three.h threeGlow.h splashBg.h runner.h
-
 $(ARM9ELF)	:	$(OFILES)
 	@echo linking $(notdir $@)
 	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+
+main.o: gbarunner9.bin.o three.h threeGlow.h splashBg.h runner.h
 
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data 
