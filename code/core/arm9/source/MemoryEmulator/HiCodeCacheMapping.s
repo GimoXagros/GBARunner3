@@ -47,9 +47,22 @@ notHicodeMiss:
     str lr, [r13]
     msr cpsr_c, #0xD1 // switch to fiq mode
     ldr r8,= vm_undefinedInstructionAddr
-    mrc p15, 3, lr, c15, c3, 0 // read data
     ldr r11, [r8]
-    b vm_undefinedArmInstructionInLR
+    // r13 held the SPSR on entry, but it became the hicode scratch stack as
+    // soon as SP was replaced above. Reload the saved guest state from DTCM;
+    // testing r13 here would classify every mapped Thumb trap as ARM.
+    ldr r10, [r8, #(vm_undefinedSpsr - vm_undefinedInstructionAddr)]
+    tst r10, #0x20 // saved spsr thumb bit
+    mrc p15, 3, lr, c15, c3, 0 // read aligned instruction data
+    beq vm_undefinedArmInstructionInLR
+
+    // High-ROM is instruction-cache mapped, so do not reload the Thumb
+    // halfword through a normal data access. Select it from the aligned cache
+    // word and enter the Thumb dispatcher after its usual ldrh.
+    tst r11, #2 // exception LR is Thumb instruction address + 2
+    moveq lr, lr, lsr #16
+    sub r11, r11, #2
+    b vm_undefinedThumbInstructionInLR
 
 .bss
 

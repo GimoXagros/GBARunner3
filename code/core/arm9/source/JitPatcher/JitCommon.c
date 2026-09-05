@@ -2,6 +2,7 @@
 #include <string.h>
 #include "SdCache/SdCache.h"
 #include "cp15.h"
+#include "MemoryEmulator/HiCodeCacheMapping.h"
 #include "MemoryEmulator/RomDefs.h"
 #include "VirtualMachine/VMIrq.h"
 #include "JitArm.h"
@@ -112,6 +113,25 @@ bool jit_isBlockJitted(void* ptr)
     return (*jitBits >> bitIdx) & 1;
 }
 
+[[gnu::section(".ewram"), gnu::optimize("Oz")]]
+void* jit_getBackingAddress(void* ptr)
+{
+    const u32 address = (u32)ptr;
+    if (address >= ROM_LINEAR_GBA_ADDRESS && address < ROM_LINEAR_END_GBA_ADDRESS)
+    {
+        return (void*)(address - ROM_LINEAR_GBA_ADDRESS + ROM_LINEAR_DS_ADDRESS);
+    }
+    else if (address >= ROM_LINEAR_END_GBA_ADDRESS && address < 0x0E000000)
+    {
+        u32 romBlock = ((address << 7) >> 7) >> SDC_BLOCK_SHIFT;
+        void* cacheBlock = sdc_romBlockToCacheBlock[romBlock];
+        if (cacheBlock)
+            return (void*)((u32)cacheBlock + (address & SDC_BLOCK_MASK));
+    }
+
+    return ptr;
+}
+
 // Preparing an uncached block may perform SD I/O and is not latency-sensitive
 // enough to consume scarce ITCM space. Keep only the JIT bit lookup hot path in
 // ITCM; callers receive a linker veneer transparently.
@@ -143,6 +163,12 @@ void* jit_ensureBlockJitted(void* ptr)
         jit_processArmBlock((u32*)ptr);
     }
     dc_drainWriteBuffer();
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+    // Invalidating the whole ARM946E-S I-cache also invalidates locked hicode
+    // lines. Disable their MPU region first so the next high-ROM fetch remaps
+    // the block instead of fetching through invalid tags.
+    hic_unmapRomBlock();
+#endif
     ic_invalidateAll();
     return executablePtr;
 }

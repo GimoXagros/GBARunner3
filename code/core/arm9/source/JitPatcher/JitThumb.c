@@ -1,6 +1,7 @@
 #include "common.h"
 #include "SdCache/SdCache.h"
 #include "cp15.h"
+#include "MemoryEmulator/HiCodeCacheMapping.h"
 #include "JitCommon.h"
 #include "JitThumb.h"
 
@@ -10,6 +11,14 @@
 static inline void thumbJitNotImplemented()
 {
     asm volatile ("bkpt #0");
+}
+
+static inline void invalidateJitInstructionCache()
+{
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+    hic_unmapRomBlock();
+#endif
+    ic_invalidateAll();
 }
 
 void jit_processThumbBlock(u16* ptr)
@@ -118,7 +127,8 @@ void jit_processThumbBlock(u16* ptr)
 u16* jit_handleThumbBCond(u16* instructionPtr, u32 instruction, bool conditionPass)
 {
     // todo: check if previous instruction was actually the first bl part
-    u16* jitAuxBits = jit_getJitAuxBits(instructionPtr);
+    u16* backingInstructionPtr = (u16*)jit_getBackingAddress(instructionPtr);
+    u16* jitAuxBits = jit_getJitAuxBits(backingInstructionPtr);
     u32 auxBits = ((*jitAuxBits) >> ((u32)instructionPtr & 0xF)) & 3;
 
     u32 offset = ((instruction & 0x3F) << 2) | auxBits;
@@ -141,9 +151,9 @@ u16* jit_handleThumbBCond(u16* instructionPtr, u32 instruction, bool conditionPa
     if (jit_isBlockJitted((void*)otherAddress))
     {
         u32 condition = (instruction >> 6) & 0xF;
-        *instructionPtr = 0xD000 | (condition << 8) | offset;
+        *backingInstructionPtr = 0xD000 | (condition << 8) | offset;
         dc_drainWriteBuffer();
-        ic_invalidateAll();
+        invalidateJitInstructionCache();
     }
 #ifdef TRACE_THUMB_UNDEFINED
     logAddress(0xD000);
@@ -155,7 +165,8 @@ u16* jit_handleThumbBCond(u16* instructionPtr, u32 instruction, bool conditionPa
 [[gnu::section(".itcm")]]
 u16* jit_handleThumbUndefined(u32 instruction, u16* instructionPtr, u32* registers)
 {
-    u16* jitAuxBits = jit_getJitAuxBits(instructionPtr);
+    u16* backingInstructionPtr = (u16*)jit_getBackingAddress(instructionPtr);
+    u16* jitAuxBits = jit_getJitAuxBits(backingInstructionPtr);
     u32 auxBits = ((*jitAuxBits) >> ((u32)instructionPtr & 0xF)) & 3;
     if ((instruction & 0xFF80) == 0b1011101110000000)
     {
@@ -186,9 +197,9 @@ u16* jit_handleThumbUndefined(u32 instruction, u16* instructionPtr, u32* registe
         logAddress(0xE000);
         logAddress(branchDestination);
 #endif
-        *instructionPtr = 0xE000 | offset;
+        *backingInstructionPtr = 0xE000 | offset;
         dc_drainWriteBuffer();
-        ic_invalidateAll();
+        invalidateJitInstructionCache();
         return (u16*)branchDestination;
     }
     else if ((instruction & 0xF801) == 0xE801)
@@ -202,9 +213,9 @@ u16* jit_handleThumbUndefined(u32 instruction, u16* instructionPtr, u32* registe
         logAddress(branchDestination);
 #endif
         registers[9] = (u32)instructionPtr + 3;
-        *instructionPtr = 0xF800 | offset;
+        *backingInstructionPtr = 0xF800 | offset;
         dc_drainWriteBuffer();
-        ic_invalidateAll();
+        invalidateJitInstructionCache();
         return (u16*)branchDestination;
     }
     else

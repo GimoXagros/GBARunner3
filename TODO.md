@@ -1,6 +1,6 @@
 # GBARunner3 TODO and upstream issue comparison
 
-Snapshot date: 2026-08-29
+Snapshot date: 2026-09-05
 
 Compared baselines:
 
@@ -56,6 +56,15 @@ input and route have not been verified on rc5.
 
 ## P1: compatibility work directly adjacent to rc5
 
+- [ ] **Extend hardware regression coverage for the high-ROM Thumb/JIT fix.**
+  Nintendo 3DS + DSpico testing of build
+  `9b991ac9c89e1952b8573f4bf8bc9708bcade92b` (`GBARunner3.nds`
+  SHA-256 `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`)
+  passed the `[B8CJ][K]` route `Main Menu -> New Game -> Save Slot` and did not
+  reproduce the diagnostic build's black scanlines, screen flicker, or irregular
+  audio clicks in other tested games. Continue through slot selection, intro,
+  gameplay, save, restart, and load, then broaden the title matrix. Keep these
+  extended checks separate from the now-fixed reported transition.
 - [ ] **Finish high-ROM save-signature scanning across 4 KiB boundaries.** The
   current search explicitly cannot match a 16-byte signature split between two
   SD-cache blocks. Add a boundary-safe comparison and unit vectors without

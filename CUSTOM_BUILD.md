@@ -34,3 +34,21 @@ This release persists per-game RTC state in `.g3rtc` sidecars and includes the
 custom NDS banner icon. The application and test NDS compile successfully. The
 rc5 binary remains the immutable hardware regression baseline until the new RTC
 cold-start and recovery paths complete DSpico/3DS verification.
+
+## custom-v0.1.2 release identity
+
+- Tag: `custom-v0.1.2`
+- Binary-producing implementation commit:
+  `9b991ac9c89e1952b8573f4bf8bc9708bcade92b`
+- Hardware-tested `GBARunner3.nds` SHA-256:
+  `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`
+- Candidate CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33936711193>
+- PR CI: <https://github.com/GimoXagros/GBARunner3/actions/runs/33938366058>
+
+This release fixes mapped high-ROM Thumb undefined dispatch, resolves Thumb JIT
+metadata and patch writes to the loaded SD-cache backing block, and unmaps the
+hicode MPU region before whole instruction-cache invalidation. Nintendo 3DS +
+DSpico hardware testing passed `[B8CJ][K]` from Main Menu through New Game to the
+Save Slot screen. The black scanlines, screen flicker, and irregular audio clicks
+introduced by the rejected diagnostic build were absent. Extended progression
+and wider compatibility checks are tracked in `TODO.md`.
