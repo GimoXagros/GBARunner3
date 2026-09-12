@@ -61,6 +61,14 @@ jobs:
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
+      - name: Verify linked IRQ callbacks and ELF audit negative control
+        run: |
+          python3 tools/tests/test_irq_callbacks_elf.py out/tests/arm9.elf --output irq-results.json
+          python3 tools/tests/test_display_audit.py out/tests/arm9.elf
+      - uses: actions/upload-artifact@v7
+        with:
+          name: irq-callback-results
+          path: irq-results.json
       - name: Execute linked JIT metadata and address regressions
         run: python3 tools/tests/test_jit_core_elf.py out/tests/arm9.elf --output jit-results.json
       - uses: actions/upload-artifact@v7

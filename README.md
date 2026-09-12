@@ -14,49 +14,23 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 ## Current custom release
 
 The current stable custom release is
-[`custom-v0.1.2`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.2).
-The broken rc2 and rc4 release entries have been withdrawn.
+[`custom-v0.1.3`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3).
+It promotes the strict JSON validation and build hardening from RC1. Its normal
+`GBARunner3.nds` is byte-identical to RC1 and the RC2 control:
+`9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2`.
 
-- Release tag and merge commit: `custom-v0.1.2` at
-  `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`
-- High-ROM fix implementation commit:
-  `9b991ac9c89e1952b8573f4bf8bc9708bcade92b`
-- `GBARunner3.zip` SHA-256:
-  `13AE1E2252ECF2245AD2236FF13EBEA3BA558C7B4E6EA7FB4F021CB25834CE77`
-- `GBARunner3.nds` SHA-256:
-  `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`
-- Automated verification: ARM7, ARM9, bootstrap, application NDS, GoogleTest
-  NDS, and linked high-ROM dispatch semantics build successfully
-- Hardware verification: Nintendo 3DS in DS mode with DSpico passed the B8CJ
-  route `Main Menu -> New Game -> Save Slot`
+On 2026-09-13, the user confirmed that both distorted output and flicker were
+absent after the temporary display-comparison setting was removed and defaults
+were restored. This is an observed recovery in the reported setup, not evidence
+of a new display/IRQ code fix or a full compatibility pass. The exact executable
+hash for that hardware session was not supplied. See the
+[release and investigation record](docs/v013-release.md).
 
-The immutable hardware regression baseline remains `custom-v0.1.0-rc5` at
-commit `967730a0db710f9d90dbd70907223d3f75e25a81`, with NDS SHA-256
-`E33F2818E8946EED2DB4BF8B653F81B1D48A554E2C4E9A90F2D82210F87FA9B0`.
-That baseline was verified on Nintendo 3DS in DS mode using DSpico.
-
-## Current release candidate
-
-[`custom-v0.1.3-rc1`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
-is the published Pre-release candidate for configuration and build hardening.
-Its public ZIP has passed independent download, hash and content verification;
-the exact source, workflow and hashes are recorded in
-[CUSTOM_BUILD.md](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate).
-`custom-v0.1.2` remains the current stable release.
-
-The RC includes strict external JSON patch-address validation and atomic
-rejection of malformed arrays, expanded automated regressions, reproducible
-pinned-toolchain builds, and guarded release uploads. EEPROM V124 and ROM-hack
-source-profile documents are research/design only. Draft PRs
-[#5](https://github.com/GimoXagros/GBARunner3/pull/5) and
-[#6](https://github.com/GimoXagros/GBARunner3/pull/6), including their tests, are
-excluded.
-
-Hardware validation is pending; no new RC hardware pass has been completed.
-The previous v0.1.2 B8CJ result ends at Save Slot. Slot selection, intro,
-gameplay, save/restart/load, RTC cold start, interrupted-write recovery, and
-wider compatibility remain open. See [RC build identity](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate)
-and [remaining work](TODO.md#custom-v013-rc1-release-status).
+The stable package contains one normal executable, the same 304 title configs,
+installation notes and checksums. It contains no diagnostic executable and no
+global `gbarunner3.json`. RC1/RC2 and previous stable releases remain available.
+Draft PRs [#5](https://github.com/GimoXagros/GBARunner3/pull/5) and
+[#6](https://github.com/GimoXagros/GBARunner3/pull/6) remain excluded.
 
 ## Changes in this fork
 
@@ -81,10 +55,8 @@ and [remaining work](TODO.md#custom-v013-rc1-release-status).
 
 ## Installation
 
-1. For the stable release, download `GBARunner3.zip` from `custom-v0.1.2`.
-   For RC hardware testing, explicitly choose the published
-   `custom-v0.1.3-rc1` Pre-release ZIP instead. Check that version's integrity
-   information before copying the files.
+1. Download `GBARunner3.zip` from `custom-v0.1.3` and check its release hashes.
+   Preserve existing saves and settings before updating.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Merge the included `_gba/configs` directory into `/_gba/configs` on the SD
    card.
@@ -96,6 +68,12 @@ GBARunner3 has no bundled commercial ROMs or BIOS. If a frontend does not pass
 a ROM path, the current fallback path is `/rom.gba`.
 
 ## Configuration
+
+The global `/_gba/gbarunner3.json` is optional; absent settings use defaults.
+Keep unrelated personal settings when updating. If the temporary RC2 comparison
+file containing only `enableCenterAndMask=false` is still active, move that test
+file aside to restore the original defaults. This option changes centering,
+masking and engine selection; it does not stop VBlank capture housekeeping.
 
 Global settings are read from `/_gba/gbarunner3.json`. Per-title settings use
 `/_gba/configs/GAMECODEVV.json`, where `GAMECODE` is the four-character GBA game

@@ -1,6 +1,6 @@
 # GBARunner3 TODO and upstream issue comparison
 
-Snapshot date: 2026-09-05
+Upstream issue snapshot date: 2026-09-05; release status updated 2026-09-13
 
 Compared baselines:
 
@@ -14,6 +14,22 @@ An open issue is not marked fixed merely because this branch contains related
 code. `Partial` means an implementation exists but a stated condition is still
 missing. `Retest` means the branch could affect the symptom, but the exact issue
 input and route have not been verified on rc5.
+
+## custom-v0.1.3 stable status
+
+- [x] Record the user's confirmation that both distortion and flicker disappeared
+  after removing the temporary display-comparison config and restoring defaults.
+- [x] Correct the comparison interpretation: `enableCenterAndMask=false` changes
+  presentation but does not stop VBlank capture/bank housekeeping.
+- [x] Prepare the normal RC1-equivalent runtime for stable publication, with
+  diagnostics and Draft PR #5/#6 excluded. Release identity is checked by the
+  publication workflow; see the [release record](docs/v013-release.md).
+- [ ] Broader hardware playthrough/save/restart/load, RTC recovery and physical SD
+  error propagation remain open. Symptom recovery does not close those items.
+- [ ] Root cause of the originally reported flicker remains unproven. No generic
+  display/IRQ production fix is claimed or required for this observed recovery.
+
+The following RC1 checklist is historical; current stable is `custom-v0.1.3`.
 
 ## custom-v0.1.3-rc1 release status
 
@@ -30,8 +46,8 @@ input and route have not been verified on rc5.
 - [ ] Keep Draft PR #5 and #6 excluded until their own outstanding gates pass.
   Their production changes and tests are outside this RC.
 
-`custom-v0.1.2` remains the current stable release. RC publication is an
-automated-verification milestone, not a new hardware compatibility certification.
+`custom-v0.1.2` was the stable release when RC1 was published. RC publication
+was an automated-verification milestone, not a new hardware compatibility certification.
 
 ## Completed in custom-v0.1.2
 

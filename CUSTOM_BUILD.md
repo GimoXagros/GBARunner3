@@ -4,10 +4,28 @@ The authoritative user and build documentation now lives in
 [`README.md`](README.md), and the issue comparison lives in
 [`TODO.md`](TODO.md).
 
+## custom-v0.1.3 stable release
+
+The stable release promotes the RC1 production runtime on develop
+`23bc6bcaf5dbae6ac1da532eb616caa07f852ff2`. No diagnostic branch is merged;
+there are no production-source, packaged-config or submodule changes in this
+release preparation. The normal NDS must retain SHA-256
+`9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2`.
+
+The publication workflow checks that identity before packaging. It includes
+only the normal executable, 304 configs, release instructions and SHA256SUMS.
+Exact tag source, successful workflow and independently downloaded ZIP identity
+are recorded on the [release page](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3).
+The [full release record](docs/v013-release.md) describes the user's symptom
+recovery, the corrected comparison instructions and remaining test boundaries.
+
+The following RC1 section is an immutable historical publication record, not
+the current stable designation.
+
 ## custom-v0.1.3-rc1 release candidate
 
-This is a Pre-release candidate for configuration and build hardening.
-`custom-v0.1.2` remains the current stable release. The release-preparation
+This was the Pre-release candidate for configuration and build hardening.
+At its publication, `custom-v0.1.2` was the current stable release. The release-preparation
 change updates documentation only; runtime, configs and submodule revisions
 are unchanged from audited develop `504a2d67177d6e4432c51addfeabaa07b9996654`.
 
