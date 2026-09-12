@@ -106,7 +106,7 @@ def main():
                 if wa == wb:
                     continue
                 reason = same_address(wa, wb)
-                if wa & 0xFE000000 == wb & 0xFE000000 and wa & 0x0E000000 == 0x0A000000:
+                if wa & 0xFF000000 == wb & 0xFF000000 and wa & 0x0E000000 == 0x0A000000:
                     reason = same_address(branch_target(pa + offset, wa), branch_target(pb + offset, wb))
                 changed.append({"offset": hex(offset), "stable_word": hex(wa), "candidate_word": hex(wb),
                                 "same_symbol_target": reason})

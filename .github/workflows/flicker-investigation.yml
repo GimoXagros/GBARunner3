@@ -55,5 +55,6 @@ jobs:
           cmp out/flicker-controls-j1/GBARunner3-settings-diagnostic.nds out/flicker-controls-j4/GBARunner3-settings-diagnostic.nds
           python3 tools/tests/test_irq_callbacks_elf.py out/flicker-controls-j1/tests/control-arm9.elf
           python3 tools/tests/test_irq_callbacks_elf.py out/flicker-controls-j1/tests/diagnostic-arm9.elf
+          python3 tools/tests/test_display_audit.py out/flicker-controls-j1/tests/control-arm9.elf
       - name: Boot settings snapshot sanitizer test
         run: SANITIZE=1 python3 tools/tests/test_settings_snapshot_host.py

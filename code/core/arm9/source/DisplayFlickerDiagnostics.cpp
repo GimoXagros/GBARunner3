@@ -11,9 +11,12 @@ void displayDiagnosticsWriteSettings(const AppSettings& settings, u32 gameCode,
     unsigned revision, bool globalLoaded, const char* titlePath, bool titleLoaded)
 {
     [[gnu::section(".ewram.bss")]] static char report[2048];
+    [[gnu::section(".ewram.bss")]] static char escapedPath[512];
     [[gnu::section(".ewram.bss")]] static FIL file;
+    if (!settingsEscapePath(escapedPath, sizeof(escapedPath), titlePath))
+        return;
     const int length = formatSettingsSnapshot(report, sizeof(report), settings,
-        gameCode, revision, globalLoaded, titlePath, titleLoaded, mini_snprintf);
+        gameCode, revision, globalLoaded, escapedPath, titleLoaded, mini_snprintf);
     if (length < 0)
         return;
     // CREATE_NEW never truncates an earlier result. No writes to settings/save.

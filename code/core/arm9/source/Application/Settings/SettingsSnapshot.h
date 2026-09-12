@@ -46,12 +46,9 @@ inline bool settingsEscapePath(char* output, size_t capacity, const char* path)
 
 template <typename Print>
 int formatSettingsSnapshot(char* output, size_t capacity, const AppSettings& settings,
-    u32 gameCode, unsigned revision, bool globalLoaded, const char* titlePath,
+    u32 gameCode, unsigned revision, bool globalLoaded, const char* escapedTitlePath,
     bool titleLoaded, Print print)
 {
-    char escapedPath[512];
-    if (!settingsEscapePath(escapedPath, sizeof(escapedPath), titlePath))
-        return -1;
     const auto& r = settings.runSettings;
     const auto& d = settings.displaySettings;
     const int count = print(output, capacity,
@@ -67,7 +64,7 @@ int formatSettingsSnapshot(char* output, size_t capacity, const AppSettings& set
         "gbaScreen=%u\nenableCenterAndMask=%u\nborderImage=%u\n"
         "gbaColorCorrection=%u\ngamma=%u\nbrightness=%u\n"
         "centerOffsetX=%u\ncenterOffsetY=%u\nmaskWidth=%u\nmaskHeight=%u\nsaveType=%u\n",
-        unsigned(gameCode), revision, unsigned(globalLoaded), escapedPath, unsigned(titleLoaded),
+        unsigned(gameCode), revision, unsigned(globalLoaded), escapedTitlePath, unsigned(titleLoaded),
         unsigned(r.enableJit), unsigned(r.jitPatchAddressCount),
         unsigned(settingsAddressHash(r.jitPatchAddresses.get(), r.jitPatchAddressCount)),
         unsigned(r.selfModifyingPatchAddressCount),
