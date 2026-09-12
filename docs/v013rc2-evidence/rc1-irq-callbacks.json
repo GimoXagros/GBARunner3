@@ -1,0 +1,15 @@
+{
+  "elf": "matching release-linked ARM9 ELF (see report)",
+  "irq_stack_end": "0xffffe52c",
+  "callback_call_sites": 11,
+  "results": [
+    "emu_hblankIrq: 4 linked calls aligned, registers and canary preserved",
+    "emu_arm7Irq: 2 linked calls aligned, registers and canary preserved",
+    "vblankDma: 4 linked calls aligned, registers and canary preserved",
+    "writePendingFiles: 1 linked calls aligned, registers and canary preserved",
+    "negative control: six-register push detected as misaligned",
+    "capture register instructions: C/D/C alternation",
+    "eight pending combinations: HBlank -> ARM7 -> VBlank; exception return and R4 restored"
+  ],
+  "hardware_timing_tested": false
+}

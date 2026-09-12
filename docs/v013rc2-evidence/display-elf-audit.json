@@ -1,0 +1,418 @@
+{
+  "scope": "listed function extents, not every instruction in the ELF",
+  "stable_sections": {
+    ".crt0": {
+      "address": "0x6800000",
+      "size": 408
+    },
+    ".text": {
+      "address": "0x6800198",
+      "size": 53680
+    },
+    ".fini": {
+      "address": "0x680d348",
+      "size": 24
+    },
+    ".rodata": {
+      "address": "0x680d360",
+      "size": 3512
+    },
+    ".ARM.exidx": {
+      "address": "0x680e118",
+      "size": 8
+    },
+    ".init_array": {
+      "address": "0x680e120",
+      "size": 16
+    },
+    ".fini_array": {
+      "address": "0x680e130",
+      "size": 8
+    },
+    ".eh_frame": {
+      "address": "0x680e138",
+      "size": 4
+    },
+    ".data": {
+      "address": "0x680e13c",
+      "size": 20
+    },
+    ".dtcm": {
+      "address": "0xffffc000",
+      "size": 16384
+    },
+    ".itcm": {
+      "address": "0x0",
+      "size": 32736
+    },
+    ".ewram": {
+      "address": "0x2040000",
+      "size": 13952
+    },
+    ".ewram.bss": {
+      "address": "0x2044000",
+      "size": 1753088
+    },
+    ".vramhi.bss": {
+      "address": "0x6898000",
+      "size": 49152
+    },
+    ".bss": {
+      "address": "0x680e150",
+      "size": 73392
+    }
+  },
+  "candidate_sections": {
+    ".crt0": {
+      "address": "0x6800000",
+      "size": 408
+    },
+    ".text": {
+      "address": "0x6800198",
+      "size": 53960
+    },
+    ".fini": {
+      "address": "0x680d460",
+      "size": 24
+    },
+    ".rodata": {
+      "address": "0x680d478",
+      "size": 3592
+    },
+    ".ARM.exidx": {
+      "address": "0x680e280",
+      "size": 8
+    },
+    ".init_array": {
+      "address": "0x680e288",
+      "size": 16
+    },
+    ".fini_array": {
+      "address": "0x680e298",
+      "size": 8
+    },
+    ".eh_frame": {
+      "address": "0x680e2a0",
+      "size": 4
+    },
+    ".data": {
+      "address": "0x680e2a4",
+      "size": 20
+    },
+    ".dtcm": {
+      "address": "0xffffc000",
+      "size": 16384
+    },
+    ".itcm": {
+      "address": "0x0",
+      "size": 32736
+    },
+    ".ewram": {
+      "address": "0x2040000",
+      "size": 13832
+    },
+    ".ewram.bss": {
+      "address": "0x2044000",
+      "size": 1753088
+    },
+    ".vramhi.bss": {
+      "address": "0x6898000",
+      "size": 49152
+    },
+    ".bss": {
+      "address": "0x680e2b8",
+      "size": 73032
+    }
+  },
+  "functions": [
+    {
+      "symbol": "vm_irq",
+      "stable_address": "0xdc",
+      "candidate_address": "0xdc",
+      "stable_size": 28,
+      "candidate_size": 28,
+      "stable_sha256": "2dcc8fac0e4f20c75654d048e0b99526a353d352c6807b398da1e4937a2179eb",
+      "candidate_sha256": "2dcc8fac0e4f20c75654d048e0b99526a353d352c6807b398da1e4937a2179eb",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "emu_hblankIrq",
+      "stable_address": "0x4714",
+      "candidate_address": "0x4714",
+      "stable_size": 68,
+      "candidate_size": 68,
+      "stable_sha256": "15cbfe63d08f5b99f308fd26827e1cd1817820e211f74134d3227ecbb55a3fad",
+      "candidate_sha256": "15cbfe63d08f5b99f308fd26827e1cd1817820e211f74134d3227ecbb55a3fad",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "emu_arm7Irq",
+      "stable_address": "0x469c",
+      "candidate_address": "0x469c",
+      "stable_size": 36,
+      "candidate_size": 36,
+      "stable_sha256": "dd7e70ee59eb33a4adfa144f39059aeba68756e3cae0ba33b5aa56ef4447ba78",
+      "candidate_sha256": "dd7e70ee59eb33a4adfa144f39059aeba68756e3cae0ba33b5aa56ef4447ba78",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "emu_vblankIrq",
+      "stable_address": "0x4794",
+      "candidate_address": "0x4794",
+      "stable_size": 184,
+      "candidate_size": 184,
+      "stable_sha256": "d52b25d91950724485cbd2c931167e0597e6ee77fa0a3b7ef1377bc2df3d4d07",
+      "candidate_sha256": "97f3947c61e39f08479f26c3776398a621e4e01a0f3279b7b460f8d455b6944d",
+      "changed_words": [
+        {
+          "offset": "0x74",
+          "stable_word": "0xeb000dd8",
+          "candidate_word": "0xeb000de2",
+          "same_symbol_target": "__sav_writePendingFiles_veneer+0"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "dma_dmaTransfer",
+      "stable_address": "0x3df0",
+      "candidate_address": "0x3df0",
+      "stable_size": 408,
+      "candidate_size": 408,
+      "stable_sha256": "16751809cb5d0a5110dd56cc49b397585eed15788edfad78321db7629982a8c0",
+      "candidate_sha256": "42f5628bcd0aa42ab806a2edbc992fe1540e66ed2d97a974b717c6915d69d0b6",
+      "changed_words": [
+        {
+          "offset": "0x180",
+          "stable_word": "0x681e36c",
+          "candidate_word": "0x681e4d4",
+          "same_symbol_target": "hblankDmaSkipInstruction+0"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "dma_dma0Transfer",
+      "stable_address": "0x771c",
+      "candidate_address": "0x771c",
+      "stable_size": 8,
+      "candidate_size": 8,
+      "stable_sha256": "76501238ad76036f794fe7b39664c7ad77be9e795aac7df102b570e767a24037",
+      "candidate_sha256": "76501238ad76036f794fe7b39664c7ad77be9e795aac7df102b570e767a24037",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "dma_dma1Transfer",
+      "stable_address": "0x7724",
+      "candidate_address": "0x7724",
+      "stable_size": 8,
+      "candidate_size": 8,
+      "stable_sha256": "cdf13e8e3daff31c89ab88b711302c2585beff3b40267ee95228481a20a8a539",
+      "candidate_sha256": "cdf13e8e3daff31c89ab88b711302c2585beff3b40267ee95228481a20a8a539",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "dma_dma2Transfer",
+      "stable_address": "0x772c",
+      "candidate_address": "0x772c",
+      "stable_size": 8,
+      "candidate_size": 8,
+      "stable_sha256": "ae42b0edd964dff93e14cca192e812242a3eac5a0b9fb527e830313e7620255b",
+      "candidate_sha256": "ae42b0edd964dff93e14cca192e812242a3eac5a0b9fb527e830313e7620255b",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "dma_dma3Transfer",
+      "stable_address": "0x7734",
+      "candidate_address": "0x7734",
+      "stable_size": 20,
+      "candidate_size": 20,
+      "stable_sha256": "df03036e2f3decab5d2926dd90bc50d5827a1716f6e7cbec41b5f6e1cbb45d18",
+      "candidate_sha256": "df03036e2f3decab5d2926dd90bc50d5827a1716f6e7cbec41b5f6e1cbb45d18",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "dma_dmaSound",
+      "stable_address": "0x3f88",
+      "candidate_address": "0x3f88",
+      "stable_size": 332,
+      "candidate_size": 332,
+      "stable_sha256": "5d282edc9d1ef0cdc3cb9aa41b5495af52e78ed797349a3b54476efeb8c5d105",
+      "candidate_sha256": "5d282edc9d1ef0cdc3cb9aa41b5495af52e78ed797349a3b54476efeb8c5d105",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "emu_regDispCntStore",
+      "stable_address": "0xa34",
+      "candidate_address": "0xa34",
+      "stable_size": 316,
+      "candidate_size": 316,
+      "stable_sha256": "d188925d52c678a322e999cf26a514a2632b27e9b3b46716c961c425391764d9",
+      "candidate_sha256": "f85363da9ef79d4c7a361819e9d73826787a21239c8f7dd3deeb02f889cce75c",
+      "changed_words": [
+        {
+          "offset": "0xc0",
+          "stable_word": "0xeb001d23",
+          "candidate_word": "0xeb001d2f",
+          "same_symbol_target": "__displayModeChange.isra.0_veneer+0"
+        },
+        {
+          "offset": "0xe8",
+          "stable_word": "0xeb001d19",
+          "candidate_word": "0xeb001d25",
+          "same_symbol_target": "__displayModeChange.isra.0_veneer+0"
+        },
+        {
+          "offset": "0x128",
+          "stable_word": "0xeb001d09",
+          "candidate_word": "0xeb001d15",
+          "same_symbol_target": "__displayModeChange.isra.0_veneer+0"
+        },
+        {
+          "offset": "0x138",
+          "stable_word": "0x680d37d",
+          "candidate_word": "0x680d495",
+          "same_symbol_target": "byte-identical anonymous .rodata block (7 bytes)"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "displayModeChange.isra.0",
+      "stable_address": "0x680b880",
+      "candidate_address": "0x680b998",
+      "stable_size": 864,
+      "candidate_size": 864,
+      "stable_sha256": "72cbbe4d3b0191a448d8fe5e90bc9868c4fffba2a2a2c37bdad747df2e735417",
+      "candidate_sha256": "d7adad88a9f3e2d4de64c203bd9eeb280851c972b472d265bc4eda4830cae86b",
+      "changed_words": [
+        {
+          "offset": "0x15c",
+          "stable_word": "0xeb000651",
+          "candidate_word": "0xeb00063d",
+          "same_symbol_target": "__memu_store32FromC_veneer+0"
+        },
+        {
+          "offset": "0x204",
+          "stable_word": "0xeb000627",
+          "candidate_word": "0xeb000613",
+          "same_symbol_target": "__memu_store32FromC_veneer+0"
+        },
+        {
+          "offset": "0x2ac",
+          "stable_word": "0xeb0005fd",
+          "candidate_word": "0xeb0005e9",
+          "same_symbol_target": "__memu_store32FromC_veneer+0"
+        },
+        {
+          "offset": "0x2d8",
+          "stable_word": "0x680df88",
+          "candidate_word": "0x680e0f0",
+          "same_symbol_target": "byte-identical anonymous .rodata block (8 bytes)"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "_ZN30GbaDisplayConfigurationService14SetupGbaScreenERK15DisplaySettings",
+      "stable_address": "0x680268c",
+      "candidate_address": "0x680268c",
+      "stable_size": 160,
+      "candidate_size": 160,
+      "stable_sha256": "a111979a8086862381fd60b61bdba878cd5ddde314b50732c86a10a00b22bb81",
+      "candidate_sha256": "a111979a8086862381fd60b61bdba878cd5ddde314b50732c86a10a00b22bb81",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "_ZN30GbaDisplayConfigurationService18SetupCenterAndMaskERK15DisplaySettings",
+      "stable_address": "0x6802560",
+      "candidate_address": "0x6802560",
+      "stable_size": 300,
+      "candidate_size": 300,
+      "stable_sha256": "b1d2c627097f219d43c5a109c96b901285e3e8dd9f5272732e7d99999f87c992",
+      "candidate_sha256": "b1d2c627097f219d43c5a109c96b901285e3e8dd9f5272732e7d99999f87c992",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "vm_enableNestedIrqs",
+      "stable_address": "0x680062c",
+      "candidate_address": "0x680062c",
+      "stable_size": 60,
+      "candidate_size": 60,
+      "stable_sha256": "f9961d09bd7ef37b5364c23a86abc4bd206509379005ca0a8880bde322ab93e4",
+      "candidate_sha256": "f9961d09bd7ef37b5364c23a86abc4bd206509379005ca0a8880bde322ab93e4",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "vm_disableNestedIrqs",
+      "stable_address": "0x6800668",
+      "candidate_address": "0x6800668",
+      "stable_size": 68,
+      "candidate_size": 68,
+      "stable_sha256": "00a31c0f443264eeb04eee66c2943c921cffb740df22d5ffcbe740949f695dfd",
+      "candidate_sha256": "96b50c139a0921763bbb56b4ddb9db8596d5824c3b00a8ec0c9bb6d39ecc1ef8",
+      "changed_words": [
+        {
+          "offset": "0x38",
+          "stable_word": "0xeb00331a",
+          "candidate_word": "0xeb00333c",
+          "same_symbol_target": "__emu_updateIrqs_veneer+0"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "vm_yieldGbaIrqs",
+      "stable_address": "0x7db8",
+      "candidate_address": "0x7db8",
+      "stable_size": 72,
+      "candidate_size": 72,
+      "stable_sha256": "1404fcf900ee4452e473d5feba602eff1024a3c2ed1ffdaf563c0b23c1508926",
+      "candidate_sha256": "1404fcf900ee4452e473d5feba602eff1024a3c2ed1ffdaf563c0b23c1508926",
+      "classification": "byte-identical"
+    },
+    {
+      "symbol": "fs_waitForCompletion",
+      "stable_address": "0x68043c0",
+      "candidate_address": "0x68044d8",
+      "stable_size": 128,
+      "candidate_size": 128,
+      "stable_sha256": "4a3464ffb2d49a974ec400d3cd5baea3c2fe6f4821ef19132db8c632fd33e8c7",
+      "candidate_sha256": "8c0306f339aeb79bfd55c3f06dfebddde891ae8f977ebc063f1939b037467872",
+      "changed_words": [
+        {
+          "offset": "0x7c",
+          "stable_word": "0x680e1d4",
+          "candidate_word": "0x680e33c",
+          "same_symbol_target": "_ZL17sCurrentWaitToken+0"
+        }
+      ],
+      "classification": "address-only relocation"
+    },
+    {
+      "symbol": "sdc_loadRomBlockDirect",
+      "stable_address": "0x680c360",
+      "candidate_address": "0x680c478",
+      "stable_size": 52,
+      "candidate_size": 52,
+      "stable_sha256": "cbd766983d7870254a70667833bb6432bd6c59cd4424e0671225fa8b77c4579f",
+      "candidate_sha256": "756ce11798b398372353d2bf6fcea863f21edb135d4dd02fe0887fd0773844b3",
+      "changed_words": [
+        {
+          "offset": "0x8",
+          "stable_word": "0xebffd0af",
+          "candidate_word": "0xebffd069",
+          "same_symbol_target": "vm_enableNestedIrqs+0"
+        },
+        {
+          "offset": "0x20",
+          "stable_word": "0xebffd0b8",
+          "candidate_word": "0xebffd072",
+          "same_symbol_target": "vm_disableNestedIrqs+0"
+        }
+      ],
+      "classification": "address-only relocation"
+    }
+  ],
+  "sdc_getRomBlock": "static inline; audit unchanged SdCache.h and linked sdc_loadRomBlockDirect instead"
+}

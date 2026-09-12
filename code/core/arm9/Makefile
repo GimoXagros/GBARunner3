@@ -60,6 +60,11 @@ INCLUDES	:=	include source ../common ../../libs/mini-printf
 ARCH	:=	-marm -mthumb-interwork -march=armv5te -mtune=arm946e-s \
 			-DLIBTWL_ARM9 -DARM9 -DGBAR3_HICODE_CACHE_MAPPING #-DGBAR3_IRQ_YIELDING
 
+# Opt-in boot-only settings probe. Never enabled by the normal/release build.
+ifeq ($(GBAR3_DISPLAY_FLICKER_DIAGNOSTICS),1)
+ARCH += -DGBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+endif
+
 CFLAGS	:=	-g -Wall -O2\
 			 -fomit-frame-pointer\
 			-ffunction-sections -fdata-sections\

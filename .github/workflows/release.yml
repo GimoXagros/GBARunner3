@@ -27,6 +27,14 @@ jobs:
         with:
           path: out
           name: GBARunner3
+      - name: Add opt-in boot settings probe to the RC2 investigation package
+        if: github.ref == 'refs/tags/custom-v0.1.3-rc2'
+        run: |
+          make -C code clean
+          make -C code GBAR3_DISPLAY_FLICKER_DIAGNOSTICS=1 debug
+          cp code/bootstrap/GBARunner3.nds out/GBARunner3-settings-diagnostic.nds
+          cp docs/v013rc2-flicker-investigation.md out/READ-ME-RC2.md
+          cp docs/v013rc2-hardware-runs.csv out/hardware-runs.csv
       - name: Package for release
         run: |
           cd out && zip -r ../GBARunner3.zip *

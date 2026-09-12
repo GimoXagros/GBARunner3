@@ -1,0 +1,59 @@
+name: Flicker investigation controls
+
+on:
+  push:
+    branches: ['investigate/v013rc1-display-flicker']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20241104
+    strategy:
+      fail-fast: false
+      matrix:
+        jobs: [1, 2, 4]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Build exact RC1 control and repeat opt-in diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/tests
+          "$DEVKITARM/bin/arm-none-eabi-g++" --version > out/compiler.txt
+          make -C code -j${{ matrix.jobs }} debug
+          echo '9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2  code/bootstrap/GBARunner3.nds' | sha256sum -c -
+          cp code/bootstrap/GBARunner3.nds out/GBARunner3.nds
+          cp code/core/arm9/arm9.elf out/tests/control-arm9.elf
+          for repetition in 1 2; do
+            make -C code clean
+            make -C code -j${{ matrix.jobs }} GBAR3_DISPLAY_FLICKER_DIAGNOSTICS=1 debug
+            sha256sum code/bootstrap/GBARunner3.nds > "out/diagnostic-hash-$repetition.txt"
+          done
+          diff -u out/diagnostic-hash-1.txt out/diagnostic-hash-2.txt
+          cp code/bootstrap/GBARunner3.nds out/GBARunner3-settings-diagnostic.nds
+          cp code/core/arm9/arm9.elf out/tests/diagnostic-arm9.elf
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flicker-controls-j${{ matrix.jobs }}
+          path: out
+  validate:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: flicker-controls-j*
+          path: out
+      - run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
+      - name: Verify build concurrency identity and linked IRQ callbacks
+        run: |
+          cmp out/flicker-controls-j1/GBARunner3-settings-diagnostic.nds out/flicker-controls-j2/GBARunner3-settings-diagnostic.nds
+          cmp out/flicker-controls-j1/GBARunner3-settings-diagnostic.nds out/flicker-controls-j4/GBARunner3-settings-diagnostic.nds
+          python3 tools/tests/test_irq_callbacks_elf.py out/flicker-controls-j1/tests/control-arm9.elf
+          python3 tools/tests/test_irq_callbacks_elf.py out/flicker-controls-j1/tests/diagnostic-arm9.elf
+      - name: Boot settings snapshot sanitizer test
+        run: SANITIZE=1 python3 tools/tests/test_settings_snapshot_host.py

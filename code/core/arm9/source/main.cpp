@@ -57,6 +57,12 @@
 
 #define BOOT_EWRAM [[gnu::section(".ewram"), gnu::noinline]]
 
+#ifdef GBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+static bool sGlobalConfigLoaded;
+void displayDiagnosticsWriteSettings(const AppSettings& settings, u32 gameCode,
+    unsigned revision, bool globalLoaded, const char* titlePath, bool titleLoaded);
+#endif
+
 [[gnu::section(".ewram.bss")]]
 FATFS gFatFs;
 [[gnu::section(".ewram.bss")]]
@@ -405,10 +411,20 @@ BOOT_EWRAM static void loadGameSpecificSettings()
         (gRomHeader.gameCode >> 16) & 0xFF, gRomHeader.gameCode >> 24,
         gRomHeader.softwareVersion);
 
+#ifdef GBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+    bool titleLoaded = false;
+#endif
     if (gAppSettingsService.TryLoadAppSettings(path.get()))
     {
+#ifdef GBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+        titleLoaded = true;
+#endif
         gLogger->Log(LogLevel::Debug, "Loaded game specific settings from %s\n", path.get());
     }
+#ifdef GBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+    displayDiagnosticsWriteSettings(gAppSettingsService.GetAppSettings(), gRomHeader.gameCode,
+        gRomHeader.softwareVersion, sGlobalConfigLoaded, path.get(), titleLoaded);
+#endif
 }
 
 [[gnu::interrupt("IRQ")]]
@@ -507,6 +523,9 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     // if (Environment::SupportsAgbSemihosting())
         // mountAgbSemihosting();
 
+#ifdef GBAR3_DISPLAY_FLICKER_DIAGNOSTICS
+    sGlobalConfigLoaded =
+#endif
     gAppSettingsService.TryLoadAppSettings(SETTINGS_FILE_PATH);
 
     patch_resetSwiPatches();
