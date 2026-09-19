@@ -71,6 +71,12 @@ jobs:
           path: irq-results.json
       - name: Execute linked JIT metadata and address regressions
         run: python3 tools/tests/test_jit_core_elf.py out/tests/arm9.elf --output jit-results.json
+      - name: Execute linked noncontiguous ROM DMA boundary cases
+        run: python3 tools/tests/test_dma_rom_elf.py out/tests/arm9.elf --output dma-rom-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dma-rom-results
+          path: dma-rom-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: jit-core-results
