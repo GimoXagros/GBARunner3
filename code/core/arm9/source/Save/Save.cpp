@@ -48,6 +48,7 @@ extern FIL gFile;
 
 #ifdef GBAR3_HICODE_CACHE_MAPPING
 
+[[gnu::section(".ewram"), gnu::noinline]]
 static u32* searchHiCode(const u32* signature, u32 romStart, u32 romEnd)
 {
     // The runtime cache accessor is fail-closed: an I/O error cannot be

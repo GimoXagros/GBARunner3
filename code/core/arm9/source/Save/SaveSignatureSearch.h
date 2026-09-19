@@ -7,7 +7,7 @@
 // getBlock returns a block base that may be invalidated by the next getBlock.
 // The return value never exposes a temporary cache pointer.
 template<class GetBlock, class FastSearch>
-uint32_t sav_findSignature16(const uint32_t* signature, uint32_t start, uint32_t end,
+[[gnu::always_inline]] inline uint32_t sav_findSignature16(const uint32_t* signature, uint32_t start, uint32_t end,
     GetBlock getBlock, FastSearch fastSearch)
 {
     constexpr uint32_t blockSize = 4096;
@@ -22,14 +22,20 @@ uint32_t sav_findSignature16(const uint32_t* signature, uint32_t start, uint32_t
         const auto* block = static_cast<const uint8_t*>(getBlock(blockAddress));
         if (!block) return notFound;
         const uint32_t length = blockEnd - first;
-        if (length >= 44)
+        if (length == blockSize)
         {
             // mem_fastSearch16 requires a full 32-byte load plus 12-byte lookahead.
             const auto* data = reinterpret_cast<const uint32_t*>(block + first - blockAddress);
             const auto* found = fastSearch(data, length & ~3u, signature);
-            if (found)
+            // The assembly's final window may skip a later complete match
+            // after a failed prefix. Preserve its full-block fast path but
+            // independently check that bounded final window in address order.
+            if (found && reinterpret_cast<const uint8_t*>(found) < block + blockSize - 44)
                 return first + static_cast<uint32_t>(reinterpret_cast<const uint8_t*>(found)
                     - reinterpret_cast<const uint8_t*>(data));
+            for (uint32_t address = blockEnd - 44; address <= blockEnd - 16; address += 4)
+                if (std::memcmp(block + address - blockAddress, signature, 16) == 0)
+                    return address;
         }
         else if (length >= 16)
         {

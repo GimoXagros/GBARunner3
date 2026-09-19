@@ -74,3 +74,13 @@ for signature in corpus:
     run(signature, rom, 0, 4108, None, reject=0)
     count += 1
 print(f"PASS: {count} linked ARM search cases, {len(corpus)} source signatures, one-slot eviction, ROM/range read bounds")
+
+for signature in corpus:
+    for length in (64,4096):
+        rom=bytearray(b'\xa5'*length)
+        rom[length-32:length-28]=signature[:4]
+        rom[length-24:length-16]=signature[:8]
+        rom[length-16:length]=signature
+        run(signature,rom,0,length,length-16)
+        count+=1
+print(f'PASS: {count} linked cases including false-prefix last-window advancement')
