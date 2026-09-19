@@ -52,6 +52,12 @@ jobs:
         run: SANITIZE=1 python3 tools/tests/test_storage_failure_host.py --require-fixed --output storage-results.json
       - name: Verify actual FatFs receives driver errors
         run: SANITIZE=1 python3 tools/tests/test_storage_fatfs_host.py
+      - name: Verify save initialization and explicit recovery fault paths
+        run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --require-fixed --output save-io-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-results
+          path: save-io-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: storage-transaction-results
@@ -72,6 +78,12 @@ jobs:
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
       - name: Execute linked ARM7 and ARM9 storage transport
         run: python3 tools/tests/test_storage_linked_arm.py out/tests/arm9.elf out/tests/arm7.elf --output storage-linked-results.json
+      - name: Execute linked save latches and guest SRAM writes after error
+        run: python3 tools/tests/test_save_io_elf.py out/tests/arm9.elf --arm7 out/tests/arm7.elf --output save-io-linked-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-linked-results
+          path: save-io-linked-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: storage-linked-results
