@@ -153,8 +153,10 @@ arm_func memu_store16Sram
         bxeq lr
     ldr r12,= gGbaSaveShared
     strh r9, [r10]
-    mov r11, #1 // GBA_SAVE_STATE_DIRTY
-    strb r11, [r12]
+    ldrb r11, [r12]
+    cmp r11, #4 // GBA_SAVE_STATE_ERROR remains sticky across guest writes
+    movne r11, #1 // GBA_SAVE_STATE_DIRTY
+    strbne r11, [r12]
     mov r11, #0
     ldr r12,= emu_vblankIrqSkipSaveCheckInstruction
     mcr p15, 0, r11, c7, c10, 4 // drain write buffer
