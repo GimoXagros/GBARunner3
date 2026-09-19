@@ -8,10 +8,9 @@ using u8=uint8_t; using u16=uint16_t; using u32=uint32_t;
 using s16=int16_t; using s64=int64_t; using UINT=unsigned;
 #define private public
 #include "Peripherals/RomGpio/RomGpioRtc.h"
+#include "Peripherals/RomGpio/RomGpio.h"
 #undef private
 #define RTC_EWRAM
-constexpr unsigned RIO_RTC_STATUS_24H=0x40, RIO_RTC_STATUS_POWER=0x80,
-    RIO_RTC_STATUS_WRITE_MASK=0x6a;
 constexpr int FR_OK=0, FA_OPEN_EXISTING=0, FA_READ=1;
 struct FIL { unsigned reserved; };
 static FIL sRtcStateFile;
@@ -32,6 +31,7 @@ int f_read(FIL*,void* out,UINT size,UINT* read) {
 }
 int f_close(FIL*) { return 0; } // close/physical failure policy is a separate gate
 void sav_requestFileWrite() { ++schedules; }
+u8 mem_swapByte(u8 value,u8* target) { const u8 old=*target; *target=value; return old; }
 void RomGpioRtc::UpdateDSDateTime() { FromSecondsSinceJanuary2000(hostSeconds,sDSRtcDateTime,true); }
 #include "production_recovery.h"
 constexpr RtcPersistence::Identity ID_A{0x11111111,0x2000000,0x12345678};
@@ -43,7 +43,48 @@ void put(const char* path,const RtcPersistence::Identity& id,u32 seq,u32 game=50
     const auto* p=reinterpret_cast<const u8*>(&state); files[path]={p,p+sizeof(state)};
 }
 void load(RomGpioRtc& rtc,const RtcPersistence::Identity& id=ID_A) { rtc.Initialize("primary","temp","backup",id); }
+struct Bus {
+    RomGpioRtc rtc;
+    RomGpio gpio;
+    rio_registers_t regs{};
+    Bus() { gpio.Initialize(&regs); gpio.WriteControlRegister(1); }
+    void pins(unsigned value) { gpio.WriteDataRegister(value); rtc.Update(gpio); }
+    void command(unsigned value) {
+        gpio.WriteDirectionRegister(7); pins(0);
+        for(int bit=7;bit>=0;--bit) { const unsigned data=((value>>bit)&1)*2; pins(4|data); pins(5|data); }
+    }
+    void byte(u8 value) {
+        for(unsigned bit=0;bit<8;++bit) { const unsigned data=((value>>bit)&1)*2; pins(4|data); pins(5|data); }
+    }
+    void write(unsigned op,std::initializer_list<u8> data) { command(op); for(u8 b:data) byte(b); pins(0); }
+    std::vector<u8> read(unsigned op,unsigned count) {
+        command(op); gpio.WriteDirectionRegister(5); std::vector<u8> out(count);
+        for(unsigned i=0;i<count*8;++i) { pins(4); out[i/8]|=gpio.GetPinState(1)<<(i%8); pins(5); }
+        pins(0); return out;
+    }
+};
 int main() {
+    for(bool mode24:{false,true}) {
+        reset(); Bus bus;
+        bus.write(0x62,{static_cast<u8>(mode24?0x40:0)});
+        check("GPIO status read/write",bus.read(0x63,1)==std::vector<u8>{static_cast<u8>(mode24?0x40:0)});
+        const u8 hour=mode24?0x23:0x91;
+        const u8 readHour=mode24?0xa3:0x91;
+        bus.write(0x64,{0x24,0x02,0x28,3,hour,0x59,0x59});
+        check("GPIO date/time round trip",bus.read(0x65,7)==std::vector<u8>({0x24,0x02,0x28,3,readHour,0x59,0x59}));
+        check("GPIO write persists offset",bus.rtc._stateDirty && gRomGpioRtcStateDirty && schedules>0);
+        ++hostSeconds;
+        check("GPIO leap-day rollover",bus.read(0x65,7)==std::vector<u8>({0x24,0x02,0x29,4,0,0,0}));
+        bus.write(0x66,{static_cast<u8>(mode24?0x20:0x88),0x45,0x50});
+        const auto time=bus.read(0x67,3);
+        check("GPIO time-only write",time==std::vector<u8>({static_cast<u8>(mode24?0xa0:0x88),0x45,0x50}));
+        bus.command(0x64); bus.byte(0x99); bus.byte(0x12); bus.pins(0);
+        check("incomplete command does not commit offset",bus.read(0x67,3)==time);
+        bus.command(0x70); bus.pins(0);
+        check("invalid command leaves time unchanged",bus.read(0x67,3)==time);
+        bus.write(0x60,{});
+        check("GPIO reset",bus.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+    }
     reset(); RomGpioRtc empty; load(empty); check("missing state",empty._sequence==0 && !empty._stateDirty);
     reset(); put("primary",ID_A,7); RomGpioRtc normal; load(normal);
     check("primary",normal._sequence==7 && normal._rtcOffset==400 && !normal._stateDirty && schedules==0);
@@ -75,6 +116,6 @@ int main() {
     put("primary",ID_B,2,900); RomGpioRtc b; load(b,ID_B);
     check("per-ROM offsets independent",a._rtcOffset==400 && b._rtcOffset==800);
     check("future sequence comparison",!RtcPersistence::IsSequenceNewer(7,8));
-    std::cout<<checks<<" RTC recovery selection cases, "<<failures<<" failures; fake read-only FatFs/clock, no GPIO/write/durability claim\n";
+    std::cout<<checks<<" RTC GPIO/recovery cases, "<<failures<<" failures; actual GPIO state machine, fake read-only FatFs/host clock, no physical write/durability claim\n";
     return failures?1:0;
 }
