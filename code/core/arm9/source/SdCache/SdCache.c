@@ -72,6 +72,24 @@ static bool isCurrentlyFetching(void)
     return sCurrentFetch.cacheBlock != SDC_BLOCK_INVALID;
 }
 
+static void publishCacheBlock(u32 romBlock, u32 cacheBlock)
+{
+    void* previous = sdc_romBlockToCacheBlock[romBlock];
+    if (previous && previous != &sdc_cache[cacheBlock][0])
+    {
+        // Applies to successful disk reads AND synthesized out-of-file data.
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+        hic_unmapRomBlock();
+#endif
+        ic_invalidateAll();
+        sCacheBlockToRomBlock[((u32)previous - (u32)sdc_cache) / SDC_BLOCK_SIZE] = SDC_ROM_BLOCK_INVALID;
+    }
+    jit_resetDynamicRomBlock(&sdc_cache[cacheBlock][0]);
+    sCacheBlockToRomBlock[cacheBlock] = romBlock;
+    sdc_romBlockToCacheBlock[romBlock] = &sdc_cache[cacheBlock][0];
+    dc_drainWriteBuffer();
+}
+
 static void finishFetch()
 {
     // A nested reader may retire this fetch on behalf of its suspended owner.
@@ -79,20 +97,7 @@ static void finishFetch()
     if (sCurrentFetch.token->transactionComplete &&
         sCurrentFetch.token->result == FS_RESULT_SUCCESS)
     {
-        void* previous = sdc_romBlockToCacheBlock[sCurrentFetch.romBlock];
-        if (previous && previous != &sdc_cache[sCurrentFetch.cacheBlock][0])
-        {
-            // Permanent promotion keeps the old valid backing until the new
-            // read succeeds. Retire its reverse ownership only on success.
-#ifdef GBAR3_HICODE_CACHE_MAPPING
-            hic_unmapRomBlock();
-#endif
-            ic_invalidateAll();
-            sCacheBlockToRomBlock[((u32)previous - (u32)sdc_cache) / SDC_BLOCK_SIZE] = SDC_ROM_BLOCK_INVALID;
-        }
-        jit_resetDynamicRomBlock(&sdc_cache[sCurrentFetch.cacheBlock][0]);
-        sCacheBlockToRomBlock[sCurrentFetch.cacheBlock] = sCurrentFetch.romBlock;
-        sdc_romBlockToCacheBlock[sCurrentFetch.romBlock] = &sdc_cache[sCurrentFetch.cacheBlock][0];
+        publishCacheBlock(sCurrentFetch.romBlock, sCurrentFetch.cacheBlock);
     }
     sCurrentFetch.romBlock = SDC_ROM_BLOCK_INVALID;
     sCurrentFetch.cacheBlock = SDC_BLOCK_INVALID;
@@ -147,10 +152,7 @@ static void fillOutOfBoundsCacheBlock(u32 romBlock, u32 cacheBlock)
         }
     }
 
-    jit_resetDynamicRomBlock(&sdc_cache[cacheBlock][0]);
-    sCacheBlockToRomBlock[cacheBlock] = romBlock;
-    sdc_romBlockToCacheBlock[romBlock] = &sdc_cache[cacheBlock][0];
-    dc_drainWriteBuffer();
+    publishCacheBlock(romBlock, cacheBlock);
 }
 
 /// @brief Loads a rom block to the given buffer.

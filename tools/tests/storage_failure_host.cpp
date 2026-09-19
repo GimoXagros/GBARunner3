@@ -235,6 +235,14 @@ int main() {
     result("successful_promotion_retires_previous_owner",loadRomBlock(0,1)==sdc_cache[1] &&
         sdc_romBlockToCacheBlock[0]==sdc_cache[1] && sCacheBlockToRomBlock[0]==SDC_ROM_BLOCK_INVALID);
 
+    sdc_init(); sBlockCount=2;
+    loadRomBlock(2,0); // synthesized out-of-file block, no driver read
+    --sBlockCount;
+    loadRomBlock(2,1);
+    loadRomBlock(0,0); // evict the former dynamic owner
+    result("synthesized_promotion_survives_old_slot_eviction",sdc_romBlockToCacheBlock[2]==sdc_cache[1] &&
+        sCacheBlockToRomBlock[1]==2);
+
     // Unaligned write must never copy the bounce buffer back into const input.
     std::vector<u8> writeBuffer(1025,0x61); writeBuffer[513]=0xB2;
     const auto immutable=writeBuffer;
