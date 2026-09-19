@@ -13,6 +13,7 @@ typedef struct
 {
     vu16 cacheBlock;
     vu32 romBlock;
+    FsWaitToken* token;
 } SdcFetch;
 
 static SdcFetch sCurrentFetch;
@@ -73,11 +74,18 @@ static bool isCurrentlyFetching(void)
 
 static void finishFetch()
 {
-    jit_resetDynamicRomBlock(&sdc_cache[sCurrentFetch.cacheBlock][0]);
-    sCacheBlockToRomBlock[sCurrentFetch.cacheBlock] = sCurrentFetch.romBlock;
-    sdc_romBlockToCacheBlock[sCurrentFetch.romBlock] = &sdc_cache[sCurrentFetch.cacheBlock][0];
+    // A nested reader may retire this fetch on behalf of its suspended owner.
+    // Completion alone is not success: only this exact token may publish.
+    if (sCurrentFetch.token->transactionComplete &&
+        sCurrentFetch.token->result == FS_RESULT_SUCCESS)
+    {
+        jit_resetDynamicRomBlock(&sdc_cache[sCurrentFetch.cacheBlock][0]);
+        sCacheBlockToRomBlock[sCurrentFetch.cacheBlock] = sCurrentFetch.romBlock;
+        sdc_romBlockToCacheBlock[sCurrentFetch.romBlock] = &sdc_cache[sCurrentFetch.cacheBlock][0];
+    }
     sCurrentFetch.romBlock = SDC_ROM_BLOCK_INVALID;
     sCurrentFetch.cacheBlock = SDC_BLOCK_INVALID;
+    sCurrentFetch.token = NULL;
     dc_drainWriteBuffer();
 }
 
@@ -180,9 +188,15 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
     u32 oldRomBlock = sCacheBlockToRomBlock[cacheBlock];
     if (oldRomBlock != SDC_ROM_BLOCK_INVALID)
     {
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+        // Retire executable aliases before ARM7 can overwrite their backing.
+        hic_unmapRomBlock();
+#endif
+        ic_invalidateAll();
         sdc_romBlockToCacheBlock[oldRomBlock] = NULL;
         sCacheBlockToRomBlock[cacheBlock] = SDC_ROM_BLOCK_INVALID;
     }
+    jit_resetDynamicRomBlock(&sdc_cache[cacheBlock][0]);
 
     FsWaitToken waitToken;
     if (sector != 0)
@@ -193,6 +207,7 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
             SDC_BLOCK_SIZE / 512, &waitToken);
         sCurrentFetch.romBlock = romBlock;
         sCurrentFetch.cacheBlock = cacheBlock;
+        sCurrentFetch.token = &waitToken;
     }
 
     bool decreaseTabuLevel = false;
@@ -222,12 +237,14 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
         sTabuLevel--;
     }
 
+    if (sector != 0 && waitToken.result != FS_RESULT_SUCCESS)
+        return NULL;
     return &sdc_cache[cacheBlock][0];
 }
 
 extern void logAddress(u32 address);
 
-const void* sdc_loadRomBlockDirect(u32 romAddress)
+const void* sdc_tryLoadRomBlock(u32 romAddress)
 {
     vm_enableNestedIrqs();
     // logAddress(romAddress);
@@ -235,6 +252,14 @@ const void* sdc_loadRomBlockDirect(u32 romAddress)
     void* cacheBlock = loadRomBlock(romBlock, SDC_BLOCK_INVALID);
     vm_disableNestedIrqs();
     return cacheBlock;
+}
+
+const void* sdc_loadRomBlockDirect(u32 romAddress)
+{
+    const void* data = sdc_tryLoadRomBlock(romAddress);
+    if (!data)
+        sdc_storageFault(romAddress);
+    return data;
 }
 
 void* sdc_loadRomBlockForPatching(u32 romAddress)
@@ -251,7 +276,14 @@ void* sdc_loadRomBlockForPatching(u32 romAddress)
             sCacheBlockToRomBlock[((u32)data - (u32)&sdc_cache[0][0]) / SDC_BLOCK_SIZE] = SDC_ROM_BLOCK_INVALID;
         }
 
+        if (sBlockCount == 0)
+            sdc_storageFault(romAddress);
         data = loadRomBlock(romBlock, --sBlockCount);
+        if (!data)
+        {
+            ++sBlockCount;
+            sdc_storageFault(romAddress);
+        }
     }
     return (void*)((u32)data + (romAddress & SDC_BLOCK_MASK));
 }
@@ -271,6 +303,7 @@ void sdc_init(void)
 
     sCurrentFetch.cacheBlock = SDC_BLOCK_INVALID;
     sCurrentFetch.romBlock = SDC_ROM_BLOCK_INVALID;
+    sCurrentFetch.token = NULL;
     gSdCacheIrqForbiddenRomBlockReplacementRange = 0;
     sTabuLevel = 0;
     sTabuBlocks[0] = SDC_BLOCK_INVALID;

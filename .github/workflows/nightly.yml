@@ -33,6 +33,7 @@ jobs:
           mkdir -p out/tests
           cp code/test/test.nds out/tests/
           cp code/core/arm9/arm9.elf out/tests/
+          cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
@@ -47,6 +48,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Execute host serializer regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
+      - name: Verify production storage transaction failures with sanitizers
+        run: SANITIZE=1 python3 tools/tests/test_storage_failure_host.py --require-fixed --output storage-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: storage-transaction-results
+          path: storage-results.json
       - name: Test release upload without network mutations
         run: node tools/tests/test_release_upload.cjs
       - name: Execute EEPROM source-selection audit
