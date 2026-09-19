@@ -1,6 +1,8 @@
 #include "Save/SaveSignatureSearch.h"
 extern "C" const uint32_t* mem_fastSearch16(const uint32_t*, uint32_t, const uint32_t*);
-extern "C" __attribute__((noinline)) const void* probe_get_block(uint32_t address)
+// The instruction harness replaces this call. noinline alone still permits
+// IPA constant-propagation of its placeholder NULL return into search_probe.
+extern "C" __attribute__((noipa)) const void* probe_get_block(uint32_t address)
 {
     asm volatile("" : : "r"(address) : "memory");
     return nullptr; // instruction harness replaces this platform operation
