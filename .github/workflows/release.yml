@@ -38,6 +38,7 @@ jobs:
           RC3_RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
           RC3_RELEASE_DRAFT: ${{ github.event.release.draft }}
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 .github/scripts/package-rc3.py --mode published --out out --zip GBARunner3.zip
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7

@@ -82,6 +82,7 @@ jobs:
           submodules: recursive
       - name: Clean pinned build and validate RC3 package
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           make -C code clean
           make -C code debug
           python3 .github/scripts/package-rc3.py --mode dry-run --out out --zip GBARunner3.zip
