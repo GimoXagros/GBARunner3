@@ -41,101 +41,40 @@ fastSearch16_continueLastSearch:
     pop {r4-r11,pc}
 
 fastSearch16_firstWordMatchLast:
-    ldr r6, [r0], #4
+    // Keep r0 at the next candidate when a prefix fails. Post-incrementing
+    // the lookahead skipped later aligned starts in the final window.
+    ldr r6, [r0]
     cmp r6, r3
-    ldreq r6, [r0], #4
+    ldreq r6, [r0, #4]
     cmpeq r6, r4
-    ldreq r6, [r0], #4
+    ldreq r6, [r0, #8]
     cmpeq r6, r5
     bne fastSearch16_continueLastSearch
-    sub r0, r0, #16
+    sub r0, r0, #4
     pop {r4-r11,pc}
 
 fastSearch16_firstWordMatch:
+    // A first-word collision is rare. Recheck every aligned start in this
+    // batch in address order, then resume the eight-word fast path. The old
+    // specialized branches advanced r0 after a failed continuation and could
+    // skip a real match at the next candidate (including the linear ROM path).
+    sub r0, r0, #32
+    mov r7, #8
+3:
+    ldr r6, [r0]
     cmp r6, r2
-    beq fastSearch16_firstWordMatch_r6
-    cmpne r7, r2
-    beq fastSearch16_firstWordMatch_r7
-    cmpne r8, r2
-    beq fastSearch16_firstWordMatch_r8
-    cmpne r9, r2
-    beq fastSearch16_firstWordMatch_r9
-    cmpne r10, r2
-    beq fastSearch16_firstWordMatch_r10
-    cmpne r11, r2
-    beq fastSearch16_firstWordMatch_r11
-    cmpne r12, r2
-    beq fastSearch16_firstWordMatch_r12
-fastSearch16_firstWordMatch_lr:
-    ldr r6, [r0], #4
+    bne 4f
+    ldr r6, [r0, #4]
     cmp r6, r3
-    ldreq r6, [r0], #4
-    cmpeq r6, r4
-    ldreq r6, [r0], #4
-    cmpeq r6, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r6:
-    sub r0, r0, #16
-    cmp r7, r3
-    cmpeq r8, r4
-    cmpeq r9, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r7:
-    sub r0, r0, #12
-    cmp r8, r3
-    cmpeq r9, r4
-    cmpeq r10, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r8:
-    sub r0, r0, #8
-    cmp r9, r3
-    cmpeq r10, r4
-    cmpeq r11, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r9:
-    sub r0, r0, #4
-    cmp r10, r3
-    cmpeq r11, r4
-    cmpeq r12, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r10:
-    cmp r11, r3
-    cmpeq r12, r4
-    cmpeq lr, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r11:
-    cmp r12, r3
-    cmpeq lr, r4
-    ldreq r6, [r0], #4
-    cmpeq r6, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
-
-fastSearch16_firstWordMatch_r12:
-    cmp lr, r3
-    ldreq r6, [r0], #4
-    cmpeq r6, r4
-    ldreq r6, [r0], #4
-    cmpeq r6, r5
-    bne fastSearch16_continueFastSearch
-    sub r0, r0, #16
-    pop {r4-r11,pc}
+    bne 4f
+    ldr r6, [r0, #8]
+    cmp r6, r4
+    bne 4f
+    ldr r6, [r0, #12]
+    cmp r6, r5
+    popeq {r4-r11,pc}
+4:
+    add r0, r0, #4
+    subs r7, r7, #1
+    bne 3b
+    b fastSearch16_continueFastSearch

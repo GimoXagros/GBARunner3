@@ -13,11 +13,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           submodules: recursive
       - name: Make application and test ROM
         run: |
           make -C code debug
       - name: Prepare for build publishing
+        if: github.ref != 'refs/tags/custom-v0.1.3-rc3'
         run: |
           mkdir -p out/_gba/
           cp -f code/bootstrap/GBARunner3.nds out/
@@ -29,17 +31,27 @@ jobs:
           cp docs/v013-release.md out/README-v0.1.3.md
           cd out
           find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS
+      - name: Verify and package the RC3 validation candidate
+        if: github.ref == 'refs/tags/custom-v0.1.3-rc3'
+        env:
+          RC3_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RC3_RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RC3_RELEASE_DRAFT: ${{ github.event.release.draft }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 .github/scripts/package-rc3.py --mode published --out out --zip GBARunner3.zip
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
           path: out
           name: GBARunner3
       - name: Package for release
+        if: github.ref != 'refs/tags/custom-v0.1.3-rc3'
         run: |
           cd out && zip -r ../GBARunner3.zip *
       - name: Upload to the published release
         uses: actions/github-script@v9
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/')
         with:
           script: |
             const upload = require('./.github/scripts/upload-release.cjs');

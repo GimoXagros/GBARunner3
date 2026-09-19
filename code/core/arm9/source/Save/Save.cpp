@@ -16,6 +16,7 @@
 #include "IpcChannels.h"
 #include "GbaSaveIpcCommand.h"
 #include "Save.h"
+#include "SaveSignatureSearch.h"
 
 #define DEFAULT_SAVE_SIZE   (32 * 1024)
 
@@ -47,20 +48,14 @@ extern FIL gFile;
 
 #ifdef GBAR3_HICODE_CACHE_MAPPING
 
+[[gnu::section(".ewram"), gnu::noinline]]
 static u32* searchHiCode(const u32* signature, u32 romStart, u32 romEnd)
 {
-    // todo: this doesn't work if the function lies on a cache block boundary
-    for (u32 i = romStart; i < romEnd; i += SDC_BLOCK_SIZE)
-    {
-        const void* block = sdc_getRomBlock(i);
-        u32* function = (u32*)mem_fastSearch16((const u32*)block, SDC_BLOCK_SIZE, signature);
-        if (function)
-        {
-            return (u32*)sdc_loadRomBlockForPatching(i + (u32)function - (u32)block);
-        }
-    }
-
-    return nullptr;
+    // The runtime cache accessor is fail-closed: an I/O error cannot be
+    // mistaken for a clean signature miss and proceed with unpatched saves.
+    const u32 address = sav_findSignature16(signature, romStart, romEnd,
+        sdc_getRomBlock, mem_fastSearch16);
+    return address == UINT32_MAX ? nullptr : (u32*)sdc_loadRomBlockForPatching(address);
 }
 
 #endif
@@ -76,7 +71,20 @@ bool sav_tryPatchFunction(const u32* signature, u32 saveSwiNumber, void* patchFu
     if (!function)
     {
         u32 romSize = f_size(&gFile);
-        function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
+        if (romSize >= ROM_LINEAR_SIZE + 4)
+        {
+            // The final 12 linear bytes and first cached block form one
+            // logical 4 KiB boundary. Keep the tail before resolving cache.
+            alignas(4) u8 linearTail[12];
+            memcpy(linearTail, (const void*)(ROM_LINEAR_END_DS_ADDRESS - 12), 12);
+            const auto* next = (const u8*)sdc_getRomBlock(ROM_LINEAR_END_GBA_ADDRESS);
+            const u32 match = sav_findSplitBoundary16(signature, ROM_LINEAR_END_GBA_ADDRESS,
+                linearTail, next, std::min<u32>(12, romSize - ROM_LINEAR_SIZE));
+            if (match != UINT32_MAX)
+                function = (u32*)(ROM_LINEAR_DS_ADDRESS + match - ROM_LINEAR_GBA_ADDRESS);
+        }
+        if (!function)
+            function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
     }
 #endif
     if (!function)

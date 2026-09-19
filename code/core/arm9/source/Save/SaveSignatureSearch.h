@@ -1,0 +1,78 @@
+#pragma once
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+
+// Addresses are logical primary GamePak addresses in a half-open search range.
+// getBlock returns a block base that may be invalidated by the next getBlock.
+// The return value never exposes a temporary cache pointer.
+// A separately mapped linear/cache seam needs the same bounded overlap.
+inline uint32_t sav_findSplitBoundary16(const uint32_t* signature, uint32_t boundary,
+    const uint8_t* linearTail, const uint8_t* nextBlock, uint32_t nextLength)
+{
+    if (!linearTail || !nextBlock || boundary < 12 || nextLength < 4) return UINT32_MAX;
+    alignas(4) uint8_t overlap[24];
+    std::memcpy(overlap, linearTail, 12);
+    const uint32_t copied = std::min<uint32_t>(12, nextLength);
+    std::memcpy(overlap + 12, nextBlock, copied);
+    for (uint32_t offset = 0; offset < 12 && offset + 16 <= 12 + copied; offset += 4)
+        if (std::memcmp(overlap + offset, signature, 16) == 0)
+            return boundary - 12 + offset;
+    return UINT32_MAX;
+}
+
+template<class GetBlock, class FastSearch>
+[[gnu::always_inline]] inline uint32_t sav_findSignature16(const uint32_t* signature, uint32_t start, uint32_t end,
+    GetBlock getBlock, FastSearch fastSearch)
+{
+    constexpr uint32_t blockSize = 4096;
+    constexpr uint32_t notFound = UINT32_MAX;
+    if (start < 0x08000000u || end > 0x0A000000u) return notFound;
+    if (start >= end || end - start < 16) return notFound;
+    start = (start + 3) & ~3u;
+    for (uint32_t blockAddress = start & ~(blockSize - 1); blockAddress < end; blockAddress += blockSize)
+    {
+        const uint32_t first = std::max(start, blockAddress);
+        const uint32_t blockEnd = std::min(end, blockAddress + blockSize);
+        const auto* block = static_cast<const uint8_t*>(getBlock(blockAddress));
+        if (!block) return notFound;
+        const uint32_t length = blockEnd - first;
+        if (length == blockSize)
+        {
+            // mem_fastSearch16 requires a full 32-byte load plus 12-byte lookahead.
+            const auto* data = reinterpret_cast<const uint32_t*>(block + first - blockAddress);
+            const auto* found = fastSearch(data, length & ~3u, signature);
+            // The assembly's final window may skip a later complete match
+            // after a failed prefix. Preserve its full-block fast path but
+            // independently check that bounded final window in address order.
+            if (found && reinterpret_cast<const uint8_t*>(found) < block + blockSize - 44)
+                return first + static_cast<uint32_t>(reinterpret_cast<const uint8_t*>(found)
+                    - reinterpret_cast<const uint8_t*>(data));
+            for (uint32_t address = blockEnd - 44; address <= blockEnd - 16; address += 4)
+                if (std::memcmp(block + address - blockAddress, signature, 16) == 0)
+                    return address;
+        }
+        else if (length >= 16)
+        {
+            for (uint32_t address = first; address <= blockEnd - 16; address += 4)
+                if (std::memcmp(block + address - blockAddress, signature, 16) == 0)
+                    return address;
+        }
+
+        // Copy before fetching the next block: even a one-slot cache is safe.
+        const uint32_t boundary = blockAddress + blockSize;
+        const uint32_t tailStart = std::max(first, boundary - 12);
+        if (boundary >= end || end - tailStart < 16) continue;
+        alignas(4) uint8_t overlap[24];
+        const uint32_t tailLength = boundary - tailStart;
+        std::memcpy(overlap, block + tailStart - blockAddress, tailLength);
+        const auto* next = static_cast<const uint8_t*>(getBlock(boundary));
+        if (!next) return notFound;
+        const uint32_t headLength = std::min<uint32_t>(12, end - boundary);
+        std::memcpy(overlap + tailLength, next, headLength);
+        for (uint32_t offset = 0; offset < tailLength && offset + 16 <= tailLength + headLength; offset += 4)
+            if (std::memcmp(overlap + offset, signature, 16) == 0)
+                return tailStart + offset;
+    }
+    return notFound;
+}
