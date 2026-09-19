@@ -54,26 +54,39 @@ void FsIpcService::SetupDldi(const fs_ipc_cmd_t* cmd) const
     SendResponseMessage(result);
 }
 
+static void completeTransfer(const fs_ipc_cmd_t* cmd, u32 sequence, bool success)
+{
+    auto* completion = const_cast<fs_ipc_result_t*>(&cmd->completion);
+    completion->result = success ? FS_RESULT_SUCCESS : FS_RESULT_IO_ERROR;
+    // ARM7 has no data cache/write buffer. Publish identity last, then notify.
+    asm volatile("" ::: "memory");
+    completion->completedSequence = sequence;
+    asm volatile("" ::: "memory");
+    ipc_setArm7SyncBits(sequence & 15);
+}
+
 void FsIpcService::DldiReadSectors(const fs_ipc_cmd_t* cmd) const
 {
-    _DLDI_readSectors_ptr(cmd->sector, cmd->count, cmd->buffer);
-    ipc_setArm7SyncBits(ipc_getArm9SyncBits());
+    const u32 sequence = cmd->sequence;
+    completeTransfer(cmd, sequence, _DLDI_readSectors_ptr(cmd->sector, cmd->count, cmd->buffer));
 }
 
 void FsIpcService::DldiWriteSectors(const fs_ipc_cmd_t* cmd) const
 {
-    _DLDI_writeSectors_ptr(cmd->sector, cmd->count, cmd->buffer);
-    ipc_setArm7SyncBits(ipc_getArm9SyncBits());
+    const u32 sequence = cmd->sequence;
+    completeTransfer(cmd, sequence, _DLDI_writeSectors_ptr(cmd->sector, cmd->count, cmd->buffer));
 }
 
 void FsIpcService::DsiSdReadSectors(const fs_ipc_cmd_t* cmd) const
 {
-    SDMMC_readSectors(SDMMC_DEV_CARD, cmd->sector, cmd->buffer, cmd->count);
-    ipc_setArm7SyncBits(ipc_getArm9SyncBits());
+    const u32 sequence = cmd->sequence;
+    completeTransfer(cmd, sequence,
+        SDMMC_readSectors(SDMMC_DEV_CARD, cmd->sector, cmd->buffer, cmd->count) == 0);
 }
 
 void FsIpcService::DsiSdWriteSectors(const fs_ipc_cmd_t* cmd) const
 {
-    SDMMC_writeSectors(SDMMC_DEV_CARD, cmd->sector, cmd->buffer, cmd->count);
-    ipc_setArm7SyncBits(ipc_getArm9SyncBits());
+    const u32 sequence = cmd->sequence;
+    completeTransfer(cmd, sequence,
+        SDMMC_writeSectors(SDMMC_DEV_CARD, cmd->sector, cmd->buffer, cmd->count) == 0);
 }
