@@ -22,6 +22,7 @@ u32 REG_IPCSYNC;
 bool gIrqYieldingEnabled=false, failDriver=false, driverCalled=false;
 bool deferCommand=false, commandQueued=false;
 unsigned driverCalls=0, invalidations=0;
+unsigned failAtCall=UINT32_MAX;
 std::function<void()> onPoll;
 unsigned pollDelay=0, pollEntries=0;
 u32 arm_disableIrqs() {
@@ -45,7 +46,7 @@ void dc_drainWriteBuffer();
 std::vector<u8> disk(16384+512,0x35);
 bool driverRead(u32 sector,u32 count,void* data) {
     driverCalled=true; ++driverCalls;
-    if(failDriver) return false;
+    if(failDriver || driverCalls==failAtCall) return false;
     std::memcpy(data,disk.data()+sector*512,count*512); return true;
 }
 bool driverWrite(u32 sector,u32 count,const void* data) {
@@ -82,6 +83,15 @@ void ic_invalidateAll() {}
 [[noreturn]] void sdc_storageFault(u32) { throw std::runtime_error("storage fault"); }
 void logAddress(u32) {}
 #include "production_sd_cache.h"
+#ifdef TEST_SAVE_SEARCH_CONSUMER
+#include "production_cache_accessor.h"
+const u32* mem_fastSearch16(const u32* data,u32 bytes,const u32* signature) {
+    for(u32 i=0;i+16<=bytes;i+=4)
+        if(!std::memcmp(reinterpret_cast<const u8*>(data)+i,signature,16)) return data+i/4;
+    return nullptr;
+}
+#include "production_search.h"
+#endif
 void executeQueuedCommand() {
     FsIpcService service;
     switch(sIpcCommand.cmd) {
@@ -239,4 +249,18 @@ int main() {
     std::vector<u8> writeBuffer(1025,0x61); writeBuffer[513]=0xB2;
     const auto immutable=writeBuffer;
     result("unaligned_write_source_immutable",disk_write(DEV_FAT,writeBuffer.data()+1,0,2)==RES_OK && writeBuffer==immutable);
+#ifdef TEST_SAVE_SEARCH_CONSUMER
+    const u32 signature[4]={0x12345678,0x90ABCDEF,0x13572468,0x02468ACE};
+    for(unsigned failedCall:{1u,2u}) {
+        sdc_init(); sBlockCount=1; driverCalls=0; failAtCall=failedCall;
+        std::fill(disk.begin(),disk.end(),0x35);
+        std::memcpy(disk.data()+512+4096-12,signature,16);
+        bool stopped=false;
+        try { (void)searchHiCode(signature,0x08000000,0x08002000); }
+        catch(const std::runtime_error&) { stopped=true; }
+        result("actual_search_aborts_storage_failure_"+std::to_string(failedCall),stopped &&
+            driverCalls==failedCall && !sdc_romBlockToCacheBlock[failedCall-1]);
+    }
+    failAtCall=UINT32_MAX;
+#endif
 }
