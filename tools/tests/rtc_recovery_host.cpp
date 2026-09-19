@@ -68,6 +68,7 @@ int main() {
         reset(); Bus bus;
         bus.write(0x62,{static_cast<u8>(mode24?0x40:0)});
         check("GPIO status read/write",bus.read(0x63,1)==std::vector<u8>{static_cast<u8>(mode24?0x40:0)});
+        bus.rtc._stateDirty=false; gRomGpioRtcStateDirty=0; schedules=0;
         const u8 hour=mode24?0x23:0x91;
         const u8 readHour=mode24?0xa3:0x91;
         bus.write(0x64,{0x24,0x02,0x28,3,hour,0x59,0x59});
@@ -78,8 +79,10 @@ int main() {
         bus.write(0x66,{static_cast<u8>(mode24?0x20:0x88),0x45,0x50});
         const auto time=bus.read(0x67,3);
         check("GPIO time-only write",time==std::vector<u8>({static_cast<u8>(mode24?0xa0:0x88),0x45,0x50}));
+        const auto fullDate=bus.read(0x65,7);
+        const auto offset=bus.rtc._rtcOffset;
         bus.command(0x64); bus.byte(0x99); bus.byte(0x12); bus.pins(0);
-        check("incomplete command does not commit offset",bus.read(0x67,3)==time);
+        check("incomplete command does not commit offset",bus.rtc._rtcOffset==offset && bus.read(0x65,7)==fullDate);
         bus.command(0x70); bus.pins(0);
         check("invalid command leaves time unchanged",bus.read(0x67,3)==time);
         bus.write(0x60,{});

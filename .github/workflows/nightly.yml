@@ -50,7 +50,10 @@ jobs:
       - name: Verify production RTC BCD and calendar conversions
         run: SANITIZE=1 python3 tools/tests/test_rtc_calendar_host.py --output rtc-calendar-results.json
       - name: Verify RTC GPIO and recovery selection with synthetic files
-        run: SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py
+        run: |
+          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py
+          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control no-dirty
+          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control partial-offset
       - uses: actions/upload-artifact@v7
         with:
           name: rtc-calendar-results
