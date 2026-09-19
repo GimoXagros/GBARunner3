@@ -13,7 +13,8 @@ constexpr u32 CREATE_LINKMAP = UINT32_MAX;
 struct FIL { u32* cltbl; int err; };
 #include "GbaSaveShared.h"
 constexpr u32 SAVE_DATA_SIZE = 32768, SAVE_DATA_FILL = 255, DEFAULT_SAVE_SIZE = 32768;
-constexpr u32 SAVE_TYPE_SRAM = 1, ISNITRO_SAVE_BUFFER_SIZE = 131072;
+#include "../../code/core/arm9/source/Save/SaveType.h"
+constexpr u32 ISNITRO_SAVE_BUFFER_SIZE = 131072;
 u8 nitro[ISNITRO_SAVE_BUFFER_SIZE];
 #define ISNITRO_SAVE_BUFFER nitro
 struct SaveTypeInfo { u32 size; u32 type; };
@@ -102,6 +103,17 @@ void reset(unsigned size = 32768) {
 void result(const char* scenario, bool ok) { std::cout << scenario << ':' << (ok ? "PASS" : "FAIL") << '\n'; }
 bool init() { return sav_initializeSave(nullptr, "synthetic.sav"); }
 int main() {
+    for (const auto type : {SAVE_TYPE_EEPROM_V124, SAVE_TYPE_FLASH_V120,
+            SAVE_TYPE_FLASH512_V133, SAVE_TYPE_FLASH1M_V103, SAVE_TYPE_SRAM_V113}) {
+        const bool sram = (type & SAVE_TYPE_MASK) == SAVE_TYPE_SRAM;
+        const u32 size = sram ? 32768 : (type == SAVE_TYPE_EEPROM_V124 ? 8192 :
+            (type == SAVE_TYPE_FLASH1M_V103 ? 131072 : 65536));
+        reset(size); SaveTypeInfo info{size, type};
+        result((std::string("production_save_type_")+std::to_string(type)).c_str(),
+            sav_initializeSave(&info,"synthetic.sav") && opened &&
+            gGbaSaveShared.saveDataSize == (sram ? size : 0) &&
+            (gGbaSaveShared.saveData != nullptr) == sram);
+    }
     reset(); init(); gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE; fault="write";
     sav_writePendingFiles(); fault.clear(); gRomGpioRtcStateDirty=1;
     const bool rtcRecovered=sav_retryFailedWrite("synthetic.sav");

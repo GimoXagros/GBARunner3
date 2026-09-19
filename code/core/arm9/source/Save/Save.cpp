@@ -129,7 +129,9 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
     u32 saveSize = saveTypeInfo ? saveTypeInfo->size : DEFAULT_SAVE_SIZE;
     if (Environment::IsIsNitroEmulator() && saveSize > ISNITRO_SAVE_BUFFER_SIZE)
         return false;
-    if ((!saveTypeInfo || (saveTypeInfo->type & SAVE_TYPE_SRAM)) && saveSize > SAVE_DATA_SIZE)
+    const bool isSram = !saveTypeInfo ||
+        (saveTypeInfo->type & SAVE_TYPE_MASK) == SAVE_TYPE_SRAM;
+    if (isSram && saveSize > SAVE_DATA_SIZE)
         return false;
     sByteWriteFailed = false;
     memset(gSaveData, SAVE_DATA_FILL, SAVE_DATA_SIZE);
@@ -193,7 +195,7 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
 
     gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
     sSkipSaveCheckInstruction = emu_vblankIrqSkipSaveCheckInstruction;
-    if (!saveTypeInfo || (saveTypeInfo->type & SAVE_TYPE_SRAM))
+    if (isSram)
     {
         gGbaSaveShared.saveData = gSaveData;
         gGbaSaveShared.saveDataSize = saveSize;
