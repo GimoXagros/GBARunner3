@@ -30,7 +30,7 @@ ROM 저장장치 오류가 발생하면 오래되거나 손상된 데이터를 �
 
 - Application NDS SHA-256: `b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90`
 - Test NDS SHA-256: `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7`
-- 설정 파일: 304개; 이름순 `SHA-256  filename` 행의 SHA-256: `43c357d0ab4080330664d71f79a887ba44c1bb654e124b76e9ab055959391e65`
+- 설정 파일: 304개; Git에 저장된 원본 바이트를 이름순 `SHA-256  filename` 행으로 계산한 SHA-256: `0ada1a9e67e36a6b9780d65ad6c39f3eb8922c1750691ac8db46f34ec9d078b8`
 - libtwl submodule: `e069645bed14a93e149e873e9273f04851e3a04e`
 
 검증된 exact source commit은 이 소스에서 생성된 `RELEASE-MANIFEST.json`과 공개 릴리스 설명에 기록합니다. 소스 문서 자체에 자기 commit SHA를 넣으면 SHA가 바뀌므로 빌드 시점의 Git HEAD를 manifest에 기록합니다. 공개 ZIP SHA-256은 업로드된 자산을 다시 내려받아 검증한 뒤 릴리스 설명에 기록합니다.
