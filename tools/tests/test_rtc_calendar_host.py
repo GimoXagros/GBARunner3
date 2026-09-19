@@ -34,9 +34,9 @@ with tempfile.TemporaryDirectory(prefix='gbar3-rtc-calendar-') as temp:
                '-I',str(tmp), '-I',str(ROOT/'code/core/arm9/source'),
                str(ROOT/'tools/tests/rtc_calendar_host.cpp'), '-o',str(exe)]
     if os.environ.get('SANITIZE') == '1':
-        command += ['-fsanitize=address,undefined','-fno-omit-frame-pointer']
+        command += ['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer']
     subprocess.run(command,check=True)
-    run = subprocess.run([str(exe)],text=True,capture_output=True,timeout=30)
+    run = subprocess.run([str(exe)],text=True,stdout=subprocess.PIPE,timeout=30)
     print(run.stdout, end='')
     if args.output:
         args.output.write_text(json.dumps(dict(exit_code=run.returncode,output=run.stdout,

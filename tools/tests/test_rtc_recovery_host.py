@@ -36,9 +36,9 @@ with tempfile.TemporaryDirectory(prefix='gbar3-rtc-recovery-') as directory:
                '-I',str(tmp), '-I',str(ROOT/'code/core/arm9/source'),
                str(ROOT/'tools/tests/rtc_recovery_host.cpp'), '-o',str(exe)]
     if os.environ.get('SANITIZE') == '1':
-        command += ['-fsanitize=address,undefined', '-fno-omit-frame-pointer']
+        command += ['-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-fno-omit-frame-pointer']
     subprocess.run(command,check=True)
-    run = subprocess.run([str(exe)],text=True,capture_output=True)
+    run = subprocess.run([str(exe)],text=True,stdout=subprocess.PIPE)
     print(run.stdout, end='')
     if args.negative_control:
         expected = 'GPIO write persists offset' if args.negative_control == 'no-dirty' else 'incomplete command does not commit offset'
