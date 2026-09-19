@@ -1,5 +1,7 @@
 # GBARunner3 Custom v0.1.3-rc3 — Storage Validation Candidate
 
+릴리스 태그: `custom-v0.1.3-rc3`.
+
 이 버전은 저장장치 오류 전달과 4 KiB 경계의 저장 기능 검색을 실기에서 검증하기 위한 **프리릴리즈**입니다. 정식 권장판은 계속 [custom-v0.1.3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3)입니다. **Hardware verification: NOT COMPLETED.** 중요한 저장 파일을 먼저 백업하고 복사본으로 시험하세요.
 
 ## 포함 범위
