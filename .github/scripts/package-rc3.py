@@ -18,7 +18,9 @@ TAG = "custom-v0.1.3-rc3"
 DEVELOP_BASE = "405177357aeaf0ff464e727ab2010433ed132b3c"
 TOOLCHAIN = "devkitpro/devkitarm:20241104"
 EXPECTED_NDS_SHA256 = "b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90"
+EXPECTED_TEST_NDS_SHA256 = "50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7"
 CONFIG_COUNT = 304
+EXPECTED_CONFIG_MANIFEST_SHA256 = "43c357d0ab4080330664d71f79a887ba44c1bb654e124b76e9ab055959391e65"
 README = ROOT / "docs/releases/custom-v0.1.3-rc3.md"
 GUIDE = ROOT / "docs/releases/HARDWARE-TEST-custom-v0.1.3-rc3.md"
 
@@ -61,11 +63,15 @@ def main():
     require(nds.is_file() and test_nds.is_file(), "application or test NDS missing")
     nds_hash = digest(nds)
     require(nds_hash == EXPECTED_NDS_SHA256, f"NDS hash mismatch: {nds_hash}")
+    test_nds_hash = digest(test_nds)
+    require(test_nds_hash == EXPECTED_TEST_NDS_SHA256, f"test NDS hash mismatch: {test_nds_hash}")
     configs = sorted((ROOT / "configs").iterdir())
     require(len(configs) == CONFIG_COUNT and all(p.is_file() and p.suffix == ".json" for p in configs),
             "config count or extension differs")
     config_lines = [f"{digest(path)}  {path.name}\n" for path in configs]
     config_manifest = hashlib.sha256("".join(config_lines).encode("utf-8")).hexdigest()
+    require(config_manifest == EXPECTED_CONFIG_MANIFEST_SHA256,
+            f"config manifest mismatch: {config_manifest}")
     require(README.is_file() and GUIDE.is_file(), "RC3 documentation missing")
     require(TAG in README.read_text(encoding="utf-8") and TAG in GUIDE.read_text(encoding="utf-8"),
             "RC3 document version mismatch")
@@ -91,7 +97,7 @@ def main():
         "arm7_commit_or_submodule": source,
         "libtwl_commit": git("rev-parse", "HEAD:code/libs/libtwl"),
         "nds_sha256": nds_hash,
-        "test_nds_sha256": digest(test_nds),
+        "test_nds_sha256": test_nds_hash,
         "configs_count": len(configs),
         "configs_manifest_sha256": config_manifest,
         "hardware_verified": False,
