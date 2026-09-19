@@ -47,6 +47,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Execute host serializer regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
+      - name: Verify production RTC BCD and calendar conversions
+        run: SANITIZE=1 python3 tools/tests/test_rtc_calendar_host.py --output rtc-calendar-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rtc-calendar-results
+          path: rtc-calendar-results.json
       - name: Test release upload without network mutations
         run: node tools/tests/test_release_upload.cjs
       - name: Execute EEPROM source-selection audit

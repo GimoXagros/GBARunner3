@@ -723,15 +723,17 @@ RTC_EWRAM u32 RomGpioRtc::ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& da
         days += GetNumberOfDaysInMonth(2000 + yearsSince2000, i);
     }
 
-    u32 hours = FromBcd(dateTime.time.hour & 0x1F);
+    // Keep both BCD tens bits: 20-23 hours and 40-59 minutes/seconds
+    // are data, not flags. The PM bit is handled separately below.
+    u32 hours = FromBcd(dateTime.time.hour & 0x3F);
     if (!time24h && (dateTime.time.hour & 0x80))
     {
         hours += 12;
     }
 
     return ((days * 24u + hours) * 60u
-        + FromBcd(dateTime.time.minute & 0x3F)) * 60u
-        + FromBcd(dateTime.time.second & 0x3F);
+        + FromBcd(dateTime.time.minute & 0x7F)) * 60u
+        + FromBcd(dateTime.time.second & 0x7F);
 }
 
 RTC_EWRAM void RomGpioRtc::FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rtc_datetime_t& dateTime, bool time24h) const
