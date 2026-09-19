@@ -74,6 +74,9 @@ static bool isCurrentlyFetching(void)
 
 static void publishCacheBlock(u32 romBlock, u32 cacheBlock)
 {
+    // Synthesized fills arrive here with IRQs enabled. Snapshot, retire and
+    // publish as one ownership transaction, just like completed disk reads.
+    const u32 irqs = arm_disableIrqs();
     void* previous = sdc_romBlockToCacheBlock[romBlock];
     if (previous && previous != &sdc_cache[cacheBlock][0])
     {
@@ -88,6 +91,7 @@ static void publishCacheBlock(u32 romBlock, u32 cacheBlock)
     sCacheBlockToRomBlock[cacheBlock] = romBlock;
     sdc_romBlockToCacheBlock[romBlock] = &sdc_cache[cacheBlock][0];
     dc_drainWriteBuffer();
+    arm_restoreIrqs(irqs);
 }
 
 static void finishFetch()

@@ -24,13 +24,16 @@ bool deferCommand=false, commandQueued=false;
 unsigned driverCalls=0, invalidations=0;
 std::function<void()> onPoll;
 unsigned pollDelay=0, pollEntries=0;
+u32 irqState=0x80;
 u32 arm_disableIrqs() {
     ++pollEntries;
     if (onPoll && !pollDelay) { auto action=std::move(onPoll); onPoll=nullptr; action(); }
     else if(onPoll) --pollDelay;
-    return 0x80;
+    const u32 previous=irqState;
+    irqState=0x80;
+    return previous;
 }
-void arm_restoreIrqs(u32) {}
+void arm_restoreIrqs(u32 value) { irqState=value; }
 void vm_disableIrqYielding() {}
 void vm_restoreIrqYielding(bool) {}
 bool vm_yieldGbaIrqs() { return false; }
@@ -78,7 +81,12 @@ alignas(32) u8 sdc_cache[SDC_BLOCK_COUNT][SDC_BLOCK_SIZE];
 u32 arm_getCpsr() { return 0x13; }
 void vm_enableNestedIrqs() {} void vm_disableNestedIrqs() {}
 void dc_drainWriteBuffer() {} void jit_resetDynamicRomBlock(void*) {}
-void ic_invalidateAll() {}
+std::function<void()> onCacheInvalidation;
+void ic_invalidateAll() {
+    if (!(irqState&0x80) && onCacheInvalidation) {
+        auto action=std::move(onCacheInvalidation); onCacheInvalidation=nullptr; action();
+    }
+}
 [[noreturn]] void sdc_storageFault(u32) { throw std::runtime_error("storage fault"); }
 void logAddress(u32) {}
 #include "production_sd_cache.h"
@@ -242,6 +250,19 @@ int main() {
     loadRomBlock(0,0); // evict the former dynamic owner
     result("synthesized_promotion_survives_old_slot_eviction",sdc_romBlockToCacheBlock[2]==sdc_cache[1] &&
         sCacheBlockToRomBlock[1]==2);
+
+    sdc_init(); sBlockCount=3;
+    loadRomBlock(2,0);
+    bool irqReentered=false;
+    onCacheInvalidation=[&] { irqReentered=true; loadRomBlock(0,0); };
+    irqState=0;
+    loadRomBlock(2,1);
+    const bool atomicPublication=!irqReentered && irqState==0;
+    if(onCacheInvalidation) { auto action=std::move(onCacheInvalidation); onCacheInvalidation=nullptr; action(); }
+    result("synthesized_publish_excludes_irq_slot_reuse",atomicPublication &&
+        sdc_romBlockToCacheBlock[2]==sdc_cache[1] && sdc_romBlockToCacheBlock[0]==sdc_cache[0] &&
+        sCacheBlockToRomBlock[0]==0);
+    irqState=0x80;
 
     // Unaligned write must never copy the bounce buffer back into const input.
     std::vector<u8> writeBuffer(1025,0x61); writeBuffer[513]=0xB2;
