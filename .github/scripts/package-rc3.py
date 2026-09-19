@@ -17,7 +17,7 @@ GIT = ["git", "-c", f"safe.directory={ROOT}"]
 TAG = "custom-v0.1.3-rc3"
 DEVELOP_BASE = "405177357aeaf0ff464e727ab2010433ed132b3c"
 TOOLCHAIN = "devkitpro/devkitarm:20241104"
-EXPECTED_NDS_SHA256 = "e8f53434cc96e5907159e78ce0d01f7ec801d7098e36b8377f6406d97175b1b8"
+EXPECTED_NDS_SHA256 = "b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90"
 CONFIG_COUNT = 304
 README = ROOT / "docs/releases/custom-v0.1.3-rc3.md"
 GUIDE = ROOT / "docs/releases/HARDWARE-TEST-custom-v0.1.3-rc3.md"

@@ -65,7 +65,7 @@ def run_fast(signature, data, expected):
         uc.mem_write(address, segment)
     ptr, slot, stop = 0x02020000, 0x02022000, 0x02021000
     uc.mem_write(ptr, signature)
-    uc.mem_write(slot, data)
+    uc.mem_write(slot, bytes(data))
     for reg, value in ((UC_ARM_REG_R0, slot), (UC_ARM_REG_R1, len(data)),
                        (UC_ARM_REG_R2, ptr), (UC_ARM_REG_SP, 0x0203F000), (UC_ARM_REG_LR, stop)):
         uc.reg_write(reg, value)
@@ -82,8 +82,8 @@ def run_seam(signature, tail, head, head_length, expected):
         uc.mem_write(address, segment)
     ptr, tail_ptr, head_ptr, stop = 0x02020000, 0x02021000, 0x02021020, 0x02022000
     uc.mem_write(ptr, signature)
-    uc.mem_write(tail_ptr, tail)
-    uc.mem_write(head_ptr, head)
+    uc.mem_write(tail_ptr, bytes(tail))
+    uc.mem_write(head_ptr, bytes(head))
     for reg, value in ((UC_ARM_REG_R0, ptr), (UC_ARM_REG_R1, tail_ptr),
                        (UC_ARM_REG_R2, head_ptr), (UC_ARM_REG_R3, head_length),
                        (UC_ARM_REG_SP, 0x0203F000), (UC_ARM_REG_LR, stop)):
