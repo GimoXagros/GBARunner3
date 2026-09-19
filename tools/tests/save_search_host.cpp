@@ -51,6 +51,24 @@ void check(const u32* sig, u32 start, u32 end, u32 expected) {
     }
 }
 int main() {
+    for (const auto& sig : corpus) {
+        const auto* bytes = reinterpret_cast<const uint8_t*>(sig);
+        for (u32 offset : {0u, 4u, 8u}) {
+            uint8_t tail[12], head[12];
+            std::memset(tail, 0xA5, sizeof(tail));
+            std::memset(head, 0xA5, sizeof(head));
+            const u32 tailBytes = 12 - offset;
+            std::memcpy(tail + offset, bytes, tailBytes);
+            std::memcpy(head, bytes + tailBytes, 16 - tailBytes);
+            const u32 boundary = 0x08200000;
+            assert(sav_findSplitBoundary16(sig, boundary, tail, head, 16 - tailBytes)
+                == boundary - 12 + offset);
+            assert(sav_findSplitBoundary16(sig, boundary, tail, head, 15 - tailBytes)
+                == UINT32_MAX);
+            assert(sav_findSplitBoundary16(sig, boundary, tail, nullptr, 12)
+                == UINT32_MAX);
+        }
+    }
     for(auto range : {std::pair<u32,u32>{0x07ffffff,0x08001000},
                      {0x08000000,0x0a000001},{0xfffffff0,0xffffffff}}) {
         auto reject=[](u32)->const void* { assert(false && "invalid range must not read"); return nullptr; };
@@ -102,5 +120,5 @@ int main() {
 
         }
     }
-    std::cout << "search boundary, 4-byte alignment, bounded ranges, cache replacement and permanent patch backing PASS\n";
+    std::cout << "search boundary, linear/cache seam, 4-byte alignment, bounded ranges, cache replacement and permanent patch backing PASS\n";
 }

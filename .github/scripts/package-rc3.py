@@ -13,6 +13,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
+GIT = ["git", "-c", f"safe.directory={ROOT}"]
 TAG = "custom-v0.1.3-rc3"
 DEVELOP_BASE = "405177357aeaf0ff464e727ab2010433ed132b3c"
 TOOLCHAIN = "devkitpro/devkitarm:20241104"
@@ -23,7 +24,7 @@ GUIDE = ROOT / "docs/releases/HARDWARE-TEST-custom-v0.1.3-rc3.md"
 
 
 def git(*args):
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+    return subprocess.check_output([*GIT, *args], cwd=ROOT, text=True).strip()
 
 
 def digest(path):
@@ -46,7 +47,8 @@ def main():
     for pr in ("ab59a7e37a0f73cbe06aa1be4e4e964a64a4c1a3", "a46b781dc8a290bf12684390a921c73916612c64"):
         git("merge-base", "--is-ancestor", pr, "HEAD")
     for excluded in ("cee5ea5018013a4edc44eee6b1cff4720dcd27da", "53c9545c47499a97016885894da3b92770366a22"):
-        require(subprocess.run(["git", "merge-base", "--is-ancestor", excluded, "HEAD"], cwd=ROOT).returncode != 0,
+        git("cat-file", "-e", f"{excluded}^{{commit}}")
+        require(subprocess.run([*GIT, "merge-base", "--is-ancestor", excluded, "HEAD"], cwd=ROOT).returncode == 1,
                 f"excluded PR ancestor: {excluded}")
     if args.mode == "published":
         require(os.environ.get("GITHUB_REF") == f"refs/tags/{TAG}", "wrong release ref")
