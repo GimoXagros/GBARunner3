@@ -79,6 +79,17 @@ static void finishFetch()
     if (sCurrentFetch.token->transactionComplete &&
         sCurrentFetch.token->result == FS_RESULT_SUCCESS)
     {
+        void* previous = sdc_romBlockToCacheBlock[sCurrentFetch.romBlock];
+        if (previous && previous != &sdc_cache[sCurrentFetch.cacheBlock][0])
+        {
+            // Permanent promotion keeps the old valid backing until the new
+            // read succeeds. Retire its reverse ownership only on success.
+#ifdef GBAR3_HICODE_CACHE_MAPPING
+            hic_unmapRomBlock();
+#endif
+            ic_invalidateAll();
+            sCacheBlockToRomBlock[((u32)previous - (u32)sdc_cache) / SDC_BLOCK_SIZE] = SDC_ROM_BLOCK_INVALID;
+        }
         jit_resetDynamicRomBlock(&sdc_cache[sCurrentFetch.cacheBlock][0]);
         sCacheBlockToRomBlock[sCurrentFetch.cacheBlock] = sCurrentFetch.romBlock;
         sdc_romBlockToCacheBlock[sCurrentFetch.romBlock] = &sdc_cache[sCurrentFetch.cacheBlock][0];
@@ -156,7 +167,8 @@ static void* loadRomBlock(u32 romBlock, u32 cacheBlock)
     }
 
     void* currentCacheBlock = sdc_romBlockToCacheBlock[romBlock];
-    if (currentCacheBlock)
+    if (currentCacheBlock && (cacheBlock == SDC_BLOCK_INVALID ||
+        currentCacheBlock == &sdc_cache[cacheBlock][0]))
     {
         arm_restoreIrqs(irqs);
         return currentCacheBlock;
@@ -269,13 +281,6 @@ void* sdc_loadRomBlockForPatching(u32 romAddress)
     // if not loaded at all yet, or not permanent
     if (!data || (u32)data < (u32)&sdc_cache[sBlockCount][0])
     {
-        if (data)
-        {
-            // if already loaded, but not permanent, invalidate block
-            sdc_romBlockToCacheBlock[romBlock] = NULL;
-            sCacheBlockToRomBlock[((u32)data - (u32)&sdc_cache[0][0]) / SDC_BLOCK_SIZE] = SDC_ROM_BLOCK_INVALID;
-        }
-
         if (sBlockCount == 0)
             sdc_storageFault(romAddress);
         data = loadRomBlock(romBlock, --sBlockCount);

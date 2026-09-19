@@ -23,8 +23,11 @@ bool gIrqYieldingEnabled=false, failDriver=false, driverCalled=false;
 bool deferCommand=false, commandQueued=false;
 unsigned driverCalls=0, invalidations=0;
 std::function<void()> onPoll;
+unsigned pollDelay=0, pollEntries=0;
 u32 arm_disableIrqs() {
-    if (onPoll) { auto action=std::move(onPoll); onPoll=nullptr; action(); }
+    ++pollEntries;
+    if (onPoll && !pollDelay) { auto action=std::move(onPoll); onPoll=nullptr; action(); }
+    else if(onPoll) --pollDelay;
     return 0x80;
 }
 void arm_restoreIrqs(u32) {}
@@ -156,8 +159,10 @@ int main() {
     sIpcCommand.completion.result=FS_RESULT_SUCCESS;
     result("stale_completion_rejected",fs_pollTransaction(&a)==FS_RESULT_STALE_COMPLETION && !a.transactionComplete && sCurrentWaitToken==&a);
     onPoll=[] { executeQueuedCommand(); };
+    pollDelay=2;
+    const unsigned beforePoll=pollEntries;
     fs_waitForCompletion(&a,false);
-    result("completion_during_polling",a.result==FS_RESULT_SUCCESS && a.transactionComplete);
+    result("completion_during_polling",a.result==FS_RESULT_SUCCESS && a.transactionComplete && pollEntries>=beforePoll+3);
 
     failDriver=true;
     fs_readCacheAlignedSectorsAsync(FS_DEVICE_DLDI,buffer,0,1,&a);
@@ -168,6 +173,18 @@ int main() {
     result("nested_command_keeps_old_result",a.result==FS_RESULT_IO_ERROR && a.sequence==oldSequence && b.result==FS_RESULT_SUCCESS && b.sequence!=a.sequence);
     fs_waitForCompletion(&a,false);
     result("old_token_wait_does_not_claim_new_result",a.result==FS_RESULT_IO_ERROR);
+
+    deferCommand=true;
+    fs_readCacheAlignedSectorsAsync(FS_DEVICE_DLDI,buffer,0,1,&a);
+    onPoll=[&] {
+        executeQueuedCommand();
+        deferCommand=false;
+        fs_readCacheAlignedSectorsAsync(FS_DEVICE_DLDI,buffer,1,1,&b);
+        fs_waitForCompletion(&b,false);
+    };
+    fs_waitForCompletion(&a,false);
+    result("reentrant_wait_retains_each_owner",a.transactionComplete && b.transactionComplete &&
+        a.result==FS_RESULT_SUCCESS && b.result==FS_RESULT_SUCCESS && a.sequence!=b.sequence);
 
     deferCommand=true;
     fs_readCacheAlignedSectorsAsync(FS_DEVICE_DLDI,buffer,0,1,&a);
@@ -203,6 +220,20 @@ int main() {
     result("failed_permanent_slot_rolled_back",stopped && sBlockCount==1 && !sdc_romBlockToCacheBlock[1]);
     failDriver=false;
     result("explicit_later_read_succeeds",sdc_tryLoadRomBlock(0x08001000)==sdc_cache[0] && sdc_romBlockToCacheBlock[1]==sdc_cache[0]);
+
+    sdc_init(); sBlockCount=2; failDriver=false;
+    loadRomBlock(0,0);
+    failDriver=true; stopped=false;
+    try { (void)sdc_loadRomBlockForPatching(0x08000000); } catch(const std::runtime_error&) { stopped=true; }
+    result("failed_promotion_preserves_valid_backing",stopped && sBlockCount==2 &&
+        sdc_romBlockToCacheBlock[0]==sdc_cache[0] && sCacheBlockToRomBlock[0]==0 &&
+        sCacheBlockToRomBlock[1]==SDC_ROM_BLOCK_INVALID);
+    failDriver=false;
+    // Call the loader directly to avoid a host 64-bit pointer in the target
+    // 32-bit patch-address return. This executes the same successful promotion.
+    --sBlockCount;
+    result("successful_promotion_retires_previous_owner",loadRomBlock(0,1)==sdc_cache[1] &&
+        sdc_romBlockToCacheBlock[0]==sdc_cache[1] && sCacheBlockToRomBlock[0]==SDC_ROM_BLOCK_INVALID);
 
     // Unaligned write must never copy the bounce buffer back into const input.
     std::vector<u8> writeBuffer(1025,0x61); writeBuffer[513]=0xB2;
