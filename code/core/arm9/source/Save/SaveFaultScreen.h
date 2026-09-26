@@ -1,7 +1,7 @@
 #pragma once
 
 // Tiny embedded 5x7 uppercase font: no allocator, ROM, filesystem or GUI state.
-inline void sav_renderPersistenceFaultScreen(volatile unsigned short* pixels)
+[[gnu::always_inline]] inline void sav_renderPersistenceFaultScreen(volatile unsigned short* pixels)
 {
     static const unsigned char glyphs[26][5] = {
         {126,17,17,17,126}, {127,73,73,73,54}, {62,65,65,65,34},

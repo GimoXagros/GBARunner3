@@ -52,6 +52,30 @@ int main() {
             check(label+"round_trip_"+std::to_string(type),sav_initializeSave(&info,path.c_str()) && sav_readSaveByteFromFile(0)==0x79 && sav_readSaveByteFromFile(size-1)==0x71);
             f_close(&gSaveFile); f_mount(nullptr,volume,0);
         }
+        // Real truncation/extension: preserve the known prefix and fill only the tail.
+        resetMedia(fs,volume);
+        FIL seed{}; UINT count=0; std::vector<u8> prefix(11,0x35);
+        if(f_open(&seed,path.c_str(),FA_CREATE_ALWAYS|FA_READ|FA_WRITE)!=FR_OK ||
+           f_write(&seed,prefix.data(),prefix.size(),&count)!=FR_OK || count!=prefix.size() ||
+           f_close(&seed)!=FR_OK) throw std::runtime_error("seed creation failed");
+        check(label+"short_file_extension",sav_initializeSave(nullptr,path.c_str()) && f_size(&gSaveFile)==32768 &&
+            std::all_of(gSaveData,gSaveData+11,[](u8 b){return b==0x35;}) &&
+            std::all_of(gSaveData+11,gSaveData+32768,[](u8 b){return b==255;}));
+        f_close(&gSaveFile); f_mount(nullptr,volume,0);
+
+        // Full synthetic media produces a genuine FR_OK short write, not a mocked API result.
+        resetMedia(fs,volume);
+        const std::string filler=std::string(volume)+"/FILL.BIN";
+        if(f_open(&seed,filler.c_str(),FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK) throw std::runtime_error("filler creation failed");
+        std::vector<u8> block(8192,0xAB); bool full=false;
+        for(unsigned i=0;i<128 && !full;++i) {
+            if(f_write(&seed,block.data(),block.size(),&count)!=FR_OK) throw std::runtime_error("unexpected filler disk error");
+            full=count<block.size();
+        }
+        if(!full || f_close(&seed)!=FR_OK) throw std::runtime_error("failed to fill synthetic media");
+        check(label+"full_disk_initialization_rejected",!sav_initializeSave(nullptr,path.c_str()) && sSaveFileOpen && f_size(&gSaveFile)<32768 && rtcCalls==0);
+        f_mount(nullptr,volume,0);
+
         for(const char* operation:{"read","write","deferred","sync"}) {
             resetMedia(fs,volume);
             if(!sav_initializeSave(nullptr,path.c_str())) throw std::runtime_error("synthetic save initialization failed");

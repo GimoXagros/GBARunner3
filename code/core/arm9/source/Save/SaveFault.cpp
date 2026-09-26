@@ -9,7 +9,8 @@
 #include "SaveFault.h"
 #include "SaveFaultScreen.h"
 
-extern "C" [[gnu::noreturn]] void sav_persistenceFault(void)
+// Terminal code uses existing main-memory headroom; VRAM A is at its layout limit.
+extern "C" [[gnu::noreturn, gnu::section(".ewram")]] void sav_persistenceFault(void)
 {
     arm_disableIrqs();
     gGbaSaveShared.saveState = GBA_SAVE_STATE_ERROR;
