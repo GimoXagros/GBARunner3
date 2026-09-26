@@ -54,8 +54,10 @@ jobs:
         run: SANITIZE=1 python3 tools/tests/test_storage_failure_host.py --require-fixed --output storage-results.json
       - name: Verify actual FatFs receives driver errors
         run: SANITIZE=1 python3 tools/tests/test_storage_fatfs_host.py
-      - name: Verify save initialization and explicit recovery fault paths
+      - name: Verify save initialization and terminal error paths
         run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --require-fixed --output save-io-results.json
+      - name: Verify production save I/O through actual FatFs and ARM7 drivers
+        run: SANITIZE=1 python3 tools/tests/test_save_fatfs_host.py
       - uses: actions/upload-artifact@v7
         with:
           name: save-io-results

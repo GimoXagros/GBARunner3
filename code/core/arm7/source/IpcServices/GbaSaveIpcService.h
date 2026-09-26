@@ -17,6 +17,7 @@ public:
 
     void OnMessageReceived(u32 data) override;
 
+    bool HasSaveError() const;
     void Update();
     SaveFlushResult FlushSaveIfDirty();
 };

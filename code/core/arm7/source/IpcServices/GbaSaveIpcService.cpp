@@ -17,6 +17,11 @@ void GbaSaveIpcService::OnMessageReceived(u32 data)
     }
 }
 
+bool GbaSaveIpcService::HasSaveError() const
+{
+    return _saveShared && _saveShared->saveState == GBA_SAVE_STATE_ERROR;
+}
+
 void GbaSaveIpcService::Update()
 {
     if (!_saveShared || _saveShared->saveDataSize == 0 || isDSiMode())

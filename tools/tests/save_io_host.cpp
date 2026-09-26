@@ -23,11 +23,13 @@ bool Environment::nitroMode = false;
 u8 gSaveData[SAVE_DATA_SIZE]; FIL gSaveFile; gba_save_shared_t gGbaSaveShared;
 u32 emu_vblankIrqSkipSaveCheckInstruction = 123;
 volatile u8 gRomGpioRtcStateDirty;
-struct { bool FlushRtcStateIfDirty() { return true; } } gRomGpio;
+unsigned rtcCalls;
+struct { bool FlushRtcStateIfDirty() { ++rtcCalls; return true; } } gRomGpio;
 #include "GbaSaveIpcCommand.h"
 #include "IpcChannels.h"
 constexpr unsigned IPC_FIFO_MSG_CHANNEL_BITS = 4;
 void ipc_sendWordDirect(u32) {} bool ipc_isRecvFifoEmpty() { return false; } void ipc_recvWordDirect() {}
+u32 arm_disableIrqs() { return 0; }
 void vm_enableNestedIrqs() {} void vm_disableNestedIrqs() {} void dc_drainWriteBuffer() {}
 
 std::vector<u8> disk;
@@ -78,30 +80,43 @@ int f_close(FIL* file) {
     opened = false; return 0;
 }
 
+struct TerminalSaveFault {};
+extern "C" [[noreturn]] void sav_persistenceFault() { throw TerminalSaveFault{}; }
 #include "production_save_io.h"
+#include "../../code/core/arm9/source/Save/SaveFaultScreen.h"
 
 // Only expose private members to attach shared memory in the 64-bit host.
 // All Update/Flush/exit behavior below is extracted from actual ARM7 source.
 #define class struct
 #include "GbaSaveIpcService.h"
 #undef class
+int volume;
+void snd_setMasterVolume(int value) { volume = value; }
 bool isDSiMode() { return false; }
 #include "production_arm7_save.h"
 enum class Arm7State { Idle, ExitRequested };
 Arm7State sState;
-int sExitMode, exits, volume;
+bool sSaveFaultSeen=false;
+enum class ExitMode { Reset, PowerOff };
+ExitMode sExitMode=ExitMode::Reset;
+int exits;
 GbaSaveIpcService sGbaSaveIpcService;
-void performExit(int) { ++exits; }
-void snd_setMasterVolume(int value) { volume = value; }
+void performExit(ExitMode) { ++exits; }
 #include "production_exit.h"
 
 void reset(unsigned size = 32768) {
-    disk.assign(size, 0x35); cursor = 0; opened = false; fault.clear(); writeCalls = syncCalls = openCalls = seekCalls = closeCalls = 0;
-    failAt.clear(); calls.clear(); sSaveFileOpen = sByteWriteFailed = false; gSaveFile = {}; Environment::nitroMode = false;
+    disk.assign(size, 0x35); cursor = 0; opened = false; fault.clear();
+    writeCalls = syncCalls = openCalls = seekCalls = closeCalls = rtcCalls = 0;
+    failAt.clear(); calls.clear(); sSaveFileOpen = false; gSaveFile = {}; Environment::nitroMode = false;
     gGbaSaveShared = {}; emu_vblankIrqSkipSaveCheckInstruction = 123; gRomGpioRtcStateDirty=0;
 }
-void result(const char* scenario, bool ok) { std::cout << scenario << ':' << (ok ? "PASS" : "FAIL") << '\n'; }
+unsigned checks=0, failures=0;
+void result(const std::string& scenario, bool ok) { ++checks; failures+=!ok; std::cout << scenario << ':' << (ok ? "PASS" : "FAIL") << '\n'; }
 bool init() { return sav_initializeSave(nullptr, "synthetic.sav"); }
+template<class Action> bool terminal(Action action) {
+    try { action(); } catch(const TerminalSaveFault&) { return gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR; }
+    return false;
+}
 int main() {
     for (const auto type : {SAVE_TYPE_EEPROM_V124, SAVE_TYPE_FLASH_V120,
             SAVE_TYPE_FLASH512_V133, SAVE_TYPE_FLASH1M_V103, SAVE_TYPE_SRAM_V113}) {
@@ -109,127 +124,93 @@ int main() {
         const u32 size = sram ? 32768 : (type == SAVE_TYPE_EEPROM_V124 ? 8192 :
             (type == SAVE_TYPE_FLASH1M_V103 ? 131072 : 65536));
         reset(size); SaveTypeInfo info{size, type};
-        result((std::string("production_save_type_")+std::to_string(type)).c_str(),
+        result("production_save_type_"+std::to_string(type),
             sav_initializeSave(&info,"synthetic.sav") && opened &&
             gGbaSaveShared.saveDataSize == (sram ? size : 0) &&
             (gGbaSaveShared.saveData != nullptr) == sram);
+        if(sram) { gSaveData[0]=0x79; gSaveData[size-1]=0x71; gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE; sav_writePendingFiles(); }
+        else { sav_writeSaveByteToFile(0,0x79); sav_writeSaveByteToFile(size-1,0x71); sav_flushSaveFile(); }
+        const bool closed=f_close(&gSaveFile)==FR_OK; sSaveFileOpen=false; gSaveFile={};
+        result("save_type_round_trip_"+std::to_string(type), closed && sav_initializeSave(&info,"synthetic.sav") &&
+            sav_readSaveByteFromFile(0)==0x79 && sav_readSaveByteFromFile(size-1)==0x71);
     }
-    reset(); init(); gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE; fault="write";
-    sav_writePendingFiles(); fault.clear(); gRomGpioRtcStateDirty=1;
-    const bool rtcRecovered=sav_retryFailedWrite("synthetic.sav");
-    result("explicit_recovery_preserves_rtc_schedule",rtcRecovered && emu_vblankIrqSkipSaveCheckInstruction==0xE1A00000);
     reset(0); result("normal_create", init() && disk.size() == 32768 && std::all_of(disk.begin(), disk.end(), [](u8 v){return v == 255;}));
-    reset(10); bool initialized = init();
-    result("short_file_extension", initialized && std::all_of(disk.begin(), disk.begin()+10, [](u8 v){return v == 0x35;}) && std::all_of(disk.begin()+10,disk.end(),[](u8 v){return v==255;}));
-    reset(65536); result("oversized_existing_preserved", init() && disk.size() == 65536 && disk.back() == 0x35);
-    for (const auto* failure : {"open", "seek", "map", "read", "short-read"}) {
-        reset(); fault = failure; result((std::string("initialize_") + failure).c_str(), !init() && !opened);
+    reset(10); bool initialized=init();
+    result("short_file_extension", initialized && disk.size()==32768 && std::all_of(disk.begin(),disk.begin()+10,[](u8 v){return v==0x35;}) && std::all_of(disk.begin()+10,disk.end(),[](u8 v){return v==255;}));
+    reset(65536); result("oversized_existing_preserved", init() && disk.size()==65536 && disk.back()==0x35);
+    for(const auto* failure:{"open","seek","map","read","short-read"}) {
+        reset(); fault=failure;
+        result(std::string("initialize_")+failure,!init() && closeCalls==0);
+        const unsigned opens=openCalls;
+        if(opened) result(std::string("initialize_no_reopen_")+failure,!init() && opens==openCalls && closeCalls==0);
     }
-    for (const auto* failure : {"write", "short-write", "sync", "full", "readonly"}) {
-        reset(0); fault = failure; result((std::string("create_") + failure).c_str(), !init() && (std::string(failure) == "sync" ? opened && sSaveFileOpen : !opened));
+    for(const auto* failure:{"write","short-write","sync","full","readonly"}) {
+        reset(0); fault=failure;
+        result(std::string("create_")+failure,!init() && closeCalls==0);
     }
-    reset(); init(); gSaveData[0] = 0x79; gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE;
-    sav_writePendingFiles(); closeSaveFile(); init();
-    result("write_close_reopen", gSaveData[0] == 0x79 && gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN);
-    for (const auto* failure : {"seek", "write", "short-write", "sync", "full", "readonly"}) {
-        reset(); init(); gSaveData[0] = 0x79; gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE; fault = failure;
-        sav_writePendingFiles();
-        result((std::string("deferred_") + failure).c_str(), gGbaSaveShared.saveState != GBA_SAVE_STATE_CLEAN);
-        unsigned syncsAfterFailure = syncCalls;
-        fault.clear(); sav_retryFailedWrite("synthetic.sav");
-        result((std::string("retry_") + failure).c_str(), disk[0] == 0x79 && syncCalls > syncsAfterFailure && gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN);
+    reset(); failAt["seek"]=2; result("initialize_rewind_failure",!init() && closeCalls==0);
+    reset(); init(); auto before=disk; const unsigned opens=openCalls;
+    result("live_file_reinitialization_rejected",!init() && openCalls==opens && closeCalls==0 && disk==before);
+    for(const auto* failure:{"seek","write","short-write","sync","full","readonly"}) {
+        reset(); init(); gSaveData[0]=0x79; gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE;
+        gRomGpioRtcStateDirty=1; fault=failure;
+        result(std::string("deferred_terminal_")+failure,terminal([]{sav_writePendingFiles();}) && gSaveData[0]==0x79 && rtcCalls==0);
+        const unsigned writes=writeCalls,syncs=syncCalls,seeks=seekCalls;
+        fault.clear();
+        result(std::string("latched_no_later_io_")+failure,terminal([]{sav_writePendingFiles();}) && writeCalls==writes && syncCalls==syncs && seekCalls==seeks && rtcCalls==0);
     }
-    for (const auto* failure : {"read", "short-read"}) {
-        reset(); init(); fault = failure;
-        result((std::string("byte_") + failure).c_str(), sav_readSaveByteFromFile(0) == 255);
+    for(const auto* failure:{"seek","read","short-read"}) {
+        reset(); init(); fault=failure;
+        result(std::string("byte_read_terminal_")+failure,terminal([]{sav_readSaveByteFromFile(0);}) && writeCalls==0);
     }
-    reset(); init(); result("byte_read_out_of_range", sav_readSaveByteFromFile(40000) == 255 && disk.size() == 32768);
-    reset(); init(); cursor = 1; disk[1] = 0x71; fault = "seek";
-    result("byte_read_failed_seek", sav_readSaveByteFromFile(0) == 255);
-    reset(); init(); cursor = 1; fault = "seek"; sav_writeSaveByteToFile(0, 0x79);
-    result("byte_write_failed_seek_preserves_file", disk[1] == 0x35);
-    reset(); init(); sav_writeSaveByteToFile(40000, 0x79);
-    result("byte_write_out_of_range", disk.size() == 32768);
-    reset(0); fault = "write"; bool failed = !init(); fault.clear(); initialized = init();
-    result("interrupted_initialization_retry_fill", failed && initialized && std::all_of(disk.begin(),disk.end(),[](u8 v){return v==255;}));
-    reset(); init(); fault = "sync"; sav_flushSaveFile();
-    result("flush_failure_visible", gGbaSaveShared.saveState != GBA_SAVE_STATE_CLEAN);
-    reset(); init(); fault = "close";
-    result("close_failure_observable", f_close(&gSaveFile) != FR_OK && opened);
-    reset(); init(); gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE; fault = "write";
-    for (unsigned i = 0; i < 120; ++i) sav_writePendingFiles();
-    result("no_unbounded_vblank_retry", writeCalls <= 1);
-    result("terminal_error_preserved", gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR);
-
-    for (const auto* failure : {"seek", "write", "short-write", "sync", "full", "readonly"}) {
-        reset(11); fault = failure; const bool failedInit = !init(); fault.clear();
-        result((std::string("initialize_retry_") + failure).c_str(), failedInit && init() &&
-            std::all_of(disk.begin(), disk.begin()+11, [](u8 b){return b==0x35;}) &&
-            std::all_of(disk.begin()+11, disk.end(), [](u8 b){return b==255;}));
+    for(const auto* failure:{"seek","write","short-write","full","readonly"}) {
+        reset(); init(); fault=failure; before=disk;
+        result(std::string("byte_write_terminal_")+failure,terminal([]{sav_writeSaveByteToFile(0,0x79);}) && disk==before);
+        result(std::string("byte_fault_no_followup_sync_")+failure,syncCalls==0 && rtcCalls==0);
     }
-    reset(); fault = "read+close"; initialized = init();
-    unsigned opens = openCalls; auto* table = gSaveFile.cltbl;
-    bool failedAgain = !init();
-    result("cleanup_close_keeps_live_object", !initialized && failedAgain && opened && sSaveFileOpen && openCalls == opens && gSaveFile.cltbl == table);
-    fault.clear(); result("cleanup_close_retry_then_reopen", init() && openCalls == opens + 1);
-    reset(); failAt["seek"] = 2;
-    result("initialize_rewind_failure", !init());
-    reset(11); failAt["map"] = 1;
-    result("map_failure_after_fill_retry", !init() && init() && disk[10] == 0x35 && disk[11] == 255 && disk.back() == 255);
-    reset(); init(); gSaveData[0] = 0x79; gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE; fault = "write"; sav_writePendingFiles();
-    fault = "close"; opens = openCalls;
-    result("retry_close_failure_preserves_ram", !sav_retryFailedWrite("synthetic.sav") && opened && gSaveData[0] == 0x79 && openCalls == opens && gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR);
-    fault = "open"; result("retry_open_failure_preserves_ram", !sav_retryFailedWrite("synthetic.sav") && gSaveData[0] == 0x79 && gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR);
-    fault.clear(); result("retry_after_failed_open", sav_retryFailedWrite("synthetic.sav") && disk[0] == 0x79);
-    for (const auto* failure : {"map", "write", "short-write", "sync", "readonly"}) {
-        reset(); init(); gSaveData[0] = 0x79; gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE; fault = "write"; sav_writePendingFiles();
-        fault = failure;
-        result((std::string("retry_fails_") + failure).c_str(), !sav_retryFailedWrite("synthetic.sav") && gSaveData[0] == 0x79 && gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR);
-    }
-    reset(); init(); gSaveData[0] = 0x79; gGbaSaveShared.saveState = GBA_SAVE_STATE_WRITE; fault="write"; sav_writePendingFiles(); fault.clear(); disk.resize(10);
-    result("retry_rejects_short_existing", !sav_retryFailedWrite("synthetic.sav") && disk.size()==10 && gSaveData[0]==0x79);
-    reset(); init(); gGbaSaveShared.saveDataSize=SAVE_DATA_SIZE+1; gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE; sav_writePendingFiles();
-    result("oversized_buffer_rejected", gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR && writeCalls==0);
-    reset(); init(); const auto before=disk; sav_writeSaveByteToFile(40000,0x79); sav_flushSaveFile();
-    result("byte_failure_survives_successful_flush", disk==before && gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR);
-    reset(); init(); gGbaSaveShared.saveDataSize=0; gGbaSaveShared.saveState=GBA_SAVE_STATE_ERROR;
-    result("file_backed_retry_rejected", !sav_retryFailedWrite("synthetic.sav"));
+    reset(); init(); result("byte_read_out_of_range",sav_readSaveByteFromFile(40000)==255 && disk.size()==32768);
+    reset(); init(); before=disk;
+    result("byte_write_out_of_range",terminal([]{sav_writeSaveByteToFile(40000,0x79);}) && disk==before);
+    reset(); init(); fault="sync";
+    result("flush_failure_terminal",terminal([]{sav_flushSaveFile();}));
+    reset(); init(); gGbaSaveShared.saveDataSize=SAVE_DATA_SIZE+1; gGbaSaveShared.saveState=GBA_SAVE_STATE_WRITE;
+    result("oversized_buffer_rejected",terminal([]{sav_writePendingFiles();}) && writeCalls==0 && rtcCalls==0);
     reset(); Environment::nitroMode=true; SaveTypeInfo tooLarge{ISNITRO_SAVE_BUFFER_SIZE+1,0};
-    result("nitro_initialization_bounds", !sav_initializeSave(&tooLarge,"synthetic.sav") && openCalls==0);
+    result("nitro_initialization_bounds",!sav_initializeSave(&tooLarge,"synthetic.sav") && openCalls==0);
     reset(); Environment::nitroMode=true; nitro[0]=0x35; nitro[ISNITRO_SAVE_BUFFER_SIZE-1]=0x71;
-    sav_writeSaveByteToFile(ISNITRO_SAVE_BUFFER_SIZE,0x79);
-    result("nitro_byte_bounds", sav_readSaveByteFromFile(ISNITRO_SAVE_BUFFER_SIZE)==255 && nitro[0]==0x35 && nitro[ISNITRO_SAVE_BUFFER_SIZE-1]==0x71 && gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR);
-
+    result("nitro_read_bounds",sav_readSaveByteFromFile(ISNITRO_SAVE_BUFFER_SIZE)==255);
+    result("nitro_write_bounds",terminal([]{sav_writeSaveByteToFile(ISNITRO_SAVE_BUFFER_SIZE,0x79);}) && nitro[0]==0x35 && nitro[ISNITRO_SAVE_BUFFER_SIZE-1]==0x71);
     reset(); init(); sGbaSaveIpcService._saveShared=&gGbaSaveShared;
-    result("arm7_clean_ack", sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Clean);
+    result("arm7_clean_ack",sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Clean);
     gGbaSaveShared.saveState=GBA_SAVE_STATE_DIRTY; sGbaSaveIpcService.Update();
     for(unsigned i=0;i<10;++i) sGbaSaveIpcService.Update();
-    result("arm7_normal_debounce", gGbaSaveShared.saveState==GBA_SAVE_STATE_WRITE && sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Pending);
-    gSaveData[0]=0x79; fault="write"; sav_writePendingFiles();
-    for(unsigned i=0;i<120;++i) sGbaSaveIpcService.Update();
-    result("arm7_terminal_error_ack", gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR && sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Error && writeCalls==1);
-    sState=Arm7State::ExitRequested; volume=0; exits=0; updateArm7ExitRequestedState();
-    result("exit_cancelled_on_error", sState==Arm7State::Idle && volume==127 && exits==0 && gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR);
-    fault.clear(); bool recovered=sav_retryFailedWrite("synthetic.sav");
-    sState=Arm7State::ExitRequested; updateArm7ExitRequestedState();
-    result("explicit_retry_then_clean_exit", recovered && exits==1 && disk[0]==0x79);
-    gGbaSaveShared.saveState=GBA_SAVE_STATE_WAIT; sState=Arm7State::ExitRequested; exits=0; updateArm7ExitRequestedState();
-    result("exit_waits_for_pending", exits==0 && sState==Arm7State::ExitRequested && gGbaSaveShared.saveState==GBA_SAVE_STATE_WRITE);
-    gGbaSaveShared.saveDataSize=0; gGbaSaveShared.saveState=GBA_SAVE_STATE_ERROR;
-    result("arm7_file_backed_error_ack", sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Error);
-    sState=Arm7State::ExitRequested; updateArm7ExitRequestedState();
-    result("file_backed_error_cancels_exit", sState==Arm7State::Idle && exits==0);
-    sGbaSaveIpcService._saveShared=nullptr;
-    result("arm7_unconfigured_clean", sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Clean);
-
-    for(unsigned failedChunk : {2u,3u}) {
-        reset(11); SaveTypeInfo large{131072,0}; failAt["write"]=failedChunk;
-        const bool failed=!sav_initializeSave(&large,"synthetic.sav");
-        const size_t partial=disk.size(); failAt.clear();
-        result((std::string("multi_chunk_fill_retry_")+std::to_string(failedChunk)).c_str(), failed && partial<131072 && sav_initializeSave(&large,"synthetic.sav") && disk.size()==131072 &&
-            std::all_of(disk.begin(),disk.begin()+11,[](u8 b){return b==0x35;}) &&
-            std::all_of(disk.begin()+11,disk.end(),[](u8 b){return b==255;}));
+    result("arm7_normal_debounce",gGbaSaveShared.saveState==GBA_SAVE_STATE_WRITE && sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Pending);
+    for(unsigned size:{0u,32768u}) {
+        gGbaSaveShared.saveDataSize=size; gGbaSaveShared.saveState=GBA_SAVE_STATE_ERROR; volume=127;
+        for(unsigned i=0;i<120;++i) sGbaSaveIpcService.Update();
+        result("arm7_terminal_error_ack_"+std::to_string(size),gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR && sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Error);
+        sState=Arm7State::ExitRequested; exits=0; updateArm7ExitRequestedState();
+        result("exit_stays_muted_on_error_"+std::to_string(size),exits==0 && volume==0 && gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR);
     }
-    reset(); init(); opens=openCalls; const unsigned closes=closeCalls;
-    result("retry_rejects_clean_or_null", !sav_retryFailedWrite("synthetic.sav") && !sav_retryFailedWrite(nullptr) && openCalls==opens && closeCalls==closes);
+    gGbaSaveShared.saveDataSize=32768; gGbaSaveShared.saveState=GBA_SAVE_STATE_WAIT; sState=Arm7State::ExitRequested; exits=0;
+    updateArm7ExitRequestedState();
+    result("exit_waits_for_pending",exits==0 && sState==Arm7State::ExitRequested && gGbaSaveShared.saveState==GBA_SAVE_STATE_WRITE);
+    gGbaSaveShared.saveState=GBA_SAVE_STATE_CLEAN; updateArm7ExitRequestedState();
+    result("clean_exit",exits==1);
+    sGbaSaveIpcService._saveShared=nullptr;
+    result("arm7_unconfigured_clean",sGbaSaveIpcService.FlushSaveIfDirty()==SaveFlushResult::Clean);
+    for(unsigned failedChunk:{2u,3u}) {
+        reset(11); SaveTypeInfo large{131072,SAVE_TYPE_FLASH1M_V103}; failAt["write"]=failedChunk;
+        result("multi_chunk_fill_terminal_"+std::to_string(failedChunk),!sav_initializeSave(&large,"synthetic.sav") && disk.size()<131072 && closeCalls==0 && syncCalls==0);
+    }
+    std::vector<u16> screen(256*192+2,0xA55A);
+    sav_renderPersistenceFaultScreen(screen.data()+1);
+    result("terminal_screen_bounds",screen.front()==0xA55A && screen.back()==0xA55A);
+    result("terminal_screen_visible_text",std::count(screen.begin()+1,screen.end()-1,screen[1])<256*192);
+    gGbaSaveShared.saveState=GBA_SAVE_STATE_ERROR; sGbaSaveIpcService._saveShared=&gGbaSaveShared;
+    sExitMode=ExitMode::PowerOff; exits=0; sSaveFaultSeen=false; updateArm7ExitRequestedState();
+    result("pending_poweroff_canceled_on_first_fault",exits==0 && sSaveFaultSeen && volume==0);
+    updateArm7ExitRequestedState();
+    result("explicit_poweroff_after_error",exits==1 && volume==0 && gGbaSaveShared.saveState==GBA_SAVE_STATE_ERROR);
+    return failures?1:0;
 }

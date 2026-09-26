@@ -51,13 +51,17 @@ def machine(image):
     for address,data in image: cpu.mem_write(address,data)
     return cpu
 
-def call(cpu,address,*values):
+def call(cpu,address,*values,expect_fault=False):
     cpu.reg_write(UC_ARM_REG_CPSR,0xD3)
     cpu.reg_write(UC_ARM_REG_SP,0x0300F000)
     cpu.reg_write(UC_ARM_REG_LR,0x07000000)
     for reg,value in zip(REGS,values): cpu.reg_write(reg,value)
     for i,reg in enumerate(SAVED): cpu.reg_write(reg,0xBEEF0000+i)
     cpu.emu_start(address,0x07000000,count=200000)
+    if expect_fault:
+        assert cpu.reg_read(UC_ARM_REG_PC)==symbols['sav_persistenceFault'] & ~1,'terminal hook not reached'
+        assert cpu.mem_read(symbols['gGbaSaveShared'],1)==b'\4','error not published before terminal hook'
+        return None
     assert cpu.reg_read(UC_ARM_REG_PC)==0x07000000,'instruction budget exhausted'
     assert cpu.reg_read(UC_ARM_REG_SP)==0x0300F000,'stack imbalance'
     assert [cpu.reg_read(r) for r in SAVED]==[0xBEEF0000+i for i in range(len(SAVED))],'callee-saved registers'
@@ -67,7 +71,7 @@ file_size_offset=offset(args.arm9,'FIL','obj')+offset(args.arm9,'FFOBJID','objsi
 shared_size_offset=offset(args.arm9,'gba_save_shared_t','saveDataSize')
 assert shared_size_offset==8 and offset(args.arm9,'gba_save_shared_t','saveState')==0
 
-for name in ('sSaveFileOpen','sByteWriteFailed'):
+for name in ('sSaveFileOpen',):
     address=next(value for key,value in symbols.items() if key.endswith(name))
     assert 0x02000000<=address<0x02400000,(name,hex(address),'byte latch must not be VRAM-backed')
     passed(f'main-ram-byte-latch-{name}')
@@ -106,6 +110,10 @@ def fixture(failure='',nitro=False):
     names={symbols[n]&~1:n for n in ('f_lseek','f_read','f_write','f_sync','vm_enableNestedIrqs','vm_disableNestedIrqs')}
     def hook(c,pc,size,_):
         nonlocal cursor
+        if pc == symbols['sav_persistenceFault'] & ~1:
+            events.append('terminal')
+            c.emu_stop()
+            return
         name=names.get(pc)
         if name:
             values=[c.reg_read(r) for r in REGS]
@@ -138,23 +146,25 @@ def fixture(failure='',nitro=False):
 for failure in ('','seek','read','short-read'):
     for address in (0,32767,32768,0xFFFFFFFF):
         cpu,disk,events=fixture(failure)
-        value=call(cpu,symbols['sav_readSaveByteFromFile'],address)
-        assert value==(0x35 if not failure and address<32768 else 255)
-        assert events[0]=='vm_enableNestedIrqs' and events[-1]=='vm_disableNestedIrqs'
+        fatal=bool(failure) and address<32768
+        value=call(cpu,symbols['sav_readSaveByteFromFile'],address,expect_fault=fatal)
+        if fatal:
+            assert events[-1]=='terminal'
+            assert 'f_write' not in events and 'f_sync' not in events
+        else:
+            assert value==(0x35 if address<32768 else 255)
+            assert events[0]=='vm_enableNestedIrqs' and events[-1]=='vm_disableNestedIrqs'
         if address>=32768: assert 'f_lseek' not in events
         passed(f'byte-read-{failure or "normal"}-{address}')
 
 for failure in ('','seek','write','short-write'):
     for address in (0,32767,32768):
         cpu,disk,events=fixture(failure)
-        call(cpu,symbols['sav_writeSaveByteToFile'],address,0x79)
         succeeds=not failure and address<32768
+        call(cpu,symbols['sav_writeSaveByteToFile'],address,0x79,expect_fault=not succeeds)
         assert disk==(bytearray([0x35])*address+bytearray([0x79])+bytearray([0x35])*(32767-address) if succeeds else bytearray([0x35])*32768)
         assert cpu.mem_read(symbols['gGbaSaveShared'],1)==bytes([0 if succeeds else 4])
-        if not succeeds:
-            # A successful sync must not erase evidence of the missing byte.
-            call(cpu,symbols['sav_flushSaveFile'])
-            assert cpu.mem_read(symbols['gGbaSaveShared'],1)==b'\4'
+        if not succeeds: assert events[-1]=='terminal' and 'f_sync' not in events
         passed(f'byte-write-{failure or "normal"}-{address}')
 
 for failure in ('','seek','write','short-write','sync'):
@@ -162,7 +172,7 @@ for failure in ('','seek','write','short-write','sync'):
     call(cpu,symbols['sav_initializeFileWriteScheduler'])
     before=bytes(cpu.mem_read(symbols['emu_vblankIrqSkipSaveCheckInstruction'],4))
     cpu.mem_write(symbols['gGbaSaveShared'],b'\3')
-    call(cpu,symbols['sav_writeSaveToFile'])
+    call(cpu,symbols['sav_writeSaveToFile'],expect_fault=bool(failure))
     assert cpu.mem_read(symbols['gGbaSaveShared'],1)==bytes([4 if failure else 0])
     assert bytes(cpu.mem_read(symbols['emu_vblankIrqSkipSaveCheckInstruction'],4))==before
     if failure=='seek': assert 'f_write' not in events and 'f_sync' not in events
@@ -171,16 +181,23 @@ for failure in ('','seek','write','short-write','sync'):
     passed(f'deferred-{failure or "normal"}')
 
 cpu,disk,events=fixture('sync')
-call(cpu,symbols['sav_flushSaveFile'])
-assert cpu.mem_read(symbols['gGbaSaveShared'],1)==b'\4'
+call(cpu,symbols['sav_flushSaveFile'],expect_fault=True)
 passed('standalone-sync-error')
 for address in (0,131071,131072,0xFFFFFFFF):
     cpu,disk,events=fixture(nitro=True)
-    call(cpu,symbols['sav_writeSaveByteToFile'],address,0x79)
-    value=call(cpu,symbols['sav_readSaveByteFromFile'],address)
-    assert value==(0x79 if address<131072 else 255)
+    fatal=address>=131072
+    call(cpu,symbols['sav_writeSaveByteToFile'],address,0x79,expect_fault=fatal)
+    if not fatal:
+        assert call(cpu,symbols['sav_readSaveByteFromFile'],address)==0x79
     assert not any(e.startswith('f_') for e in events)
     passed(f'nitro-byte-bounds-{address}')
+
+for operation in ('sav_writePendingFiles',):
+    cpu,disk,events=fixture()
+    cpu.mem_write(symbols['gGbaSaveShared'],b'\4')
+    call(cpu,symbols[operation],0,0x79,expect_fault=True)
+    assert events==['terminal'],'terminal state must block all subsequent filesystem I/O'
+    passed(f'latched-no-io-{operation}')
 
 if args.arm7:
     arm7_symbols,arm7_sections=load_elf(args.arm7)

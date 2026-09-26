@@ -9,6 +9,7 @@
 #include "SaveSwi.h"
 #include "SaveTypeInfo.h"
 #include "cp15.h"
+#include "Cpsr.h"
 #include "Peripherals/RomGpio/RomGpio.h"
 #include "VirtualMachine/VMNestedIrq.h"
 #include "MemoryEmulator/RomDefs.h"
@@ -17,6 +18,7 @@
 #include "GbaSaveIpcCommand.h"
 #include "Save.h"
 #include "SaveSignatureSearch.h"
+#include "SaveFault.h"
 
 #define DEFAULT_SAVE_SIZE   (32 * 1024)
 
@@ -32,7 +34,14 @@ gba_save_shared_t gGbaSaveShared;
 static DWORD sClusterTable[64];
 static u32 sSkipSaveCheckInstruction;
 [[gnu::section(".ewram.bss")]] static bool sSaveFileOpen;
-[[gnu::section(".ewram.bss")]] static bool sByteWriteFailed;
+// No error path returns to the guest or performs further filesystem I/O.
+[[gnu::noreturn]] static void saveIoFailed()
+{
+    arm_disableIrqs();
+    gGbaSaveShared.saveState = GBA_SAVE_STATE_ERROR;
+    dc_drainWriteBuffer();
+    sav_persistenceFault();
+}
 
 [[gnu::section(".ewram")]] void sav_initializeFileWriteScheduler(void)
 {
@@ -122,18 +131,10 @@ static bool fillSaveFile(u32 start, u32 end)
     return f_sync(&gSaveFile) == FR_OK;
 }
 
-static bool closeSaveFile(void)
-{
-    if (!sSaveFileOpen) return true;
-    if (f_close(&gSaveFile) != FR_OK) return false;
-    sSaveFileOpen = false;
-    return true;
-}
-
 bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
 {
-    // A failed close leaves a live FatFs object. Never overwrite it on retry.
-    if (!closeSaveFile()) return false;
+    // Initialization is boot-only. Never overwrite or flush a live failed object.
+    if (sSaveFileOpen) return false;
     u32 saveSize = saveTypeInfo ? saveTypeInfo->size : DEFAULT_SAVE_SIZE;
     if (Environment::IsIsNitroEmulator() && saveSize > ISNITRO_SAVE_BUFFER_SIZE)
         return false;
@@ -141,7 +142,6 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
         (saveTypeInfo->type & SAVE_TYPE_MASK) == SAVE_TYPE_SRAM;
     if (isSram && saveSize > SAVE_DATA_SIZE)
         return false;
-    sByteWriteFailed = false;
     memset(gSaveData, SAVE_DATA_FILL, SAVE_DATA_SIZE);
     if (Environment::IsIsNitroEmulator())
     {
@@ -162,7 +162,6 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
         if ((initialSize < saveSize && !fillSaveFile(initialSize, saveSize)) ||
             !loadSaveClusterMap())
         {
-            closeSaveFile();
             return false;
         }
 
@@ -170,13 +169,11 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
         {
             if (f_rewind(&gSaveFile) != FR_OK)
             {
-                closeSaveFile();
                 return false;
             }
             UINT read = 0;
             if (f_read(&gSaveFile, gSaveData, saveSize, &read) != FR_OK || read != saveSize)
             {
-                closeSaveFile();
                 return false;
             }
         }
@@ -185,13 +182,11 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
         {
             if (f_rewind(&gSaveFile) != FR_OK)
             {
-                closeSaveFile();
                 return false;
             }
             UINT read = 0;
             if (f_read(&gSaveFile, (void*)ISNITRO_SAVE_BUFFER, saveSize, &read) != FR_OK || read != saveSize)
             {
-                closeSaveFile();
                 return false;
             }
         }
@@ -235,11 +230,13 @@ extern "C" u8 sav_readSaveByteFromFile(u32 saveAddress)
     }
     else
     {
-        if (saveAddress < f_size(&gSaveFile) && f_lseek(&gSaveFile, saveAddress) == FR_OK)
+        if (saveAddress < f_size(&gSaveFile))
         {
+            if (f_lseek(&gSaveFile, saveAddress) != FR_OK)
+                saveIoFailed();
             UINT bytesRead = 0;
             if (f_read(&gSaveFile, &saveByte, 1, &bytesRead) != FR_OK || bytesRead != 1)
-                saveByte = SAVE_DATA_FILL;
+                saveIoFailed();
         }
     }
     vm_disableNestedIrqs();
@@ -265,10 +262,9 @@ extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
     }
     if (!written)
     {
-        // A later successful sync cannot recover the missing byte payload.
-        sByteWriteFailed = true;
-        gGbaSaveShared.saveState = GBA_SAVE_STATE_ERROR;
-        dc_drainWriteBuffer();
+        // Stop before the EEPROM/FLASH wrapper can discard this byte or
+        // report success and continue issuing the remainder of a save.
+        saveIoFailed();
     }
     vm_disableNestedIrqs();
 }
@@ -276,11 +272,8 @@ extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
 extern "C" void sav_flushSaveFile(void)
 {
     vm_enableNestedIrqs();
-    if ((!Environment::IsIsNitroEmulator() && f_sync(&gSaveFile) != FR_OK) || sByteWriteFailed)
-    {
-        gGbaSaveShared.saveState = GBA_SAVE_STATE_ERROR;
-        dc_drainWriteBuffer();
-    }
+    if (!Environment::IsIsNitroEmulator() && f_sync(&gSaveFile) != FR_OK)
+        saveIoFailed();
     vm_disableNestedIrqs();
 }
 
@@ -297,47 +290,24 @@ extern "C" void sav_writeSaveToFile(void)
             bytesWritten == size && f_sync(&gSaveFile) == FR_OK;
     }
 
-    gGbaSaveShared.saveState = saved && !sByteWriteFailed ? GBA_SAVE_STATE_CLEAN : GBA_SAVE_STATE_ERROR;
+    if (!saved)
+        saveIoFailed();
+    gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
     dc_drainWriteBuffer();
     emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
 }
 
-// Explicit recovery for the buffered SRAM path only. The caller supplies the
-// original save path while emulation is stopped; no retry runs from VBlank.
-// Reopening, rather than clearing FIL.err, recovers FatFs' sticky error state.
-bool sav_retryFailedWrite(const char* savePath)
-{
-    const u32 size = gGbaSaveShared.saveDataSize;
-    if (!savePath || gGbaSaveShared.saveState != GBA_SAVE_STATE_ERROR ||
-        size == 0 || size > SAVE_DATA_SIZE || Environment::IsIsNitroEmulator())
-        return false;
-    if (!closeSaveFile()) return false;
-    if (f_open(&gSaveFile, savePath, FA_OPEN_EXISTING | FA_READ | FA_WRITE) != FR_OK)
-        return false;
-    sSaveFileOpen = true;
-    if (f_size(&gSaveFile) < size || !loadSaveClusterMap())
-    {
-        closeSaveFile();
-        return false;
-    }
-    sav_writeSaveToFile();
-    // Recovery is invoked outside the combined deferred writer. Do not lose
-    // an independently pending RTC sidecar when the save writer restores skip.
-    if (gRomGpioRtcStateDirty)
-        sav_requestFileWrite();
-    return gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN;
-}
-
 [[gnu::section(".ewram")]] void sav_writePendingFiles(void)
 {
+    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR)
+        saveIoFailed();
     if (gGbaSaveShared.saveState == GBA_SAVE_STATE_WRITE)
     {
         sav_writeSaveToFile();
     }
 
     const bool rtcStateIsClean = gRomGpio.FlushRtcStateIfDirty();
-    if ((gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN ||
-         gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR) && rtcStateIsClean)
+    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_CLEAN && rtcStateIsClean)
     {
         emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
     }

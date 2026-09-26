@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fault-inject exact Save.cpp functions and report known defects explicitly."""
+"""Fault-inject exact Save.cpp and ARM7 functions; terminal hooks throw test-only sentinels."""
 import argparse
 import json
 import os
