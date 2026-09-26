@@ -29,12 +29,22 @@ with tempfile.TemporaryDirectory(prefix='gbar3-storage-failure-') as temp:
     (tmp/'production_fs_ipc.h').write_text(stripped(ROOT/'code/core/arm9/source/Fat/FsIpc.cpp'),encoding='utf-8')
     (tmp/'production_diskio.h').write_text(stripped(ROOT/'code/core/arm9/source/Fat/diskio.cpp'),encoding='utf-8')
     (tmp/'production_sd_cache.h').write_text(stripped(ROOT/'code/core/arm9/source/SdCache/SdCache.c'),encoding='utf-8')
+    save_search = (ROOT/'code/core/arm9/source/Save/SaveSignatureSearch.h').exists()
+    if save_search:
+        source = (ROOT/'code/core/arm9/source/Save/Save.cpp').read_text(encoding='utf-8')
+        begin = source.index('static u32* searchHiCode(')
+        (tmp/'production_search.h').write_text(source[begin:source.index('\n#endif',begin)],encoding='utf-8')
+        cache_header = (ROOT/'code/core/arm9/source/SdCache/SdCache.h').read_text(encoding='utf-8')
+        begin = cache_header.index('static inline const void* sdc_getRomBlock(')
+        end = cache_header.index('static inline const void* sdc_getRomBlockWithoutIrqYielding',begin)
+        (tmp/'production_cache_accessor.h').write_text(cache_header[begin:end],encoding='utf-8')
     exe=tmp/('storage.exe' if os.name=='nt' else 'storage')
     command=[os.environ.get('CXX','g++'),'-std=c++17','-g','-Wall','-Wextra','-fpermissive',
              '-I',str(tmp),'-I',str(ROOT/'code/core/common'),'-I',str(ROOT/'code/core/arm9/source'),
              '-I',str(ROOT/'tools/tests/storage_baseline'),
              str(ROOT/'tools/tests/storage_failure_host.cpp'),'-o',str(exe)]
     if os.environ.get('SANITIZE')=='1': command+=['-fsanitize=address,undefined','-fno-omit-frame-pointer']
+    if save_search: command+=['-DTEST_SAVE_SEARCH_CONSUMER']
     subprocess.run(command,check=True)
     report=subprocess.check_output([str(exe)],text=True,timeout=15)
     print(report,end='')
