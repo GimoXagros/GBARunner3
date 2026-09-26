@@ -163,7 +163,7 @@ class LinkedRtc:
             self.cpu.emu_stop()
         elif name == "f_open":
             path = self._cstring(r1)
-            if path == "m1" and not (r2 & FA_WRITE) and self.writes:
+            if path.startswith("m") and not (r2 & FA_WRITE) and self.writes:
                 self.readbacks += 1
             if r2 & FA_CREATE_NEW:
                 if path in self.media:
@@ -370,7 +370,9 @@ def main() -> None:
         assert stacked.media.get("m0") == expected_fresh, \
             "RTC wrapper must execute production flush on synthetic media"
         assert stacked.writes == 1 and stacked.syncs == 1 and \
-            stacked.closed_writes == 1 and stacked.readbacks >= 1
+            stacked.closed_writes == 1 and stacked.readbacks >= 1, \
+            ("linked work-stack commit I/O", stacked.writes, stacked.syncs,
+             stacked.closed_writes, stacked.readbacks)
         high_water = struct.unpack("<I", stacked.cpu.mem_read(
             stacked.work_symbols["rtcWorkStackHighWater"], 4))[0]
         assert 8 < high_water < 2048, "RTC work-stack high-water outside bounds"
@@ -385,7 +387,8 @@ def main() -> None:
             stacked.writes == before_writes, \
             "damaged guard must enter terminal fault before FatFs writes"
 
-    stack_result = "work-stack guards PASS" if stacked.work_available else "work-stack guards NOT RUN"
+    stack_result = (f"work-stack guards PASS, successful-flush high-water {high_water} bytes"
+                    if stacked.work_available else "work-stack guards NOT RUN")
     print("linked ARM9 RTC loader: fresh, legacy gate, pending commit/readback, "
           f"restart GPIO, conflict, {stack_result}; synthetic FatFs/DS clock, "
           "backend callee stack excluded; hardware NOT RUN")
