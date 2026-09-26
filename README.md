@@ -14,23 +14,20 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 ## Current custom release
 
 The current stable custom release is
-[`custom-v0.1.3`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3).
-It promotes the strict JSON validation and build hardening from RC1. Its normal
-`GBARunner3.nds` is byte-identical to RC1 and the RC2 control:
-`9968bb423430b2fcfc6aacec70a5c2e5603f711952c6eb2d6c57fbfac287a3b2`.
-
-On 2026-09-13, the user confirmed that both distorted output and flicker were
-absent after the temporary display-comparison setting was removed and defaults
-were restored. This is an observed recovery in the reported setup, not evidence
-of a new display/IRQ code fix or a full compatibility pass. The exact executable
-hash for that hardware session was not supplied. See the
-[release and investigation record](docs/v013-release.md).
+[`custom-v0.1.4`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.4).
+It promotes RC3's sequence-owned storage results and logical 4 KiB save-signature
+search after the user reported normal hardware operation on 2026-09-27. The
+normal executable retains RC3 SHA-256
+`b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90`.
+Specific device/title/save-type coverage and physical SD error or power-cut
+tests were not supplied. See the [v0.1.4 release record](docs/releases/custom-v0.1.4.md)
+for validation, installation, and remaining save/RTC recovery limitations.
 
 The stable package contains one normal executable, the same 304 title configs,
 installation notes and checksums. It contains no diagnostic executable and no
-global `gbarunner3.json`. RC1/RC2 and previous stable releases remain available.
-Draft PRs [#5](https://github.com/GimoXagros/GBARunner3/pull/5) and
-[#6](https://github.com/GimoXagros/GBARunner3/pull/6) remain excluded.
+global `gbarunner3.json`. Previous releases remain available for rollback.
+RTC migration PR #16 and save-recovery PR #18 remain excluded; legacy drafts
+#5/#6 are superseded work, not additional runtime changes in this release.
 
 ## Changes in this fork
 
@@ -55,7 +52,7 @@ Draft PRs [#5](https://github.com/GimoXagros/GBARunner3/pull/5) and
 
 ## Installation
 
-1. Download `GBARunner3.zip` from `custom-v0.1.3` and check its release hashes.
+1. Download `GBARunner3.zip` from `custom-v0.1.4` and check its release hashes.
    Preserve existing saves and settings before updating.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Merge the included `_gba/configs` directory into `/_gba/configs` on the SD
