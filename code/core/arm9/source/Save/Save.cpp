@@ -71,7 +71,20 @@ bool sav_tryPatchFunction(const u32* signature, u32 saveSwiNumber, void* patchFu
     if (!function)
     {
         u32 romSize = f_size(&gFile);
-        function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
+        if (romSize >= ROM_LINEAR_SIZE + 4)
+        {
+            // The final 12 linear bytes and first cached block form one
+            // logical 4 KiB boundary. Keep the tail before resolving cache.
+            alignas(4) u8 linearTail[12];
+            memcpy(linearTail, (const void*)(ROM_LINEAR_END_DS_ADDRESS - 12), 12);
+            const auto* next = (const u8*)sdc_getRomBlock(ROM_LINEAR_END_GBA_ADDRESS);
+            const u32 match = sav_findSplitBoundary16(signature, ROM_LINEAR_END_GBA_ADDRESS,
+                linearTail, next, std::min<u32>(12, romSize - ROM_LINEAR_SIZE));
+            if (match != UINT32_MAX)
+                function = (u32*)(ROM_LINEAR_DS_ADDRESS + match - ROM_LINEAR_GBA_ADDRESS);
+        }
+        if (!function)
+            function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
     }
 #endif
     if (!function)

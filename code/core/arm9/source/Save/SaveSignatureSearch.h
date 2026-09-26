@@ -6,6 +6,21 @@
 // Addresses are logical primary GamePak addresses in a half-open search range.
 // getBlock returns a block base that may be invalidated by the next getBlock.
 // The return value never exposes a temporary cache pointer.
+// A separately mapped linear/cache seam needs the same bounded overlap.
+inline uint32_t sav_findSplitBoundary16(const uint32_t* signature, uint32_t boundary,
+    const uint8_t* linearTail, const uint8_t* nextBlock, uint32_t nextLength)
+{
+    if (!linearTail || !nextBlock || boundary < 12 || nextLength < 4) return UINT32_MAX;
+    alignas(4) uint8_t overlap[24];
+    std::memcpy(overlap, linearTail, 12);
+    const uint32_t copied = std::min<uint32_t>(12, nextLength);
+    std::memcpy(overlap + 12, nextBlock, copied);
+    for (uint32_t offset = 0; offset < 12 && offset + 16 <= 12 + copied; offset += 4)
+        if (std::memcmp(overlap + offset, signature, 16) == 0)
+            return boundary - 12 + offset;
+    return UINT32_MAX;
+}
+
 template<class GetBlock, class FastSearch>
 [[gnu::always_inline]] inline uint32_t sav_findSignature16(const uint32_t* signature, uint32_t start, uint32_t end,
     GetBlock getBlock, FastSearch fastSearch)

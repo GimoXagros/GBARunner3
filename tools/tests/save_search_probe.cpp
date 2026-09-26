@@ -25,3 +25,16 @@ extern "C" uint32_t search_probe(const uint32_t* signature, uint32_t start, uint
 {
     return sav_findSignature16(signature, start, end, probe_get_block, mem_fastSearch16);
 }
+
+extern "C" __attribute__((noinline, used)) const uint32_t* fast_probe(
+    const uint32_t* data, uint32_t size, const uint32_t* signature)
+{
+    return mem_fastSearch16(data, size, signature);
+}
+
+extern "C" __attribute__((noinline, used)) uint32_t seam_probe(
+    const uint32_t* signature, const uint8_t* linearTail,
+    const uint8_t* nextBlock, uint32_t nextLength)
+{
+    return sav_findSplitBoundary16(signature, 0x08200000, linearTail, nextBlock, nextLength);
+}
