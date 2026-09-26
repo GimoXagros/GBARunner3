@@ -1,36 +1,36 @@
-# GBARunner3 Custom v0.1.3-rc3 — Storage Validation Candidate
+# custom-v0.1.3-rc3 배포 기록
 
-릴리스 태그: `custom-v0.1.3-rc3`.
+이 문서는 2026-09-20 공개 당시의 검증 기록입니다. 이후 2026-09-27 사용자가 정상 실기 동작을 보고하고 PR #15/#19/#20 통합과 v0.1.4 배포를 요청했습니다. 아래의 미검증·권장판 표기는 RC3 공개 당시 기준이며, 후속 정식판 상태는 Releases에서 확인합니다.
 
-이 버전은 저장장치 오류 전달과 4 KiB 경계의 저장 기능 검색을 실기에서 검증하기 위한 **프리릴리즈**입니다. 정식 권장판은 계속 [custom-v0.1.3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3)입니다. **Hardware verification: NOT COMPLETED.** 중요한 저장 파일을 먼저 백업하고 복사본으로 시험하세요.
+[custom-v0.1.3-rc3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc3)은 저장장치 오류 전달과 고주소 ROM의 저장 기능 검색을 실기에서 검증하기 위한 **프리릴리즈**입니다. **Hardware verification: NOT COMPLETED.** 정식 권장판은 계속 [custom-v0.1.3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3)입니다. 중요한 save와 개인 설정을 백업한 뒤 복사본으로 시험하세요. [실기 테스트 안내](HARDWARE-TEST-custom-v0.1.3-rc3.md)를 따르고, 문제가 생기면 정식판 NDS로 돌아가세요.
 
-## 포함 범위
+## 포함 범위와 동작
 
-- PR #15: ARM7 DLDI/DSi-SD 결과를 sequence가 소유하는 transaction result로 ARM9의 FsIpc, diskio, FatFs 및 SD cache까지 전달합니다. 실패한 cache fetch는 유효한 ROM mapping으로 공개하지 않습니다.
-- PR #19 및 RC3 독립 검토 보완: 기존 4-byte alignment 계약을 유지하면서, 물리적으로 연속하지 않거나 재사용된 cache slot 사이의 logical 4 KiB 경계와 2 MiB 선형 ROM/고주소 cache 경계를 넘는 저장 기능 signature를 검색합니다. 기존 assembly 검색기의 잘못된 첫 단어 뒤 정상 후보 누락도 수정했습니다. 최종 bounded window와 실패한 fetch도 처리합니다.
-- develop에 병합된 PR #17의 linked ROM DMA boundary 테스트와 관련 자동검사.
+- PR #15: ARM7의 DLDI/DSi-SD read/write 결과를 sequence ownership과 함께 ARM9의 diskio/FatFs 및 SD cache에 전달합니다. 실패한 cache mapping을 공개하지 않으며 ROM storage error에서 fail-closed로 중단합니다. 자동 재시도나 복구 UI는 없습니다.
+- PR #19: 물리적으로 연속하지 않거나 재사용되는 cache slot 사이의 logical 4 KiB 경계, 2 MiB 선형 ROM/고주소 cache 경계의 4-byte-aligned save signature를 bounded search로 찾습니다. 동일 prefix 뒤의 정상 후보와 마지막 window 누락도 수정했습니다.
+- `develop`의 PR #17 linked ROM DMA boundary 검사와 관련 회귀 검사를 유지했습니다.
 
-PR #18 save recovery, PR #16 RTC BCD 변경, 기존 초안 PR #5/#6, 화면 깜박임 진단 코드, 자동 복구 UI, 게임별 우회 코드 및 성능 개선 주장은 포함하지 않습니다.
+PR #16 RTC BCD 수정, PR #18 save recovery, 기존 초안 PR #5/#6, 화면 진단 코드와 게임별 우회 코드는 포함하지 않았습니다. RC3의 runtime 변경은 별도 `release/custom-v0.1.3-rc3` 브랜치와 태그에만 있으며, 이 문서 PR은 `develop`에 후보 코드를 병합하지 않습니다. 실기에서의 물리 SD 오류·제거·전원 차단, ARM7/ARM9 cache 동시성 및 자동 복구는 검증되지 않았습니다. 일반 사용자에게 SD 제거 또는 전원 차단 실험을 요청하지 않습니다.
 
-## 알려진 동작과 제한
+## 소스와 공개 파일 식별
 
-ROM 저장장치 오류가 발생하면 오래되거나 손상된 데이터를 실행하지 않도록 fail-closed로 멈춥니다. fault 주소를 기록하지만 화면에 복구 UI를 표시하거나 자동으로 재시도하지 않습니다. 이 동작은 물리 SD 카드 오류, 카드 제거, 전원 차단을 통해 아직 검증하지 않았습니다. 실기 하드웨어의 속도나 지연도 측정하지 않았습니다.
+| 항목 | 값 |
+| --- | --- |
+| 출발 `develop` | `405177357aeaf0ff464e727ab2010433ed132b3c` |
+| release branch / annotated tag target | `5cb2111be1d3893ad2a31a11a22860dc613645e9` |
+| toolchain | `devkitpro/devkitarm:20241104` |
+| libtwl submodule | `e069645bed14a93e149e873e9273f04851e3a04e` |
+| application NDS SHA-256 | `b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90` |
+| test NDS SHA-256 (검증용, ZIP 미포함) | `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7` |
+| 공개 ZIP SHA-256 / GitHub asset digest | `e9c8e49c34729856b2d0389c26def1176155934ac414393859675db29d780b53` |
+| 설정 수 / Git 원본 바이트 manifest SHA-256 | 304 / `0ada1a9e67e36a6b9780d65ad6c39f3eb8922c1750691ac8db46f34ec9d078b8` |
 
-저장 파일 쓰기 호출부의 기존 실패 처리 및 dirty-state 복구 정책은 PR #18에 남겨 두었습니다. 이 시험판은 저장 파일 쓰기 실패 후 데이터 보존이나 자동 재시도를 보장하지 않으므로 중요한 저장 파일에는 사용하지 마세요.
+[태그 전용 릴리스 빌드](https://github.com/GimoXagros/GBARunner3/actions/runs/35457456332)가 성공했고, 공개 [GBARunner3.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.3-rc3/GBARunner3.zip)을 2026-09-20 KST에 새 디렉터리로 다시 받아 검증했습니다. ZIP의 309개 항목은 허용 목록과 정확히 같고, `SHA256SUMS` 전체와 packaged NDS, source/tag commit, 설정 304개의 원본 바이트가 일치했습니다. ROM, BIOS, save, ELF, MAP, test NDS 및 진단 파일은 공개되지 않았습니다. 공개 자산은 ZIP 하나입니다.
 
-## 설치와 되돌리기
+## 자동 검증과 실기 대기열
 
-기존 save와 개인 설정을 백업합니다. ZIP의 `GBARunner3.nds`는 정식판과 구분되는 파일명으로 보관한 뒤 launcher에서 실행하고, `_gba/configs`를 필요한 위치에 복사합니다. 기존에 수정한 설정을 무조건 덮어쓰지 마세요. 문제가 생기면 정식판 custom-v0.1.3의 NDS로 돌아갑니다. 일반 사용자에게 SD 제거 또는 전원 차단 실험을 요청하지 않습니다.
+[기존 저장장치 실패 대조군](https://github.com/GimoXagros/GBARunner3/actions/runs/35455480369)에서 여섯 실패가 재현됐고, [최종 nightly](https://github.com/GimoXagros/GBARunner3/actions/runs/35456962701)에서는 production storage 48/48, 실제 FatFs 22/22, linked ARM7/ARM9 transport 16/16, linked save search 893/893, ROM DMA 63/63, JIT/address 45/45, parser 19/19, EEPROM source 12/12, repository invariant 4/4가 통과했습니다. ASan/UBSan, JSON, IRQ, hicode 및 release upload mock도 통과했습니다. [고정 도구 재현성·패키지 예행연습](https://github.com/GimoXagros/GBARunner3/actions/runs/35456972992)에서는 j1/j2/j4 각각 두 번의 application/test NDS 해시가 모두 같았습니다. 독립 읽기 전용 및 최종 XHigh 검토에서 실행 가능한 지적은 없었습니다. 선택적 최신 도구의 기존 libtwl `setVectorBase` 선언 실패는 여전히 별개입니다.
 
-자세한 실기 확인 항목은 동봉된 `HARDWARE-TEST-v0.1.3-rc3.md`를 따르세요. ROM, BIOS, save 파일을 제출할 필요는 없습니다. 결과와 해시만 기록합니다.
+실기 검증은 아직 완료되지 않았습니다. BIOS/title/menu, 10분 이상 gameplay, BRIK·AZWJ·B3TJ·BE8K·BPRE·BPEE·B8CJ, SRAM·EEPROM V124·FLASH·FLASH1M의 저장→정상 종료→재시작→로드, 확장 ROM의 4 KiB 경계 signature·JIT·ROM DMA를 [실기 테스트 안내](HARDWARE-TEST-custom-v0.1.3-rc3.md)에 따라 확인해야 합니다. B8CJ는 Main Menu → New Game → Save Slot → slot 선택 → intro → gameplay 경로를 기록합니다. RTC는 수정이 포함되지 않았으므로 정식판과 같은 동작인지 smoke 수준으로만 확인합니다.
 
-## 자동 검증 및 바이너리 식별
-
-고정 도구 버전은 `devkitpro/devkitarm:20241104`입니다. 통합 직후 [nightly 검사](https://github.com/GimoXagros/GBARunner3/actions/runs/35455196672)에서는 production-source storage 48건, 실제 FatFs의 synthetic media 22건, 기존 save signature 19개와 offset 0..4097, linked ARM 검색 551건, linked ARM7/ARM9 transport 16건, ROM DMA 경계 63건, JIT/address 45건, parser 19건 및 repository invariant 4건이 통과했습니다. 독립 검토의 검색 반례를 반영한 linked ARM 검색은 893건(내부 false-prefix, 직접 assembly 호출, 선형/고주소 경계와 잘린 suffix 포함)이 통과했습니다. [고정 도구의 여섯 빌드](https://github.com/GimoXagros/GBARunner3/actions/runs/35455201813)는 j1/j2/j4 각각 두 번씩 application과 test NDS가 동일했습니다. 최종 exact-head CI 실행 링크와 결과는 공개 릴리스 설명에 기록합니다. 이 결과는 synthetic/linked 검사이며 실기 검증을 대신하지 않습니다.
-
-- Application NDS SHA-256: `b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90`
-- Test NDS SHA-256: `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7`
-- 설정 파일: 304개; Git에 저장된 원본 바이트를 이름순 `SHA-256  filename` 행으로 계산한 SHA-256: `0ada1a9e67e36a6b9780d65ad6c39f3eb8922c1750691ac8db46f34ec9d078b8`
-- libtwl submodule: `e069645bed14a93e149e873e9273f04851e3a04e`
-
-검증된 exact source commit은 이 소스에서 생성된 `RELEASE-MANIFEST.json`과 공개 릴리스 설명에 기록합니다. 소스 문서 자체에 자기 commit SHA를 넣으면 SHA가 바뀌므로 빌드 시점의 Git HEAD를 manifest에 기록합니다. 공개 ZIP SHA-256은 업로드된 자산을 다시 내려받아 검증한 뒤 릴리스 설명에 기록합니다.
+**HARDWARE VERIFICATION REQUIRED. custom-v0.1.3 remains the recommended stable release.**
