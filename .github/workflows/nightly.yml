@@ -37,11 +37,35 @@ jobs:
           cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
           cp /tmp/save-search.elf out/tests/
+      - name: Preserve linker diagnostics on a failed build
+        if: failure()
+        run: |
+          mkdir -p link-diagnostics
+          find code/core/arm9 -name '*.map' -exec cp {} link-diagnostics/ \;
+          "$DEVKITARM/bin/arm-none-eabi-size" -A code/core/arm9/build/Save*.o > link-diagnostics/save-object-sections.txt || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: failed-link-diagnostics
+          path: link-diagnostics
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
           path: out
           name: GBARunner3
+
+  save-io-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify save initialization and terminal error paths
+        run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --require-fixed --output save-io-results.json
+      - name: Verify production save I/O through actual FatFs and ARM7 drivers
+        run: SANITIZE=1 python3 tools/tests/test_save_fatfs_host.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-results
+          path: save-io-results.json
 
   hicode-dispatch-semantics:
     needs: build
@@ -78,6 +102,12 @@ jobs:
         run: python3 tools/tests/test_save_search_arm.py out/tests/save-search.elf
       - name: Execute linked ARM7 and ARM9 storage transport
         run: python3 tools/tests/test_storage_linked_arm.py out/tests/arm9.elf out/tests/arm7.elf --output storage-linked-results.json
+      - name: Execute linked save latches and guest SRAM writes after error
+        run: python3 tools/tests/test_save_io_elf.py out/tests/arm9.elf --arm7 out/tests/arm7.elf --output save-io-linked-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-linked-results
+          path: save-io-linked-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: storage-linked-results

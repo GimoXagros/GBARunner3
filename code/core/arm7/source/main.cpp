@@ -31,6 +31,7 @@ static rtos_event_t sVBlankEvent;
 static volatile u8 sMcuIrqFlag = false;
 static Arm7State sState;
 static ExitMode sExitMode;
+static bool sSaveFaultSeen;
 
 static void vblankIrq(u32 irqMask)
 {
@@ -139,8 +140,15 @@ static void updateArm7IdleState()
 {
     checkMcuIrq();
     sGbaSaveIpcService.Update();
+    if (sGbaSaveIpcService.HasSaveError() && !sSaveFaultSeen)
+    {
+        // A power request already pending when saving failed is not informed
+        // consent to discard the failure. Require a new button event.
+        sSaveFaultSeen = true;
+        sState = Arm7State::Idle;
+    }
 
-    if (sState == Arm7State::ExitRequested)
+    if (sState == Arm7State::ExitRequested || sGbaSaveIpcService.HasSaveError())
     {
         snd_setMasterVolume(0); // mute sound
     }
@@ -168,9 +176,21 @@ static bool performExit(ExitMode exitMode)
 
 static void updateArm7ExitRequestedState()
 {
-    if (sGbaSaveIpcService.FlushSaveIfDirty())
+    const auto result = sGbaSaveIpcService.FlushSaveIfDirty();
+    if (result == SaveFlushResult::Clean)
     {
         performExit(sExitMode);
+    }
+    else if (result == SaveFlushResult::Error)
+    {
+        // The terminal ARM9 screen explicitly says unsaved data will be lost.
+        // A held power button may power off; a short reset must not silently
+        // discard the error or resume the game/audio as though saving worked.
+        if (sSaveFaultSeen && sExitMode == ExitMode::PowerOff)
+            performExit(sExitMode);
+        sSaveFaultSeen = true;
+        sState = Arm7State::Idle;
+        snd_setMasterVolume(0);
     }
 }
 
