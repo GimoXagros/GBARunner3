@@ -18,7 +18,7 @@ TAG = "custom-v0.1.4"
 RC3_SOURCE = "5cb2111be1d3893ad2a31a11a22860dc613645e9"
 DEVELOP_BASE = "405177357aeaf0ff464e727ab2010433ed132b3c"
 TOOLCHAIN = "devkitpro/devkitarm:20241104"
-EXPECTED_NDS_SHA256 = "b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90"
+EXPECTED_NDS_SHA256 = "9ddceb528334e6cadb9342245dd6f52a4ae16eafe54a36938dfb71cb5252f758"
 EXPECTED_TEST_NDS_SHA256 = "50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7"
 CONFIG_COUNT = 304
 EXPECTED_CONFIG_MANIFEST_SHA256 = "0ada1a9e67e36a6b9780d65ad6c39f3eb8922c1750691ac8db46f34ec9d078b8"
@@ -47,9 +47,9 @@ def main():
     source = git("rev-parse", "HEAD")
     git("merge-base", "--is-ancestor", RC3_SOURCE, "HEAD")
     require(git("merge-base", "--is-ancestor", DEVELOP_BASE, "HEAD") == "", "develop ancestry missing")
-    for pr in ("ab59a7e37a0f73cbe06aa1be4e4e964a64a4c1a3", "a46b781dc8a290bf12684390a921c73916612c64"):
+    for pr in ("ab59a7e37a0f73cbe06aa1be4e4e964a64a4c1a3", "a46b781dc8a290bf12684390a921c73916612c64", "cee5ea5018013a4edc44eee6b1cff4720dcd27da"):
         git("merge-base", "--is-ancestor", pr, "HEAD")
-    for excluded in ("cee5ea5018013a4edc44eee6b1cff4720dcd27da", "53c9545c47499a97016885894da3b92770366a22"):
+    for excluded in ("53c9545c47499a97016885894da3b92770366a22",):
         git("cat-file", "-e", f"{excluded}^{{commit}}")
         require(subprocess.run([*GIT, "merge-base", "--is-ancestor", excluded, "HEAD"], cwd=ROOT).returncode == 1,
                 f"excluded PR ancestor: {excluded}")
@@ -108,9 +108,10 @@ def main():
             "scope": "normal operation of custom-v0.1.3-rc3",
             "device_title_matrix": "not supplied",
             "physical_media_failure_tests": "not verified",
+            "pr18_save_error_screen": "not hardware verified; automated verification only",
         },
-        "included_prs": [15, 19],
-        "excluded_prs": [16, 18, 5, 6],
+        "included_prs": [15, 18, 19, 20, 21],
+        "excluded_prs": [16, 5, 6],
     }
     (out / "RELEASE-MANIFEST.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     files = sorted(p for p in out.rglob("*") if p.is_file())

@@ -16,9 +16,11 @@ project and adds the RTC and high-ROM compatibility work submitted upstream as
 The current stable custom release is
 [`custom-v0.1.4`](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.4).
 It promotes RC3's sequence-owned storage results and logical 4 KiB save-signature
-search after the user reported normal hardware operation on 2026-09-27. The
-normal executable retains RC3 SHA-256
-`b2e14d0732ca270c4f5f4ff60b70b810017a357f3d48f5e69c4e4d88c6165f90`.
+search after the user reported normal hardware operation on 2026-09-27. It also
+includes PR #18's checked save I/O and terminal save-error screen. This new
+error path is automatically tested but has not been hardware verified.
+Application SHA-256:
+`9ddceb528334e6cadb9342245dd6f52a4ae16eafe54a36938dfb71cb5252f758`.
 Specific device/title/save-type coverage and physical SD error or power-cut
 tests were not supplied. See the [v0.1.4 release record](docs/releases/custom-v0.1.4.md)
 for validation, installation, and remaining save/RTC recovery limitations.
@@ -26,7 +28,7 @@ for validation, installation, and remaining save/RTC recovery limitations.
 The stable package contains one normal executable, the same 304 title configs,
 installation notes and checksums. It contains no diagnostic executable and no
 global `gbarunner3.json`. Previous releases remain available for rollback.
-RTC migration PR #16 and save-recovery PR #18 remain excluded; legacy drafts
+RTC migration PR #16 remains excluded; legacy drafts
 #5/#6 are superseded work, not additional runtime changes in this release.
 
 ## Changes in this fork

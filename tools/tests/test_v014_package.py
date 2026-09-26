@@ -24,6 +24,10 @@ import zipfile
 SCRIPT = Path(__file__).resolve().parents[2] / ".github/scripts/package-v014.py"
 SOURCE = "1" * 40
 LIBTWL = "2" * 40
+PR15_SOURCE = "ab59a7e37a0f73cbe06aa1be4e4e964a64a4c1a3"
+PR18_SOURCE = "cee5ea5018013a4edc44eee6b1cff4720dcd27da"
+PR19_SOURCE = "a46b781dc8a290bf12684390a921c73916612c64"
+PR16_SOURCE = "53c9545c47499a97016885894da3b92770366a22"
 
 
 def sha256(data):
@@ -62,6 +66,9 @@ class StablePackageTests(unittest.TestCase):
         self.out = self.root / "output"
         self.archive = self.root / "package.zip"
         self.tag_target = SOURCE
+        self.missing_ancestor = None
+        self.missing_excluded_object = False
+        self.excluded_ancestry_returncode = 1
         self.env = {
             "GITHUB_REF": "refs/tags/custom-v0.1.4",
             "V014_RELEASE_TAG": "custom-v0.1.4",
@@ -76,15 +83,30 @@ class StablePackageTests(unittest.TestCase):
             return self.tag_target
         if args == ("rev-parse", "HEAD:code/libs/libtwl"):
             return LIBTWL
-        if args[:2] == ("merge-base", "--is-ancestor") or args[:2] == ("cat-file", "-e"):
+        if args[:2] == ("merge-base", "--is-ancestor"):
+            self.assertEqual(args[3:], ("HEAD",))
+            self.assertIn(args[2], {
+                self.package.RC3_SOURCE, self.package.DEVELOP_BASE,
+                PR15_SOURCE, PR18_SOURCE, PR19_SOURCE,
+            })
+            if args[2] == self.missing_ancestor:
+                raise subprocess.CalledProcessError(1, ["git", *args])
+            return ""
+        if args == ("cat-file", "-e", f"{PR16_SOURCE}^{{commit}}"):
+            if self.missing_excluded_object:
+                raise subprocess.CalledProcessError(128, ["git", *args])
             return ""
         raise AssertionError(f"Unexpected Git request: {args}")
+
+    def fake_excluded_ancestry(self, args, **kwargs):
+        self.assertEqual(args[-4:], ["merge-base", "--is-ancestor", PR16_SOURCE, "HEAD"])
+        return subprocess.CompletedProcess(args, self.excluded_ancestry_returncode)
 
     def invoke(self, mode="published"):
         args = [str(SCRIPT), "--mode", mode, "--out", str(self.out), "--zip", str(self.archive)]
         output = io.StringIO()
         with patch.object(self.package, "git", side_effect=self.fake_git), \
-                patch.object(self.package.subprocess, "run", return_value=subprocess.CompletedProcess([], 1)), \
+                patch.object(self.package.subprocess, "run", side_effect=self.fake_excluded_ancestry), \
                 patch.dict(os.environ, self.env, clear=True), \
                 patch.object(sys, "argv", args), contextlib.redirect_stdout(output):
             self.package.main()
@@ -122,7 +144,14 @@ class StablePackageTests(unittest.TestCase):
             self.assertEqual(manifest["nds_sha256"], self.package.EXPECTED_NDS_SHA256)
             self.assertEqual(manifest["test_nds_sha256"], self.package.EXPECTED_TEST_NDS_SHA256)
             self.assertEqual(manifest["hardware_validation"]["status"], "user-reported-pass")
+            self.assertEqual(manifest["hardware_validation"]["scope"], "normal operation of custom-v0.1.3-rc3")
+            self.assertEqual(manifest["hardware_validation"]["device_title_matrix"], "not supplied")
             self.assertEqual(manifest["hardware_validation"]["physical_media_failure_tests"], "not verified")
+            self.assertEqual(manifest["hardware_validation"]["pr18_save_error_screen"],
+                             "not hardware verified; automated verification only")
+            self.assertEqual(set(manifest["included_prs"]), {15, 18, 19, 20, 21})
+            self.assertEqual(set(manifest["excluded_prs"]), {16, 5, 6})
+            self.assertTrue(set(manifest["included_prs"]).isdisjoint(manifest["excluded_prs"]))
             self.assertEqual(archive.read("GBARunner3.nds"), self.inputs["code/bootstrap/GBARunner3.nds"])
             for config in ("AAAA.json", "ZZZZ.json"):
                 self.assertEqual(archive.read(f"_gba/configs/{config}"), self.inputs[f"configs/{config}"])
@@ -132,6 +161,40 @@ class StablePackageTests(unittest.TestCase):
     def test_dry_run_without_release_event_metadata(self):
         self.env = {}
         self.assertEqual(self.invoke(mode="dry-run")["channel"], "stable")
+
+    def test_rejects_missing_required_ancestry_before_creating_package(self):
+        for ancestor in (self.package.RC3_SOURCE, self.package.DEVELOP_BASE,
+                         PR15_SOURCE, PR18_SOURCE, PR19_SOURCE):
+            with self.subTest(ancestor=ancestor):
+                self.missing_ancestor = ancestor
+                with self.assertRaises(subprocess.CalledProcessError) as caught:
+                    self.invoke()
+                self.assertEqual(caught.exception.cmd[-2:], [ancestor, "HEAD"])
+                self.assertFalse(self.out.exists())
+                self.assertFalse(self.archive.exists())
+
+    def test_dry_run_also_rejects_missing_pr18_ancestry(self):
+        self.env = {}
+        self.missing_ancestor = PR18_SOURCE
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.invoke(mode="dry-run")
+        self.assertFalse(self.out.exists())
+        self.assertFalse(self.archive.exists())
+
+    def test_rejects_included_pr16(self):
+        self.excluded_ancestry_returncode = 0
+        self.assert_rejected("excluded PR ancestor")
+
+    def test_git_failure_does_not_count_as_proven_pr16_exclusion(self):
+        self.excluded_ancestry_returncode = 128
+        self.assert_rejected("excluded PR ancestor")
+
+    def test_rejects_missing_pr16_object_instead_of_assuming_exclusion(self):
+        self.missing_excluded_object = True
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.invoke()
+        self.assertFalse(self.out.exists())
+        self.assertFalse(self.archive.exists())
 
     def test_rejects_wrong_release_ref(self):
         self.env["GITHUB_REF"] = "refs/heads/develop"
