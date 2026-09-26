@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Trace driver failure through actual ARM7 handlers / FsIpc / diskio.
+
+Known failures are deliberately NOT accepted by --require-fixed. Default mode
+asserts their exact identity, so green observation CI never means fixed storage.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+
+ROOT=Path(__file__).resolve().parents[2]
+KNOWN_FAILURES={f'{device}_{case}' for device in ('dldi','dsi') for case in
+                ('failed_read_propagated','failed_write_propagated','failed_read_rejects_stale_signature')}
+parser=argparse.ArgumentParser()
+parser.add_argument('--require-fixed',action='store_true')
+parser.add_argument('--output',type=Path)
+args=parser.parse_args()
+with tempfile.TemporaryDirectory(prefix='gbar3-storage-failure-') as temp:
+    tmp=Path(temp)
+    def stripped(path):
+        return re.sub(r'^#include[^\n]*\n','',path.read_text(encoding='utf-8'),flags=re.M)
+    arm7=stripped(ROOT/'code/core/arm7/source/IpcServices/FsIpcService.cpp')
+    start = 'static void completeTransfer' if 'static void completeTransfer' in arm7 else 'void FsIpcService::DldiReadSectors'
+    (tmp/'production_arm7_storage.h').write_text(arm7[arm7.index(start):],encoding='utf-8')
+    (tmp/'production_fs_ipc.h').write_text(stripped(ROOT/'code/core/arm9/source/Fat/FsIpc.cpp'),encoding='utf-8')
+    (tmp/'production_diskio.h').write_text(stripped(ROOT/'code/core/arm9/source/Fat/diskio.cpp'),encoding='utf-8')
+    (tmp/'production_sd_cache.h').write_text(stripped(ROOT/'code/core/arm9/source/SdCache/SdCache.c'),encoding='utf-8')
+    save_search = (ROOT/'code/core/arm9/source/Save/SaveSignatureSearch.h').exists()
+    if save_search:
+        source = (ROOT/'code/core/arm9/source/Save/Save.cpp').read_text(encoding='utf-8')
+        begin = source.index('static u32* searchHiCode(')
+        (tmp/'production_search.h').write_text(source[begin:source.index('\n#endif',begin)],encoding='utf-8')
+        cache_header = (ROOT/'code/core/arm9/source/SdCache/SdCache.h').read_text(encoding='utf-8')
+        begin = cache_header.index('static inline const void* sdc_getRomBlock(')
+        end = cache_header.index('static inline const void* sdc_getRomBlockWithoutIrqYielding',begin)
+        (tmp/'production_cache_accessor.h').write_text(cache_header[begin:end],encoding='utf-8')
+    exe=tmp/('storage.exe' if os.name=='nt' else 'storage')
+    command=[os.environ.get('CXX','g++'),'-std=c++17','-g','-Wall','-Wextra','-fpermissive',
+             '-I',str(tmp),'-I',str(ROOT/'code/core/common'),'-I',str(ROOT/'code/core/arm9/source'),
+             '-I',str(ROOT/'tools/tests/storage_baseline'),
+             str(ROOT/'tools/tests/storage_failure_host.cpp'),'-o',str(exe)]
+    if os.environ.get('SANITIZE')=='1': command+=['-fsanitize=address,undefined','-fno-omit-frame-pointer']
+    if save_search: command+=['-DTEST_SAVE_SEARCH_CONSUMER']
+    subprocess.run(command,check=True)
+    report=subprocess.check_output([str(exe)],text=True,timeout=15)
+    print(report,end='')
+    results=dict(line.split(':') for line in report.splitlines())
+    failures={name for name,value in results.items() if value=='FAIL'}
+    if args.output: args.output.write_text(json.dumps({'results':results,'known_failures':sorted(KNOWN_FAILURES)},indent=2)+'\n',encoding='utf-8')
+    assert failures==(set() if args.require_fixed else KNOWN_FAILURES), sorted(failures)
+    print(f'{len(results)-len(failures)} PASS, {len(failures)} storage propagation failures; hardware verification required')

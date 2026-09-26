@@ -10,6 +10,17 @@
 
 static u32 sAgbMem;
 
+static DRESULT storageResult(FsTransactionResult result)
+{
+    if (result == FS_RESULT_SUCCESS)
+        return RES_OK;
+    if (result == FS_RESULT_INVALID_ARGUMENT)
+        return RES_PARERR;
+    if (result == FS_RESULT_NO_TRANSACTION || result == FS_RESULT_CANCELED)
+        return RES_NOTRDY;
+    return RES_ERROR;
+}
+
 extern "C" DSTATUS disk_status(BYTE pdrv)
 {
     return 0;
@@ -40,13 +51,11 @@ extern "C" DRESULT disk_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 {
     if (pdrv == DEV_FAT)
     {
-        fs_readSectors(FS_DEVICE_DLDI, buff, sector, count);
-        return RES_OK;
+        return storageResult(fs_readSectors(FS_DEVICE_DLDI, buff, sector, count));
     }
     else if (pdrv == DEV_SD)
     {
-        fs_readSectors(FS_DEVICE_DSI_SD, buff, sector, count);
-        return RES_OK;
+        return storageResult(fs_readSectors(FS_DEVICE_DSI_SD, buff, sector, count));
     }
     else if (pdrv == DEV_PC)
     {
@@ -73,13 +82,11 @@ extern "C" DRESULT disk_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT co
 {
     if (pdrv == DEV_FAT)
     {
-        fs_writeSectors(FS_DEVICE_DLDI, buff, sector, count);
-        return RES_OK;
+        return storageResult(fs_writeSectors(FS_DEVICE_DLDI, buff, sector, count));
     }
     else if (pdrv == DEV_SD)
     {
-        fs_writeSectors(FS_DEVICE_DSI_SD, buff, sector, count);
-        return RES_OK;
+        return storageResult(fs_writeSectors(FS_DEVICE_DSI_SD, buff, sector, count));
     }
     else if (pdrv == DEV_PC)
     {
