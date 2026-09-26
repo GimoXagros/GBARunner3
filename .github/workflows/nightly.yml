@@ -24,6 +24,7 @@ jobs:
       - name: Make application and test ROM
         run: |
           make -C code debug
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -fno-builtin -fno-exceptions -fno-unwind-tables -Wl,-e,search_probe,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/save_search_probe.cpp code/core/arm9/source/MemFastSearch.s -o /tmp/save-search.elf
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
       - name: Prepare for build publishing
         run: |
@@ -35,6 +36,7 @@ jobs:
           cp code/core/arm9/arm9.elf out/tests/
           cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
+          cp /tmp/save-search.elf out/tests/
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
@@ -58,6 +60,8 @@ jobs:
         with:
           name: save-io-results
           path: save-io-results.json
+      - name: Verify all save-signature block offsets
+        run: SANITIZE=1 python3 tools/tests/test_save_search_host.py
       - uses: actions/upload-artifact@v7
         with:
           name: storage-transaction-results
@@ -76,6 +80,8 @@ jobs:
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
+      - name: Execute linked ARM save-signature corpus
+        run: python3 tools/tests/test_save_search_arm.py out/tests/save-search.elf
       - name: Execute linked ARM7 and ARM9 storage transport
         run: python3 tools/tests/test_storage_linked_arm.py out/tests/arm9.elf out/tests/arm7.elf --output storage-linked-results.json
       - name: Execute linked save latches and guest SRAM writes after error
@@ -98,6 +104,12 @@ jobs:
           path: irq-results.json
       - name: Execute linked JIT metadata and address regressions
         run: python3 tools/tests/test_jit_core_elf.py out/tests/arm9.elf --output jit-results.json
+      - name: Execute linked noncontiguous ROM DMA boundary cases
+        run: python3 tools/tests/test_dma_rom_elf.py out/tests/arm9.elf --output dma-rom-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dma-rom-results
+          path: dma-rom-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: jit-core-results
