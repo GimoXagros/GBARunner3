@@ -86,6 +86,8 @@ jobs:
           path: storage-results.json
       - name: Test release upload without network mutations
         run: node tools/tests/test_release_upload.cjs
+      - name: Test stable package guards
+        run: python3 tools/tests/test_v014_package.py
       - name: Execute EEPROM source-selection audit
         run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
       - name: Validate packaged configs and repository invariants
