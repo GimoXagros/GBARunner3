@@ -218,7 +218,9 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
     return true;
 }
 
-extern "C" u8 sav_readSaveByteFromFile(u32 saveAddress)
+// Keep these file-backed SWI helpers in existing EWRAM headroom; VRAM A
+// must leave its final aligned 2 KiB hicode backing intact.
+extern "C" [[gnu::section(".ewram")]] u8 sav_readSaveByteFromFile(u32 saveAddress)
 {
     vm_enableNestedIrqs();
     u8 saveByte = SAVE_DATA_FILL;
@@ -243,7 +245,7 @@ extern "C" u8 sav_readSaveByteFromFile(u32 saveAddress)
     return saveByte;
 }
 
-extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
+extern "C" [[gnu::section(".ewram")]] void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
 {
     vm_enableNestedIrqs();
     bool written = false;
