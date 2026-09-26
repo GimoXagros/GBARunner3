@@ -107,6 +107,7 @@ u8 mem_swapByte(u8 value,u8* target) { const u8 old=*target; *target=value; retu
 
 RomGpio gRomGpio;
 static RomGpioRtc sRomGpioRtc;
+extern "C" bool rtc_runOnWorkStack();
 #include "production_rtc.h"
 // Host extraction keeps the production RomGpio bridge but cannot execute the
 // target assembly stack switch. The linked ARM test executes that wrapper.
