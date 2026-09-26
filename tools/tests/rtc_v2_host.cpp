@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdlib>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -33,6 +34,7 @@ int liveHandles=0;
 u32 hostSeconds=FIXTURE_HOST;
 bool wrote=false;
 bool forceLegacyOverwrite=false, forceBackupDelete=false;
+std::string negativeExpected;
 
 template<size_t N> std::vector<u8> bytes(const u8 (&data)[N]) { return {data,data+N}; }
 
@@ -120,7 +122,12 @@ unsigned checks=0, failures=0;
 void check(const char* name,bool condition)
 {
     ++checks;
-    if(!condition) { ++failures; std::cout<<"FAIL "<<name<<'\n'; }
+    if(!condition)
+    {
+        ++failures;
+        std::cout<<"FAIL "<<name<<'\n'<<std::flush;
+        if(negativeExpected==name) std::exit(1);
+    }
 }
 void rebootPreservingMedia()
 {
@@ -175,8 +182,20 @@ int main(int argc,char** argv)
     for(int argument=1;argument+1<argc;++argument)
         if(std::string(argv[argument])=="--negative-control")
         {
-            forceLegacyOverwrite=std::string(argv[argument+1])=="legacy-overwrite";
-            forceBackupDelete=std::string(argv[argument+1])=="backup-delete";
+            const std::string control=argv[argument+1];
+            forceLegacyOverwrite=control=="legacy-overwrite";
+            forceBackupDelete=control=="backup-delete";
+            if(control=="no-dirty") negativeExpected="GPIO write persists offset";
+            else if(control=="partial-offset") negativeExpected="incomplete command does not commit offset";
+            else if(control=="legacy-auto-load") negativeExpected="legacy-only blocks before guest";
+            else if(control=="legacy-overwrite" || control=="backup-delete")
+                negativeExpected="pending original and v1 triad unchanged";
+            else if(control=="direct-old-delta") negativeExpected="adopted GPIO exposes stored snapshot";
+            else if(control=="version-bypass") negativeExpected="unknown modern version blocks";
+            else if(control=="identity-bypass") negativeExpected="ROM identity mismatch blocks";
+            else if(control=="uncleared-dirty") negativeExpected="verified flush clears dirty";
+            else if(control=="repeat-migration")
+                negativeExpected="recreated object reloads ready without migrating twice";
         }
 
     for(bool mode24:{false,true})

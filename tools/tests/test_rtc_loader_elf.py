@@ -21,6 +21,7 @@ from unicorn import (
 from unicorn.arm_const import (
     UC_ARM_REG_CPSR, UC_ARM_REG_LR, UC_ARM_REG_PC, UC_ARM_REG_R0,
     UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3, UC_ARM_REG_SP,
+    UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, UC_ARM_REG_R8,
 )
 
 from rtc_legacy_fixtures import (
@@ -79,16 +80,27 @@ class LinkedRtc:
         self.rename_unlink = 0
         self.scheduler_calls = 0
         self.last_invalid = None
+        self.bridge_entries: list[tuple[int, int]] = []
+        self.stack_faults = 0
         self.entry = find_symbol(symbols, "RomGpioRtc10Initialize")
         self.update = find_symbol(symbols, "RomGpioRtc14UpdateDateTime")
         self.clock_entry = find_symbol(symbols, "RomGpioRtc16UpdateDSDateTime")
         self.clock_buffer = find_symbol(symbols, "RomGpioRtc14sDSRtcDateTime")
-        self.hooks = {symbols[name]: name for name in
+        self.hooks = {symbols[name] & ~1: name for name in
                       ("f_open", "f_read", "f_write", "f_sync", "f_close")}
         for name in ("f_unlink", "f_rename", "sav_requestFileWrite"):
             if name in symbols:
-                self.hooks[symbols[name]] = name
-        self.hooks[self.clock_entry] = "DS_CLOCK"
+                self.hooks[symbols[name] & ~1] = name
+        self.hooks[self.clock_entry & ~1] = "DS_CLOCK"
+        self.work_symbols = {name: symbols[name] for name in (
+            "rtc_runOnWorkStack", "rtc_flushOnWorkStackBody",
+            "rtc_workStackFault", "rtcWorkStackBase", "rtcWorkStackEnd",
+            "rtcWorkStackBusy", "rtcWorkStackHighWater",
+        ) if name in symbols}
+        self.work_available = len(self.work_symbols) == 7
+        if self.work_available:
+            self.bridge_entry = self.work_symbols["rtc_flushOnWorkStackBody"] & ~1
+            self.hooks[self.work_symbols["rtc_workStackFault"] & ~1] = "STACK_FAULT"
         self.cpu.hook_add(UC_HOOK_CODE, self._hook)
         self.cpu.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
         self.cpu.hook_add(UC_HOOK_MEM_WRITE, self._ipc_write,
@@ -135,6 +147,9 @@ class LinkedRtc:
         self.cpu.reg_write(UC_ARM_REG_PC, self.cpu.reg_read(UC_ARM_REG_LR))
 
     def _hook(self, cpu: Uc, pc: int, size: int, _: object) -> None:
+        if self.work_available and pc == self.bridge_entry:
+            self.bridge_entries.append((self.cpu.reg_read(UC_ARM_REG_SP),
+                                        self.cpu.reg_read(UC_ARM_REG_CPSR)))
         name = self.hooks.get(pc)
         if name is None:
             return
@@ -143,6 +158,9 @@ class LinkedRtc:
         if name == "DS_CLOCK":
             self._supply_ds_clock()
             self._return()
+        elif name == "STACK_FAULT":
+            self.stack_faults += 1
+            self.cpu.emu_stop()
         elif name == "f_open":
             path = self._cstring(r1)
             if path == "m1" and not (r2 & FA_WRITE) and self.writes:
@@ -230,10 +248,58 @@ class LinkedRtc:
         # registers (4 bytes), then the seven-byte RTC GPIO date/time struct.
         return bytes(self.cpu.mem_read(this + 24, 7))
 
+    def work_stack_call(self, *, busy: bool = False, corrupt_guard: bool = False,
+                        irq_masked: bool = False) -> tuple[int, bool]:
+        assert self.work_available, "application ELF lacks linked RTC work stack"
+        symbol = self.work_symbols
+        base, end = symbol["rtcWorkStackBase"], symbol["rtcWorkStackEnd"]
+        assert end - base == 2048, "RTC work stack must be exactly 2048 bytes"
+        irq_top = 0x0300D000
+        self.cpu.mem_write(irq_top - 288, bytes([0x5A] * 288))
+        registers = (UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6,
+                     UC_ARM_REG_R7, UC_ARM_REG_R8)
+        expected = tuple(0x44550000 + i * 0x1111 for i in range(len(registers)))
+        for register, value in zip(registers, expected):
+            self.cpu.reg_write(register, value)
+        cpsr = 0x93 if irq_masked else 0x13  # SVC with IRQ masked/unmasked
+        self.cpu.reg_write(UC_ARM_REG_CPSR, cpsr)
+        self.cpu.reg_write(UC_ARM_REG_SP, irq_top)
+        self.cpu.reg_write(UC_ARM_REG_LR, SENTINEL)
+        if busy:
+            self._put32(symbol["rtcWorkStackBusy"], 1)
+        if corrupt_guard:
+            self._put32(base, 0)
+        before_bridge = len(self.bridge_entries)
+        before_fault = self.stack_faults
+        self.cpu.emu_start(symbol["rtc_runOnWorkStack"], SENTINEL, count=2_000_000)
+        faulted = self.stack_faults != before_fault
+        if not faulted:
+            assert self.cpu.reg_read(UC_ARM_REG_PC) == SENTINEL, \
+                "RTC work stack did not return to caller"
+            assert self.cpu.reg_read(UC_ARM_REG_SP) == irq_top, \
+                "RTC work stack failed to restore caller SP"
+            assert tuple(self.cpu.reg_read(register) for register in registers) == expected, \
+                "RTC work stack failed to preserve callee-saved registers"
+            assert self.cpu.reg_read(UC_ARM_REG_CPSR) & 0x9F == cpsr & 0x9F, \
+                "RTC work stack failed to restore caller mode/IRQ mask"
+        assert bytes(self.cpu.mem_read(irq_top - 288, 264)) == bytes([0x5A] * 264), \
+            "RTC work overflowed simulated 288-byte IRQ stack"
+        if not busy and not faulted:
+            assert len(self.bridge_entries) == before_bridge + 1, \
+                "RTC work wrapper did not call production bridge exactly once"
+            callback_sp, callback_cpsr = self.bridge_entries[-1]
+            assert base + 4 < callback_sp <= end and callback_sp & 7 == 0, \
+                "RTC bridge did not run on aligned bounded EWRAM stack"
+            assert callback_cpsr & 0x80 == cpsr & 0x80, \
+                "RTC bridge did not inherit original IRQ mask"
+        return self.cpu.reg_read(UC_ARM_REG_R0), faulted
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("arm9", type=Path, help="linked application ARM9 ELF")
+    parser.add_argument("--allow-old-no-stack-wrapper", action="store_true",
+                        help="baseline probe only; final candidate must link RTC work stack")
     args = parser.parse_args()
     symbols, sections = load_elf(args.arm9)
     clock = datetime(2024, 2, 28, 22, 45, 45)
@@ -284,8 +350,45 @@ def main() -> None:
         "downgrade-changed legacy bytes must block re-upgrade"
     assert adopted.writes == writes and adopted.rename_unlink == 0
 
+    stacked = LinkedRtc(symbols, sections)
+    if not stacked.work_available:
+        assert args.allow_old_no_stack_wrapper, \
+            "candidate application ELF must link RTC work-stack wrapper and guards"
+    else:
+        static_rtc = find_symbol(symbols, "sRomGpioRtc")
+        mark_dirty = find_symbol(symbols, "RomGpioRtc14MarkStateDirty")
+        assert stacked.initialize(static_rtc) == STATUS_FRESH
+        stacked.call(mark_dirty, static_rtc)
+        assert stacked.scheduler_calls == 1
+        result, faulted = stacked.work_stack_call()
+        assert result == 1 and not faulted
+        expected_fresh = modern_record(
+            ID_A, sequence=0, host_seconds=correct_seconds(clock),
+            game_seconds=correct_seconds(clock), weekday_offset=0,
+            status=0x40, interrupt=0,
+        )
+        assert stacked.media.get("m0") == expected_fresh, \
+            "RTC wrapper must execute production flush on synthetic media"
+        assert stacked.writes == 1 and stacked.syncs == 1 and \
+            stacked.closed_writes == 1 and stacked.readbacks >= 1
+        high_water = struct.unpack("<I", stacked.cpu.mem_read(
+            stacked.work_symbols["rtcWorkStackHighWater"], 4))[0]
+        assert 8 < high_water < 2048, "RTC work-stack high-water outside bounds"
+        before_writes, before_bridge = stacked.writes, len(stacked.bridge_entries)
+        result, faulted = stacked.work_stack_call(busy=True, irq_masked=True)
+        assert result == 0 and not faulted and stacked.writes == before_writes and \
+            len(stacked.bridge_entries) == before_bridge, \
+            "busy guard must reject reentry without a second flush"
+        stacked._put32(stacked.work_symbols["rtcWorkStackBusy"], 0)
+        result, faulted = stacked.work_stack_call(corrupt_guard=True)
+        assert faulted and stacked.stack_faults == 1 and \
+            stacked.writes == before_writes, \
+            "damaged guard must enter terminal fault before FatFs writes"
+
+    stack_result = "work-stack guards PASS" if stacked.work_available else "work-stack guards NOT RUN"
     print("linked ARM9 RTC loader: fresh, legacy gate, pending commit/readback, "
-          "restart GPIO, conflict PASS; synthetic FatFs/DS clock; hardware NOT RUN")
+          f"restart GPIO, conflict, {stack_result}; synthetic FatFs/DS clock, "
+          "backend callee stack excluded; hardware NOT RUN")
 
 
 if __name__ == "__main__":
