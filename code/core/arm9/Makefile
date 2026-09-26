@@ -166,6 +166,7 @@ $(OUTPUT).elf	:	$(OFILES)
 endif
 #---------------------------------------------------------------------------------------
 
-# RTC persistence and its terminal notice are cold code in the existing EWRAM
-# budget. Preserve that budget with the same Thumb/size flags as *.size.cpp.
-RomGpioRtc.o RtcFault.o: CXXFLAGS += -mthumb -Os
+# RTC persistence is cold code: use the existing *.size.cpp Thumb/size flags.
+# The terminal notice must stay ARM because its CPSR/CP15 helpers use ARM asm.
+RomGpioRtc.o: CXXFLAGS += -mthumb -Os
+RtcFault.o: CXXFLAGS += -Os
