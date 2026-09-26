@@ -24,6 +24,11 @@ extern "C" {
 /// @return A pointer to the newly loaded block.
 const void* sdc_loadRomBlockDirect(u32 romAddress);
 
+// Fallible read for consumers that can abort an operation. Never publishes a
+// failed fetch. Runtime assembly/JIT/DMA use the fail-closed Direct entry.
+const void* sdc_tryLoadRomBlock(u32 romAddress);
+[[gnu::noreturn]] void sdc_storageFault(u32 romAddress);
+
 /// @brief Permanently loads the rom block that contains the given romAddress
 ///        into the sd cache for the purpose of applying patches.
 /// @param romAddress An address in the block to load permanently into the cache.

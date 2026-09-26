@@ -1,5 +1,7 @@
 # custom-v0.1.3-rc3 배포 기록
 
+이 문서는 2026-09-20 공개 당시의 검증 기록입니다. 이후 2026-09-27 사용자가 정상 실기 동작을 보고하고 PR #15/#19/#20 통합과 v0.1.4 배포를 요청했습니다. 아래의 미검증·권장판 표기는 RC3 공개 당시 기준이며, 후속 정식판 상태는 Releases에서 확인합니다.
+
 [custom-v0.1.3-rc3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc3)은 저장장치 오류 전달과 고주소 ROM의 저장 기능 검색을 실기에서 검증하기 위한 **프리릴리즈**입니다. **Hardware verification: NOT COMPLETED.** 정식 권장판은 계속 [custom-v0.1.3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3)입니다. 중요한 save와 개인 설정을 백업한 뒤 복사본으로 시험하세요. [실기 테스트 안내](HARDWARE-TEST-custom-v0.1.3-rc3.md)를 따르고, 문제가 생기면 정식판 NDS로 돌아가세요.
 
 ## 포함 범위와 동작
