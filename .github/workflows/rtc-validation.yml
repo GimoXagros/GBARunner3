@@ -22,6 +22,7 @@ jobs:
           SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control no-dirty
           SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control partial-offset
       - name: Production persistence and restart with fatal sanitizers
+        if: ${{ !cancelled() }}
         run: SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
       - uses: actions/upload-artifact@v7
         if: always()

@@ -111,17 +111,24 @@ def check_boot_caller() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--negative-control", choices=["legacy-auto-load", "uncleared-dirty"])
+    parser.add_argument("--negative-control", choices=[
+        "legacy-auto-load", "uncleared-dirty", "no-dirty", "partial-offset",
+    ])
     args = parser.parse_args()
     check_boot_caller()
     with tempfile.TemporaryDirectory(prefix="gbar3-rtc-v2-host-") as directory:
         temporary = Path(directory)
         production = production_source()
-        if args.negative_control == "legacy-auto-load":
-            # The harness deliberately changes the expected status; the named
-            # block-before-guest assertion, not an unrelated compile error,
-            # must fire.
-            pass
+        if args.negative_control == "no-dirty":
+            begin = production.index("RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()")
+            end = production.index("RTC_EWRAM void RomGpioRtc::SetYear(")
+            body = production[begin:end]
+            assert body.count("MarkStateDirty();") == 1
+            production = production[:begin] + body.replace("MarkStateDirty();", "") + production[end:]
+        elif args.negative_control == "partial-offset":
+            assert production.count("if (_offsetUpdateRequired)") == 1
+            production = production.replace("if (_offsetUpdateRequired)",
+                                            "if (_offsetUpdateRequired || _byteIndex == 2)")
         (temporary / "production_rtc.h").write_text(production, encoding="utf-8")
         (temporary / "rtc_v2_fixtures.h").write_text(fixture_source(), encoding="utf-8")
         executable = temporary / ("rtc-v2.exe" if os.name == "nt" else "rtc-v2")
@@ -141,8 +148,12 @@ def main() -> None:
         if run.stderr:
             print(run.stderr, end="", file=__import__("sys").stderr)
         if args.negative_control:
-            expected = ("legacy-only blocks before guest" if args.negative_control == "legacy-auto-load"
-                        else "verified flush clears dirty")
+            expected = {
+                "legacy-auto-load": "legacy-only blocks before guest",
+                "uncleared-dirty": "verified flush clears dirty",
+                "no-dirty": "GPIO write persists offset",
+                "partial-offset": "incomplete command does not commit offset",
+            }[args.negative_control]
             assert run.returncode != 0 and "FAIL " + expected in run.stdout, \
                 "negative control did not reach its intended assertion"
             print("PASS negative control rejected", args.negative_control)

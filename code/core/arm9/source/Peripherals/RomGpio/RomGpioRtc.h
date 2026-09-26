@@ -47,7 +47,7 @@ public:
         , _legacyPaths { nullptr, nullptr, nullptr }
         , _modernPaths { nullptr, nullptr, nullptr }, _identity()
         , _currentRecord(), _hasCurrent(false), _writeError(false)
-        , _fileHandleLive(false), _stateDirty(false) { }
+        , _stateDirty(false) { }
 
     RtcPersistence::LoadStatus Initialize(
         const char* legacyStatePath,
@@ -80,7 +80,6 @@ private:
     RtcPersistence::StateFileV2 _currentRecord;
     bool _hasCurrent;
     bool _writeError;
-    bool _fileHandleLive;
     bool _stateDirty;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);

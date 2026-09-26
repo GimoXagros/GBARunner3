@@ -44,6 +44,11 @@ RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
 [[gnu::section(".ewram.bss")]]
 static FIL sRtcStateFile alignas(32);
 
+// The FIL itself is static. Track its lifetime globally as well, so creating
+// another RTC object in the same process cannot clear a handle after close fails.
+[[gnu::section(".ewram.bss")]]
+static bool sRtcFileHandleLive;
+
 [[gnu::section(".ewram.bss")]]
 static RtcPersistence::StateFile sLegacyRecords[3] alignas(32);
 
@@ -73,7 +78,7 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::Initialize(
 {
     // A failed close may still own the static FIL. Never reinitialize it or
     // retry a failed journal transaction in this process.
-    if (_fileHandleLive) return RtcPersistence::LoadStatus::IoError;
+    if (sRtcFileHandleLive) return RtcPersistence::LoadStatus::IoError;
     if (_writeError) return RtcPersistence::LoadStatus::WriteError;
     _legacyPaths[0] = legacyStatePath;
     _legacyPaths[1] = legacyTempPath;
@@ -85,7 +90,6 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::Initialize(
     _currentRecord = { };
     _hasCurrent = false;
     _writeError = false;
-    _fileHandleLive = false;
     _stateDirty = false;
     gRomGpioRtcStateDirty = false;
 
@@ -100,12 +104,12 @@ RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadRecord(
     const char* path, void* record, u32 size, u32 magic, u16 version)
 {
     using RtcPersistence::FileStatus;
-    if (!path || _fileHandleLive) return FileStatus::IoError;
+    if (!path || sRtcFileHandleLive) return FileStatus::IoError;
     memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
     const FRESULT opened = f_open(&sRtcStateFile, path, FA_OPEN_EXISTING | FA_READ);
     if (opened == FR_NO_FILE) return FileStatus::Missing;
     if (opened != FR_OK) return FileStatus::IoError;
-    _fileHandleLive = true;
+    sRtcFileHandleLive = true;
 
     const u32 actualSize = f_size(&sRtcStateFile);
     u8 header[8] { };
@@ -134,7 +138,7 @@ RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadRecord(
         }
     }
     if (f_close(&sRtcStateFile) != FR_OK) return FileStatus::IoError;
-    _fileHandleLive = false;
+    sRtcFileHandleLive = false;
     return result;
 }
 
@@ -335,7 +339,7 @@ RTC_EWRAM bool RomGpioRtc::WriteStateFile(const RtcPersistence::StateFileV2& sta
 {
     using RtcPersistence::FileStatus;
     using RtcPersistence::LoadStatus;
-    if (_writeError || _fileHandleLive ||
+    if (_writeError || sRtcFileHandleLive ||
         !RtcPersistence::ValidateV2(state, _identity))
     {
         _writeError = true;
@@ -386,13 +390,13 @@ RTC_EWRAM bool RomGpioRtc::WriteStateFile(const RtcPersistence::StateFileV2& sta
     const FRESULT opened = f_open(&sRtcStateFile, _modernPaths[target],
         (createNew ? FA_CREATE_NEW : FA_CREATE_ALWAYS) | FA_WRITE);
     if (opened != FR_OK) { _writeError = true; return false; }
-    _fileHandleLive = true;
+    sRtcFileHandleLive = true;
     UINT bytesWritten = 0;
     const FRESULT written = f_write(&sRtcStateFile, &state, sizeof(state), &bytesWritten);
     const FRESULT synced = written == FR_OK && bytesWritten == sizeof(state)
         ? f_sync(&sRtcStateFile) : FR_DISK_ERR;
     const FRESULT closed = f_close(&sRtcStateFile);
-    if (closed == FR_OK) _fileHandleLive = false;
+    if (closed == FR_OK) sRtcFileHandleLive = false;
     if (written != FR_OK || bytesWritten != sizeof(state) ||
         synced != FR_OK || closed != FR_OK)
     {

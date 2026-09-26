@@ -113,7 +113,10 @@ void check(const char* name,bool condition)
 void reset()
 {
     files.clear(); failure.clear(); opens=writes=closes=renames=unlinks=schedules=0;
-    liveHandles=0; sRtcStateFile={}; hostSeconds=FIXTURE_HOST; wrote=false;
+    // An explicit simulated process restart is the only place that releases
+    // a FIL left live by a failed close.
+    liveHandles=0; sRtcFileHandleLive=false; sRtcStateFile={};
+    hostSeconds=FIXTURE_HOST; wrote=false;
 }
 void put(const char* path,const std::vector<u8>& data) { files[path]=data; }
 LoadStatus load(RomGpioRtc& rtc,const RtcPersistence::Identity& id=ID_A)
@@ -159,6 +162,39 @@ int main(int argc,char** argv)
             forceNegativeLegacy=std::string(argv[argument+1])=="legacy-auto-load";
             forceNegativeDirty=std::string(argv[argument+1])=="uncleared-dirty";
         }
+
+    for(bool mode24:{false,true})
+    {
+        reset(); hostSeconds=100; Bus bus;
+        bus.write(0x62,{static_cast<u8>(mode24?0x40:0)});
+        check("GPIO status read/write",bus.read(0x63,1)==
+              std::vector<u8>({static_cast<u8>(mode24?0x40:0)}));
+        bus.rtc._stateDirty=false; gRomGpioRtcStateDirty=0; schedules=0;
+        const u8 hour=mode24?0x23:0x91;
+        const u8 readHour=mode24?0xA3:0x91;
+        bus.write(0x64,{0x24,0x02,0x28,3,hour,0x59,0x59});
+        check("GPIO date/time round trip",bus.read(0x65,7)==
+              std::vector<u8>({0x24,0x02,0x28,3,readHour,0x59,0x59}));
+        check("GPIO write persists offset",bus.rtc._stateDirty &&
+              gRomGpioRtcStateDirty && schedules>0);
+        ++hostSeconds;
+        check("GPIO leap-day rollover",bus.read(0x65,7)==
+              std::vector<u8>({0x24,0x02,0x29,4,0,0,0}));
+        bus.write(0x66,{static_cast<u8>(mode24?0x20:0x88),0x45,0x50});
+        const auto time=bus.read(0x67,3);
+        check("GPIO time-only write",time==
+              std::vector<u8>({static_cast<u8>(mode24?0xA0:0x88),0x45,0x50}));
+        const auto fullDate=bus.read(0x65,7);
+        const auto offset=bus.rtc._rtcOffset;
+        bus.command(0x64); bus.byte(0x99); bus.byte(0x12); bus.pins(0);
+        check("incomplete command does not commit offset",
+              bus.rtc._rtcOffset==offset && bus.read(0x65,7)==fullDate);
+        bus.command(0x70); bus.pins(0);
+        check("invalid command leaves time unchanged",bus.read(0x67,3)==time);
+        bus.write(0x60,{});
+        check("GPIO reset",bus.read(0x65,7)==
+              std::vector<u8>({0,1,1,0,0,0,0}));
+    }
 
     reset();
     put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));
@@ -226,6 +262,28 @@ int main(int argc,char** argv)
     put("modern2",bytes(V2_FRESH)); RomGpioRtc recovered;
     check("corrupt primary may use valid ready backup",load(recovered)==LoadStatus::Ready &&
           recovered._currentRecord.sequence==7 && files.at("modern0")==corrupt);
+    const auto originalCurrent=bytes(V2_FRESH);
+    for(unsigned byte=0;byte<originalCurrent.size();++byte)
+        for(unsigned bit=0;bit<8;++bit)
+        {
+            reset(); put("modern0",originalCurrent); put("modern2",originalCurrent);
+            files["modern0"][byte]^=1u<<bit;
+            RomGpioRtc bitflip;
+            const auto status=load(bitflip);
+            const auto expected=(byte==4 || byte==5)
+                ? LoadStatus::UnsupportedVersion : LoadStatus::Ready;
+            check("bitflip classifies unknown version or uses intact backup",
+                  status==expected && files.at("modern2")==originalCurrent);
+        }
+    for(unsigned length=0;length<originalCurrent.size();++length)
+    {
+        reset(); put("modern0",originalCurrent); put("modern1",originalCurrent);
+        files["modern1"].resize(length);
+        RomGpioRtc truncated;
+        check("truncated temp preserves valid primary",
+              load(truncated)==LoadStatus::Ready &&
+              files.at("modern0")==originalCurrent);
+    }
     reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V2_FUTURE));
     RomGpioRtc future;
     check("unknown modern version blocks",load(future)==LoadStatus::UnsupportedVersion);
@@ -274,6 +332,14 @@ int main(int argc,char** argv)
         catch(const std::runtime_error&) { secondFault=true; }
         check("latched failure prevents automatic retry",secondFault &&
               opens+writes+closes==operationCount);
+        if(liveHandles)
+        {
+            RomGpioRtc recreated;
+            const auto beforeRecreate=opens+writes+closes;
+            check("failed close blocks object recreation without reopening FIL",
+                  load(recreated)==LoadStatus::IoError &&
+                  opens+writes+closes==beforeRecreate);
+        }
         verify_no_rename_unlink();
     }
 
