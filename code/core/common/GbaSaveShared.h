@@ -4,6 +4,8 @@
 #define GBA_SAVE_STATE_DIRTY    1
 #define GBA_SAVE_STATE_WAIT     2
 #define GBA_SAVE_STATE_WRITE    3
+// Terminal failed attempt: RAM remains authoritative; no automatic VBlank retry.
+#define GBA_SAVE_STATE_ERROR    4
 
 typedef struct
 {
