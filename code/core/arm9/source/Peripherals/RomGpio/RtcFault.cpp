@@ -49,7 +49,7 @@
     const char* lines[9] = {
         "RTC ERROR", "GAME STOPPED", detail, action,
         "KEEP ALL RTC FILES", "DO NOT DELETE OR RENAME",
-        "NO AUTOMATIC RESET", "DATA WAS NOT CONVERTED",
+        "NO AUTOMATIC RESET", "CHECK FILES BEFORE RESTART",
         "HOLD POWER TO TURN OFF"
     };
     for (unsigned i = 0; i < 256 * 192; ++i) pixels[i] = 0x8000;

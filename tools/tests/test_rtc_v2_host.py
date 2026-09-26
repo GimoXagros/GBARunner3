@@ -112,7 +112,9 @@ def check_boot_caller() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--negative-control", choices=[
-        "legacy-auto-load", "uncleared-dirty", "no-dirty", "partial-offset",
+        "legacy-auto-load", "legacy-overwrite", "backup-delete",
+        "direct-old-delta", "version-bypass", "identity-bypass",
+        "uncleared-dirty", "repeat-migration", "no-dirty", "partial-offset",
     ])
     args = parser.parse_args()
     check_boot_caller()
@@ -129,6 +131,54 @@ def main() -> None:
             assert production.count("if (_offsetUpdateRequired)") == 1
             production = production.replace("if (_offsetUpdateRequired)",
                                             "if (_offsetUpdateRequired || _byteIndex == 2)")
+        elif args.negative_control == "legacy-auto-load":
+            old = "return LoadStatus::LegacyFound;"
+            assert production.count(old) == 1
+            production = production.replace(old, "return LoadStatus::FreshInitialized;")
+        elif args.negative_control == "direct-old-delta":
+            marker = "ready.sequence = 1;"
+            assert production.count(marker) == 1
+            production = production.replace(marker, marker + "\n" +
+                "ready.rtcSecondsSince2000 = (ready.rtcSecondsSince2000 + "
+                "ready.hostSecondsSince2000 - sLegacyRecords[ready.selectedLegacyRole]."
+                "hostSecondsSince2000) % RtcPersistence::CYCLE_SECONDS;")
+        elif args.negative_control == "backup-delete":
+            begin = production.index("RTC_EWRAM bool RomGpioRtc::WriteStateFile(")
+            end = production.index("RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()")
+            body = production[begin:end]
+            assert body.count("return true;") == 1
+            production = production[:begin] + body.replace(
+                "return true;", "f_unlink(_legacyPaths[2]);\n    return true;",
+            ) + production[end:]
+        elif args.negative_control == "uncleared-dirty":
+            begin = production.index("RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()")
+            end = production.index("RTC_EWRAM void RomGpioRtc::MarkStateDirty()")
+            body = production[begin:end]
+            assert body.count("_stateDirty = false;") == 1
+            production = production[:begin] + body.replace("_stateDirty = false;", "") + production[end:]
+        elif args.negative_control == "repeat-migration":
+            old = "if (_currentRecord.phase == RtcPersistence::PHASE_PENDING)"
+            assert production.count(old) == 1
+            production = production.replace(old, "if (true)")
+        elif args.negative_control in ("version-bypass", "identity-bypass"):
+            begin = production.index("RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadModernStateFile(")
+            end = production.index("RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanLegacy()")
+            body = production[begin:end]
+            if args.negative_control == "version-bypass":
+                old = "if (foundMagic == magic && foundVersion != version)"
+                assert production.count(old) == 1
+                production = production.replace(old, "if (false)")
+                begin = production.index("RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadModernStateFile(")
+                end = production.index("RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanLegacy()")
+                body = production[begin:end]
+            else:
+                old = "if (state.gameCode != _identity.gameCode || state.romSize != _identity.romSize ||\n        state.headerHash != _identity.headerHash) return FileStatus::IdentityMismatch;"
+                assert old in body
+                body = body.replace(old, "")
+            fallback = "return RtcPersistence::ValidateV2(state, _identity)\n        ? FileStatus::ValidCurrent : FileStatus::Corrupt;"
+            assert fallback in body
+            body = body.replace(fallback, "return FileStatus::ValidCurrent;")
+            production = production[:begin] + body + production[end:]
         (temporary / "production_rtc.h").write_text(production, encoding="utf-8")
         (temporary / "rtc_v2_fixtures.h").write_text(fixture_source(), encoding="utf-8")
         executable = temporary / ("rtc-v2.exe" if os.name == "nt" else "rtc-v2")
@@ -150,7 +200,13 @@ def main() -> None:
         if args.negative_control:
             expected = {
                 "legacy-auto-load": "legacy-only blocks before guest",
+                "legacy-overwrite": "pending original and v1 triad unchanged",
+                "backup-delete": "pending original and v1 triad unchanged",
+                "direct-old-delta": "adopted GPIO exposes stored snapshot",
+                "version-bypass": "unknown modern version blocks",
+                "identity-bypass": "ROM identity mismatch blocks",
                 "uncleared-dirty": "verified flush clears dirty",
+                "repeat-migration": "recreated object reloads ready without migrating twice",
                 "no-dirty": "GPIO write persists offset",
                 "partial-offset": "incomplete command does not commit offset",
             }[args.negative_control]

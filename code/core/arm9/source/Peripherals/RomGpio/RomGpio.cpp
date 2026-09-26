@@ -1,9 +1,11 @@
 #include "common.h"
 #include "RomGpioRtc.h"
 #include "RomGpio.h"
+#include "RtcFault.h"
 
 RomGpio gRomGpio;
 [[gnu::section(".ewram.bss")]] static RomGpioRtc sRomGpioRtc;
+extern "C" bool rtc_runOnWorkStack();
 
 void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
 {
@@ -28,7 +30,19 @@ void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
 
 [[gnu::section(".ewram")]] bool RomGpio::FlushRtcStateIfDirty()
 {
+    return rtc_runOnWorkStack();
+}
+
+// The VBlank caller has a 288-byte DTCM IRQ stack. RTC FatFs preflight needs
+// a separate bounded stack; the assembly entry owns switching and reentrancy.
+extern "C" [[gnu::section(".ewram")]] bool rtc_flushOnWorkStackBody()
+{
     return sRomGpioRtc.FlushStateIfDirty();
+}
+
+extern "C" [[gnu::noreturn, gnu::section(".ewram")]] void rtc_workStackFault()
+{
+    rtc_persistenceFault();
 }
 
 void RomGpio::Reset()

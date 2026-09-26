@@ -83,7 +83,11 @@ jobs:
           python3 tools/tests/test_rtc_legacy_fixtures.py
           python3 tools/tests/test_rtc_migrate.py
       - name: Verify production RTC persistence and restart
-        run: SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
+        run: |
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
+          for control in legacy-auto-load legacy-overwrite backup-delete direct-old-delta version-bypass identity-bypass uncleared-dirty repeat-migration; do
+            SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --negative-control "$control"
+          done
       - name: Verify RTC GPIO and recovery selection with synthetic files
         run: |
           SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py
@@ -119,6 +123,8 @@ jobs:
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
+      - name: Execute linked production RTC adoption and restart
+        run: python3 tools/tests/test_rtc_loader_elf.py out/tests/arm9.elf
       - name: Execute linked ARM save-signature corpus
         run: python3 tools/tests/test_save_search_arm.py out/tests/save-search.elf
       - name: Execute linked ARM7 and ARM9 storage transport

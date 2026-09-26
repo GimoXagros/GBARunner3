@@ -129,9 +129,13 @@ investigation.
 
 ## Known limitations
 
-- RTC persistence now has format/corruption/time-transition regression coverage,
-  but cold-start behavior and write recovery still require hardware verification
-  on DSpico/3DS.
+- PR #16 updates RTC BCD conversion and defines an explicit, file-preserving
+  transition from version-1 sidecars to a separate version-2 namespace. Its
+  automated validation is still in progress; cold-start behavior and write
+  recovery require hardware verification on an NDS/DSi-compatible device. See the
+  [compatibility contract](docs/rtc-legacy-compatibility.md),
+  [validation record](docs/rtc-pr16-validation.md), and
+  [hardware checklist](docs/RTC-PR16-HARDWARE.md).
 - Several save implementations and region/ROM-hack combinations still require
   issue-specific hardware retesting.
 - Some upstream compatibility, timing, sound, JIT, DMA, and application-feature

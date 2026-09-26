@@ -32,7 +32,7 @@ unsigned opens=0, writes=0, closes=0, renames=0, unlinks=0, schedules=0;
 int liveHandles=0;
 u32 hostSeconds=FIXTURE_HOST;
 bool wrote=false;
-bool forceNegativeLegacy=false, forceNegativeDirty=false;
+bool forceLegacyOverwrite=false, forceBackupDelete=false;
 
 template<size_t N> std::vector<u8> bytes(const u8 (&data)[N]) { return {data,data+N}; }
 
@@ -80,6 +80,8 @@ int f_write(FIL* file,const void* input,UINT requested,UINT* count)
     if (amount) std::memcpy(data.data()+file->position,input,amount);
     file->position+=amount; *count=static_cast<UINT>(amount);
     wrote=true;
+    if(forceLegacyOverwrite && std::string(file->path)=="modern1" && files.count("legacy2"))
+        files["legacy2"][0]^=1;
     return FR_OK;
 }
 int f_sync(FIL*) { return hit("sync") ? FR_DISK_ERR : FR_OK; }
@@ -92,7 +94,13 @@ int f_close(FIL* file)
     return FR_OK;
 }
 int f_rename(const char*,const char*) { ++renames; return FR_DISK_ERR; }
-int f_unlink(const char*) { ++unlinks; return FR_DISK_ERR; }
+int f_unlink(const char* path)
+{
+    ++unlinks;
+    if(forceBackupDelete && std::string(path)=="legacy2")
+    { files.erase(path); return FR_OK; }
+    return FR_DISK_ERR;
+}
 void sav_requestFileWrite() { ++schedules; }
 u8 mem_swapByte(u8 value,u8* target) { const u8 old=*target; *target=value; return old; }
 [[noreturn]] void rtc_persistenceFault(LoadStatus) { throw std::runtime_error("RTC terminal write fault"); }
@@ -100,6 +108,9 @@ u8 mem_swapByte(u8 value,u8* target) { const u8 old=*target; *target=value; retu
 RomGpio gRomGpio;
 static RomGpioRtc sRomGpioRtc;
 #include "production_rtc.h"
+// Host extraction keeps the production RomGpio bridge but cannot execute the
+// target assembly stack switch. The linked ARM test executes that wrapper.
+extern "C" bool rtc_runOnWorkStack() { return rtc_flushOnWorkStackBody(); }
 void RomGpioRtc::UpdateDSDateTime() { FromSecondsSinceJanuary2000(hostSeconds,sDSRtcDateTime,true); }
 
 constexpr RtcPersistence::Identity ID_A{0x45455042,32u*1024*1024,0x12345678};
@@ -110,13 +121,17 @@ void check(const char* name,bool condition)
     ++checks;
     if(!condition) { ++failures; std::cout<<"FAIL "<<name<<'\n'; }
 }
-void reset()
+void rebootPreservingMedia()
 {
-    files.clear(); failure.clear(); opens=writes=closes=renames=unlinks=schedules=0;
+    failure.clear(); opens=writes=closes=renames=unlinks=schedules=0;
     // An explicit simulated process restart is the only place that releases
     // a FIL left live by a failed close.
     liveHandles=0; sRtcFileHandleLive=false; sRtcStateFile={};
     hostSeconds=FIXTURE_HOST; wrote=false;
+}
+void reset()
+{
+    files.clear(); rebootPreservingMedia();
 }
 void put(const char* path,const std::vector<u8>& data) { files[path]=data; }
 LoadStatus load(RomGpioRtc& rtc,const RtcPersistence::Identity& id=ID_A)
@@ -159,8 +174,8 @@ int main(int argc,char** argv)
     for(int argument=1;argument+1<argc;++argument)
         if(std::string(argv[argument])=="--negative-control")
         {
-            forceNegativeLegacy=std::string(argv[argument+1])=="legacy-auto-load";
-            forceNegativeDirty=std::string(argv[argument+1])=="uncleared-dirty";
+            forceLegacyOverwrite=std::string(argv[argument+1])=="legacy-overwrite";
+            forceBackupDelete=std::string(argv[argument+1])=="backup-delete";
         }
 
     for(bool mode24:{false,true})
@@ -202,10 +217,34 @@ int main(int argc,char** argv)
     const auto originals=files;
     RomGpioRtc legacy;
     const auto legacyStatus=load(legacy);
-    check("legacy-only blocks before guest",forceNegativeLegacy
-          ? legacyStatus==LoadStatus::Ready : legacyStatus==LoadStatus::LegacyFound);
+    check("legacy-only blocks before guest",legacyStatus==LoadStatus::LegacyFound);
     check("legacy-only performs no write",files==originals && writes==0);
     verify_no_rename_unlink();
+    const auto originalLegacy=bytes(V1_PRIMARY);
+    for(unsigned byte=0;byte<originalLegacy.size();++byte)
+        for(unsigned bit=0;bit<8;++bit)
+        {
+            reset(); put("legacy0",originalLegacy); put("legacy2",bytes(V1_BACKUP));
+            files["legacy0"][byte]^=1u<<bit;
+            const auto damaged=files.at("legacy0"), backup=files.at("legacy2");
+            RomGpioRtc bitflip;
+            const auto status=load(bitflip);
+            const auto expected=(byte==4 || byte==5)
+                ? LoadStatus::UnsupportedVersion : LoadStatus::Corrupt;
+            check("v1 bitflip blocks without altering intact backup",
+                  status==expected && files.at("legacy0")==damaged &&
+                  files.at("legacy2")==backup && writes==0);
+        }
+    for(unsigned length=0;length<originalLegacy.size();++length)
+    {
+        reset(); put("legacy0",originalLegacy); put("legacy1",bytes(V1_TEMP));
+        files["legacy1"].resize(length);
+        const auto primary=files.at("legacy0"), truncated=files.at("legacy1");
+        RomGpioRtc cut;
+        check("v1 truncated sibling blocks without touching primary",
+              load(cut)==LoadStatus::Corrupt && files.at("legacy0")==primary &&
+              files.at("legacy1")==truncated && writes==0);
+    }
 
     reset();
     check("production RomGpio wrapper returns fresh gate status",
@@ -224,9 +263,9 @@ int main(int argc,char** argv)
           adopted.rtc._currentRecord.hostSecondsSince2000==FIXTURE_HOST);
     check("pending original and v1 triad unchanged",files.at("modern0")==pending &&
           files.at("legacy0")==preserved0 && files.at("legacy1")==preserved1 &&
-          files.at("legacy2")==preserved2);
+          files.count("legacy2") && files.at("legacy2")==preserved2);
     check("adopted GPIO exposes stored snapshot",adopted.read(0x65,7)==
-          std::vector<u8>({0x24,0x02,0x28,1,0x01,0x39,0x39}));
+          std::vector<u8>({0x24,0x02,0x28,0,0x01,0x39,0x39}));
     const unsigned committedWrites=writes;
     Bus restarted;
     check("recreated object reloads ready without migrating twice",
@@ -244,8 +283,7 @@ int main(int argc,char** argv)
     check("GPIO date command marks dirty",fresh.rtc._stateDirty && schedules>0);
     check("fresh flush writes and validates",fresh.rtc.FlushStateIfDirty() &&
           files.count("modern0") && files.at("modern0").size()==200);
-    check("verified flush clears dirty",forceNegativeDirty
-          ? fresh.rtc._stateDirty : !fresh.rtc._stateDirty);
+    check("verified flush clears dirty",!fresh.rtc._stateDirty);
     check("new record has fresh policy and ready phase",
           fresh.rtc._currentRecord.policy==RtcPersistence::POLICY_FRESH &&
           fresh.rtc._currentRecord.phase==RtcPersistence::PHASE_READY);
@@ -339,6 +377,59 @@ int main(int argc,char** argv)
             check("failed close blocks object recreation without reopening FIL",
                   load(recreated)==LoadStatus::IoError &&
                   opens+writes+closes==beforeRecreate);
+        }
+        verify_no_rename_unlink();
+
+        // A process restart releases host handles but preserves media bytes.
+        // A fully written new record may win even if sync/close/readback failed;
+        // a partial record cannot displace the prior selected copy.
+        rebootPreservingMedia();
+        RomGpioRtc afterReboot;
+        const bool completed=std::string(stage)=="sync" ||
+            std::string(stage)=="close_write" || std::string(stage)=="readback";
+        check("failed-write reboot selects only a complete valid record",
+              load(afterReboot)==LoadStatus::Ready &&
+              afterReboot._currentRecord.sequence==(completed?8u:7u) && writes==0 &&
+              files.at("modern0")==selected);
+        verify_no_rename_unlink();
+    }
+
+    for(const char* stage:{"open_write","write","short_write","sync",
+                           "close_write","readback"})
+    {
+        reset();
+        put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));
+        put("legacy2",bytes(V1_BACKUP)); put("modern0",bytes(V2_PENDING));
+        const auto beforeLegacy=files;
+        failure=stage;
+        RomGpioRtc interrupted;
+        check("pending failure blocks guest execution",load(interrupted)==LoadStatus::WriteError);
+        check("pending failure preserves all v1 bytes and consent",
+              files.at("legacy0")==beforeLegacy.at("legacy0") &&
+              files.at("legacy1")==beforeLegacy.at("legacy1") &&
+              files.at("legacy2")==beforeLegacy.at("legacy2") &&
+              files.at("modern0")==beforeLegacy.at("modern0"));
+        rebootPreservingMedia();
+        RomGpioRtc resumed;
+        const std::string stageName=stage;
+        if(stageName=="write" || stageName=="short_write")
+            check("partial pending restart blocks instead of re-migrating",
+                  load(resumed)==LoadStatus::Corrupt && writes==0 &&
+                  files.at("modern0")==beforeLegacy.at("modern0"));
+        else
+        {
+            const bool wasComplete=stageName!="open_write";
+            check("pending restart reaches one verified ready record",
+                  load(resumed)==LoadStatus::Ready &&
+                  resumed._currentRecord.phase==RtcPersistence::PHASE_READY &&
+                  resumed._currentRecord.sequence==1 &&
+                  writes==(wasComplete?0u:1u));
+            const unsigned firstReadyWrites=writes;
+            rebootPreservingMedia();
+            RomGpioRtc again;
+            check("ready restart does not migrate twice",
+                  load(again)==LoadStatus::Ready && writes==0 &&
+                  firstReadyWrites==(wasComplete?0u:1u));
         }
         verify_no_rename_unlink();
     }

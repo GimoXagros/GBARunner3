@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""Execute the application ELF's linked ARM9 RTC loader on synthetic media.
+
+Unicorn runs production ARM instructions. Hooks provide FatFs calls and a
+corrected DS RTC reply. This verifies loader reachability and machine-code
+execution, but cannot establish physical FAT durability or ARM7 IPC timing.
+Dependencies: unicorn==2.1.4, pyelftools==0.32.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timedelta
+from pathlib import Path
+import struct
+
+from unicorn import (
+    Uc, UcError, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_CODE,
+    UC_HOOK_MEM_INVALID, UC_HOOK_MEM_WRITE,
+)
+from unicorn.arm_const import (
+    UC_ARM_REG_CPSR, UC_ARM_REG_LR, UC_ARM_REG_PC, UC_ARM_REG_R0,
+    UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3, UC_ARM_REG_SP,
+)
+
+from rtc_legacy_fixtures import (
+    ID_A, correct_seconds, legacy_record_from_old_clock, modern_record,
+)
+from test_hicode_dispatch_elf import load_elf
+
+FR_OK, FR_DISK_ERR, FR_NO_FILE, FR_EXIST = 0, 1, 4, 8
+FA_WRITE, FA_CREATE_NEW, FA_CREATE_ALWAYS = 2, 4, 8
+SENTINEL = 0x0300F000
+HEAP_BASE = 0x023E0000
+STACK = 0x023D0000
+STATUS_READY, STATUS_FRESH, STATUS_LEGACY, STATUS_CONFLICT = 0, 1, 2, 7
+
+
+def bcd(value: int) -> int:
+    return (value // 10 << 4) | value % 10
+
+
+def find_symbol(symbols: dict[str, int], fragment: str) -> int:
+    matches = [(name, address) for name, address in symbols.items()
+               if fragment in name and address and not name.startswith("__")]
+    exact = [(name, address) for name, address in matches if "veneer" not in name]
+    if len(exact) != 1:
+        raise AssertionError(f"expected one linked symbol containing {fragment}: {exact}")
+    return exact[0][1]
+
+
+class LinkedRtc:
+    def __init__(self, symbols: dict[str, int], sections: list[tuple[int, bytes]]):
+        self.symbols = symbols
+        self.cpu = Uc(UC_ARCH_ARM, UC_MODE_ARM)
+        for base, size in (
+            (0, 0x8000), (0x02000000, 0x400000), (0x03000000, 0x10000),
+            (0x037C0000, 0x4000), (0x03800000, 0x10000),
+            (0x04000000, 0x2000), (0x04100000, 0x1000),
+            (0x06800000, 0x100000),
+            (0xFFFF8000, 0x8000),
+        ):
+            self.cpu.mem_map(base, size)
+        for address, data in sections:
+            self.cpu.mem_write(address, data)
+        self.file_addresses = {name: HEAP_BASE + 0x100 + i * 0x20
+                               for i, name in enumerate(("l0", "l1", "l2", "m0", "m1", "m2"))}
+        for name, address in self.file_addresses.items():
+            self.cpu.mem_write(address, name.encode() + b"\0")
+        self.cpu.mem_write(HEAP_BASE + 0x300, struct.pack("<III", *ID_A))
+        self.media: dict[str, bytes] = {}
+        self.handles: dict[int, tuple[str, int, int]] = {}
+        self.clock = datetime(2024, 2, 28, 22, 45, 45)
+        self.writes = 0
+        self.syncs = 0
+        self.closed_writes = 0
+        self.readbacks = 0
+        self.clock_reads = 0
+        self.rename_unlink = 0
+        self.scheduler_calls = 0
+        self.last_invalid = None
+        self.entry = find_symbol(symbols, "RomGpioRtc10Initialize")
+        self.update = find_symbol(symbols, "RomGpioRtc14UpdateDateTime")
+        self.clock_entry = find_symbol(symbols, "RomGpioRtc16UpdateDSDateTime")
+        self.clock_buffer = find_symbol(symbols, "RomGpioRtc14sDSRtcDateTime")
+        self.hooks = {symbols[name]: name for name in
+                      ("f_open", "f_read", "f_write", "f_sync", "f_close")}
+        for name in ("f_unlink", "f_rename", "sav_requestFileWrite"):
+            if name in symbols:
+                self.hooks[symbols[name]] = name
+        self.hooks[self.clock_entry] = "DS_CLOCK"
+        self.cpu.hook_add(UC_HOOK_CODE, self._hook)
+        self.cpu.hook_add(UC_HOOK_MEM_INVALID, self._invalid_memory)
+        self.cpu.hook_add(UC_HOOK_MEM_WRITE, self._ipc_write,
+                          begin=0x04000188, end=0x04000188)
+
+    def _supply_ds_clock(self) -> None:
+        self.clock_reads += 1
+        clock = self.clock
+        self.cpu.mem_write(self.clock_buffer, bytes((
+            bcd(clock.year - 2000), bcd(clock.month), bcd(clock.day),
+            clock.weekday(), bcd(clock.hour) | (0x80 if clock.hour >= 12 else 0),
+            bcd(clock.minute), bcd(clock.second),
+        )))
+
+    def _ipc_write(self, cpu: Uc, access: int, address: int,
+                   size: int, value: int, _: object) -> None:
+        # GCC may inline UpdateDSDateTime at a pending-adoption call site.
+        # Observe the actual IPC FIFO write and supply the same ARM7 date bytes.
+        self._supply_ds_clock()
+
+    def _invalid_memory(self, cpu: Uc, access: int, address: int,
+                        size: int, value: int, _: object) -> bool:
+        self.last_invalid = (access, address, size,
+                             cpu.reg_read(UC_ARM_REG_PC), cpu.reg_read(UC_ARM_REG_LR))
+        return False
+
+    def _arg(self, register: int) -> int:
+        return self.cpu.reg_read(register)
+
+    def _put32(self, address: int, value: int) -> None:
+        self.cpu.mem_write(address, struct.pack("<I", value))
+
+    def _cstring(self, address: int) -> str:
+        data = bytearray()
+        for i in range(128):
+            byte = self.cpu.mem_read(address + i, 1)[0]
+            if byte == 0:
+                return data.decode("ascii")
+            data.append(byte)
+        raise AssertionError("unterminated synthetic RTC path")
+
+    def _return(self, result: int = 0) -> None:
+        self.cpu.reg_write(UC_ARM_REG_R0, result)
+        self.cpu.reg_write(UC_ARM_REG_PC, self.cpu.reg_read(UC_ARM_REG_LR))
+
+    def _hook(self, cpu: Uc, pc: int, size: int, _: object) -> None:
+        name = self.hooks.get(pc)
+        if name is None:
+            return
+        r0, r1, r2, r3 = (self._arg(register) for register in
+                          (UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3))
+        if name == "DS_CLOCK":
+            self._supply_ds_clock()
+            self._return()
+        elif name == "f_open":
+            path = self._cstring(r1)
+            if path == "m1" and not (r2 & FA_WRITE) and self.writes:
+                self.readbacks += 1
+            if r2 & FA_CREATE_NEW:
+                if path in self.media:
+                    self._return(FR_EXIST); return
+                self.media[path] = b""
+            elif r2 & FA_CREATE_ALWAYS:
+                self.media[path] = b""
+            elif path not in self.media:
+                self._return(FR_NO_FILE); return
+            if self.handles:
+                raise AssertionError("linked loader reopened a live FIL")
+            self.handles[r0] = (path, 0, r2)
+            # FatFs f_size macro reads FFOBJID.objsize, a 32-bit member at +12
+            # in this project's FF_FS_EXFAT=0 configuration.
+            self._put32(r0 + 12, len(self.media[path]))
+            self._return(FR_OK)
+        elif name == "f_read":
+            path, position, mode = self.handles[r0]
+            chunk = self.media[path][position:position + r2]
+            if chunk:
+                self.cpu.mem_write(r1, chunk)
+            self._put32(r3, len(chunk))
+            self.handles[r0] = (path, position + len(chunk), mode)
+            self._return(FR_OK)
+        elif name == "f_write":
+            path, position, mode = self.handles[r0]
+            data = bytes(self.cpu.mem_read(r1, r2))
+            current = bytearray(self.media[path])
+            if len(current) < position + len(data):
+                current.extend(b"\0" * (position + len(data) - len(current)))
+            current[position:position + len(data)] = data
+            self.media[path] = bytes(current)
+            self.handles[r0] = (path, position + len(data), mode)
+            self._put32(r3, len(data))
+            self.writes += 1
+            self._return(FR_OK)
+        elif name == "f_sync":
+            self.syncs += 1
+            self._return(FR_OK)
+        elif name == "f_close":
+            assert r0 in self.handles, "linked loader closed unknown FIL"
+            if self.handles[r0][2] & FA_WRITE:
+                self.closed_writes += 1
+            del self.handles[r0]
+            self._return(FR_OK)
+        elif name in ("f_unlink", "f_rename"):
+            self.rename_unlink += 1
+            self._return(FR_DISK_ERR)
+        elif name == "sav_requestFileWrite":
+            self.scheduler_calls += 1
+            self._return()
+
+    def call(self, address: int, this: int, *, initialize: bool = False) -> int:
+        self.cpu.reg_write(UC_ARM_REG_CPSR, 0xD3)
+        self.cpu.reg_write(UC_ARM_REG_SP, STACK)
+        self.cpu.reg_write(UC_ARM_REG_LR, SENTINEL)
+        self.cpu.reg_write(UC_ARM_REG_R0, this)
+        if initialize:
+            self.cpu.reg_write(UC_ARM_REG_R1, self.file_addresses["l0"])
+            self.cpu.reg_write(UC_ARM_REG_R2, self.file_addresses["l1"])
+            self.cpu.reg_write(UC_ARM_REG_R3, self.file_addresses["l2"])
+            self.cpu.mem_write(STACK, struct.pack("<4I",
+                self.file_addresses["m0"], self.file_addresses["m1"],
+                self.file_addresses["m2"], HEAP_BASE + 0x300))
+        try:
+            self.cpu.emu_start(address, SENTINEL, count=2_000_000)
+        except UcError as error:
+            raise AssertionError(
+                f"linked ARM RTC fault {error}; last_invalid={self.last_invalid}; "
+                f"PC={self.cpu.reg_read(UC_ARM_REG_PC):#x} "
+                f"LR={self.cpu.reg_read(UC_ARM_REG_LR):#x}") from error
+        assert self.cpu.reg_read(UC_ARM_REG_PC) == SENTINEL, \
+            "linked ARM RTC function exhausted instruction budget"
+        return self.cpu.reg_read(UC_ARM_REG_R0)
+
+    def initialize(self, this: int) -> int:
+        return self.call(self.entry, this, initialize=True)
+
+    def visible_date_time(self, this: int) -> bytes:
+        self.call(self.update, this)
+        # ARM AAPCS layout: five u32 transfer fields (20 bytes), two u16
+        # registers (4 bytes), then the seven-byte RTC GPIO date/time struct.
+        return bytes(self.cpu.mem_read(this + 24, 7))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("arm9", type=Path, help="linked application ARM9 ELF")
+    args = parser.parse_args()
+    symbols, sections = load_elf(args.arm9)
+    clock = datetime(2024, 2, 28, 22, 45, 45)
+    game = datetime(2024, 2, 28, 21, 39, 39)
+    triad = tuple(legacy_record_from_old_clock(
+        ID_A, sequence=sequence, host=clock, game=game,
+    ) for sequence in (7, 8, 6))
+    game_seconds = struct.unpack_from("<I", triad[1], 28)[0]
+    pending = modern_record(ID_A, sequence=0, host_seconds=0,
+                            game_seconds=game_seconds, legacy=triad,
+                            selected_role=1, pending=True)
+    ready = modern_record(ID_A, sequence=1,
+                          host_seconds=correct_seconds(clock),
+                          game_seconds=game_seconds, legacy=triad,
+                          selected_role=1)
+
+    fresh = LinkedRtc(symbols, sections)
+    assert fresh.initialize(HEAP_BASE + 0x800) == STATUS_FRESH
+    assert not fresh.media and fresh.writes == 0 and fresh.clock_reads == 0
+
+    legacy = LinkedRtc(symbols, sections)
+    legacy.media.update(zip(("l0", "l1", "l2"), triad))
+    before_legacy = dict(legacy.media)
+    assert legacy.initialize(HEAP_BASE + 0x800) == STATUS_LEGACY
+    assert legacy.media == before_legacy and legacy.writes == 0 and legacy.clock_reads == 0
+
+    adopted = LinkedRtc(symbols, sections)
+    adopted.media.update(zip(("l0", "l1", "l2"), triad))
+    adopted.media["m0"] = pending
+    assert adopted.initialize(HEAP_BASE + 0x800) == STATUS_READY
+    assert adopted.media["m0"] == pending and adopted.media["m1"] == ready
+    assert adopted.writes == 1 and adopted.syncs == 1 and \
+        adopted.closed_writes == 1 and adopted.readbacks >= 1 and not adopted.handles, \
+        "linked pending commit must write, sync, close and reread"
+    assert all(adopted.media[f"l{i}"] == triad[i] for i in range(3))
+    assert adopted.visible_date_time(HEAP_BASE + 0x800) == bytes.fromhex(
+        "24 02 28 00 01 39 39"), "linked GPIO date/time after adoption"
+    writes = adopted.writes
+    adopted.clock += timedelta(seconds=1)
+    assert adopted.initialize(HEAP_BASE + 0xA00) == STATUS_READY
+    assert adopted.writes == writes, "linked reload must not re-adopt"
+    assert adopted.visible_date_time(HEAP_BASE + 0xA00) == bytes.fromhex(
+        "24 02 28 00 01 39 40"), "linked GPIO date/time after restart"
+    assert adopted.rename_unlink == 0
+    adopted.media["l1"] = legacy_record_from_old_clock(
+        ID_A, sequence=9, host=clock, game=game)
+    assert adopted.initialize(HEAP_BASE + 0xC00) == STATUS_CONFLICT, \
+        "downgrade-changed legacy bytes must block re-upgrade"
+    assert adopted.writes == writes and adopted.rename_unlink == 0
+
+    print("linked ARM9 RTC loader: fresh, legacy gate, pending commit/readback, "
+          "restart GPIO, conflict PASS; synthetic FatFs/DS clock; hardware NOT RUN")
+
+
+if __name__ == "__main__":
+    main()
