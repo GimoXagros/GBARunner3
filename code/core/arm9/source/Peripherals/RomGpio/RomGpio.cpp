@@ -12,13 +12,18 @@ void RomGpio::Initialize(rio_registers_t* romGpioRegisters)
     Reset();
 }
 
-[[gnu::section(".ewram")]] void RomGpio::LoadRtcState(
-    const char* statePath,
-    const char* tempPath,
-    const char* backupPath,
+[[gnu::section(".ewram")]] RtcPersistence::LoadStatus RomGpio::LoadRtcState(
+    const char* legacyStatePath,
+    const char* legacyTempPath,
+    const char* legacyBackupPath,
+    const char* modernStatePath,
+    const char* modernTempPath,
+    const char* modernBackupPath,
     const RtcPersistence::Identity& identity)
 {
-    sRomGpioRtc.Initialize(statePath, tempPath, backupPath, identity);
+    return sRomGpioRtc.Initialize(
+        legacyStatePath, legacyTempPath, legacyBackupPath,
+        modernStatePath, modernTempPath, modernBackupPath, identity);
 }
 
 [[gnu::section(".ewram")]] bool RomGpio::FlushRtcStateIfDirty()

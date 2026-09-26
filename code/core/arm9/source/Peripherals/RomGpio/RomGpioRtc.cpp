@@ -7,6 +7,7 @@
 #include "Fat/ff.h"
 #include "IpcChannels.h"
 #include "Save/Save.h"
+#include "RtcFault.h"
 #include "RomGpio.h"
 #include "RomGpioRtc.h"
 
@@ -34,7 +35,6 @@
 #define RIO_RTC_STATUS_POWER        0x80
 
 #define RIO_RTC_STATUS_WRITE_MASK   0b01101010
-#define RIO_RTC_FLUSH_RETRY_FRAMES  60
 
 [[gnu::section(".ewram.bss")]]
 RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
@@ -45,57 +45,231 @@ RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
 static FIL sRtcStateFile alignas(32);
 
 [[gnu::section(".ewram.bss")]]
-static RtcPersistence::StateFile sRtcStateFileBuffer alignas(32);
+static RtcPersistence::StateFile sLegacyRecords[3] alignas(32);
+
+[[gnu::section(".ewram.bss")]]
+static RtcPersistence::StateFileV2 sModernRecords[3] alignas(32);
+
+[[gnu::section(".ewram.bss")]]
+static RtcPersistence::FileStatus sLegacyStatus[3];
+
+[[gnu::section(".ewram.bss")]]
+static RtcPersistence::FileStatus sModernStatus[3];
+
+[[gnu::section(".ewram.bss")]]
+static RtcPersistence::StateFileV2 sRtcWriteBuffer alignas(32);
 
 [[gnu::section(".ewram.bss")]]
 volatile u8 gRomGpioRtcStateDirty;
 
-RTC_EWRAM void RomGpioRtc::Initialize(
-    const char* statePath,
-    const char* tempPath,
-    const char* backupPath,
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::Initialize(
+    const char* legacyStatePath,
+    const char* legacyTempPath,
+    const char* legacyBackupPath,
+    const char* modernStatePath,
+    const char* modernTempPath,
+    const char* modernBackupPath,
     const RtcPersistence::Identity& identity)
 {
-    _statePath = statePath;
-    _tempPath = tempPath;
-    _backupPath = backupPath;
+    // A failed close may still own the static FIL. Never reinitialize it or
+    // retry a failed journal transaction in this process.
+    if (_fileHandleLive) return RtcPersistence::LoadStatus::IoError;
+    if (_writeError) return RtcPersistence::LoadStatus::WriteError;
+    _legacyPaths[0] = legacyStatePath;
+    _legacyPaths[1] = legacyTempPath;
+    _legacyPaths[2] = legacyBackupPath;
+    _modernPaths[0] = modernStatePath;
+    _modernPaths[1] = modernTempPath;
+    _modernPaths[2] = modernBackupPath;
     _identity = identity;
-    _sequence = 0;
+    _currentRecord = { };
+    _hasCurrent = false;
+    _writeError = false;
+    _fileHandleLive = false;
     _stateDirty = false;
-    _flushRetryFrames = 0;
     gRomGpioRtcStateDirty = false;
 
     _statusRegister = RIO_RTC_STATUS_24H;
     _intRegister = 0;
     _rtcOffset = 0;
     _weekDayOffset = 0;
-    LoadState();
+    return LoadState();
 }
 
-RTC_EWRAM bool RomGpioRtc::ReadStateFile(
-    const char* path,
-    RtcPersistence::StateFile& state)
+RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadRecord(
+    const char* path, void* record, u32 size, u32 magic, u16 version)
 {
-    if (!path)
-    {
-        return false;
-    }
-
+    using RtcPersistence::FileStatus;
+    if (!path || _fileHandleLive) return FileStatus::IoError;
     memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
-    if (f_open(&sRtcStateFile, path, FA_OPEN_EXISTING | FA_READ) != FR_OK)
-    {
-        return false;
-    }
+    const FRESULT opened = f_open(&sRtcStateFile, path, FA_OPEN_EXISTING | FA_READ);
+    if (opened == FR_NO_FILE) return FileStatus::Missing;
+    if (opened != FR_OK) return FileStatus::IoError;
+    _fileHandleLive = true;
 
+    const u32 actualSize = f_size(&sRtcStateFile);
+    u8 header[8] { };
     UINT bytesRead = 0;
-    const bool success = f_size(&sRtcStateFile) == sizeof(state) &&
-        f_read(&sRtcStateFile, &state, sizeof(state), &bytesRead) == FR_OK &&
-        bytesRead == sizeof(state);
-    f_close(&sRtcStateFile);
-    return success && RtcPersistence::Validate(state, _identity);
+    const FRESULT headerResult = actualSize >= sizeof(header)
+        ? f_read(&sRtcStateFile, header, sizeof(header), &bytesRead) : FR_OK;
+    FileStatus result = FileStatus::Corrupt;
+    if (headerResult != FR_OK || (actualSize >= sizeof(header) && bytesRead != sizeof(header)))
+        result = FileStatus::IoError;
+    else if (actualSize >= sizeof(header))
+    {
+        u32 foundMagic;
+        u16 foundVersion;
+        memcpy(&foundMagic, header, sizeof(foundMagic));
+        memcpy(&foundVersion, header + 4, sizeof(foundVersion));
+        if (foundMagic == magic && foundVersion != version)
+            result = FileStatus::UnsupportedVersion;
+        else if (foundMagic == magic && actualSize == size)
+        {
+            memcpy(record, header, sizeof(header));
+            UINT remainder = 0;
+            const FRESULT rest = f_read(&sRtcStateFile,
+                static_cast<u8*>(record) + sizeof(header), size - sizeof(header), &remainder);
+            result = rest != FR_OK || remainder != size - sizeof(header)
+                ? FileStatus::IoError : FileStatus::ValidCurrent;
+        }
+    }
+    if (f_close(&sRtcStateFile) != FR_OK) return FileStatus::IoError;
+    _fileHandleLive = false;
+    return result;
 }
 
-RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFile& state)
+RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadLegacyStateFile(
+    const char* path, RtcPersistence::StateFile& state)
+{
+    using RtcPersistence::FileStatus;
+    const auto result = ReadRecord(path, &state, sizeof(state),
+        RtcPersistence::STATE_MAGIC, RtcPersistence::STATE_VERSION);
+    if (result != FileStatus::ValidCurrent) return result;
+    if (state.checksum != RtcPersistence::CalculateChecksum(state)) return FileStatus::Corrupt;
+    if (!RtcPersistence::MatchesIdentity(state, _identity)) return FileStatus::IdentityMismatch;
+    return RtcPersistence::ValidateLegacy(state, _identity)
+        ? FileStatus::ValidLegacy : FileStatus::Corrupt;
+}
+
+RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadModernStateFile(
+    const char* path, RtcPersistence::StateFileV2& state)
+{
+    using RtcPersistence::FileStatus;
+    const auto result = ReadRecord(path, &state, sizeof(state),
+        RtcPersistence::STATE_V2_MAGIC, RtcPersistence::STATE_V2_VERSION);
+    if (result != FileStatus::ValidCurrent) return result;
+    if (state.checksum != RtcPersistence::CalculateV2Checksum(state)) return FileStatus::Corrupt;
+    if (state.gameCode != _identity.gameCode || state.romSize != _identity.romSize ||
+        state.headerHash != _identity.headerHash) return FileStatus::IdentityMismatch;
+    return RtcPersistence::ValidateV2(state, _identity)
+        ? FileStatus::ValidCurrent : FileStatus::Corrupt;
+}
+
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanLegacy()
+{
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    for (u32 i = 0; i < 3; ++i)
+    {
+        sLegacyStatus[i] = ReadLegacyStateFile(_legacyPaths[i], sLegacyRecords[i]);
+        switch (sLegacyStatus[i])
+        {
+            case FileStatus::Corrupt: return LoadStatus::Corrupt;
+            case FileStatus::UnsupportedVersion: return LoadStatus::UnsupportedVersion;
+            case FileStatus::IdentityMismatch: return LoadStatus::IdentityMismatch;
+            case FileStatus::IoError: _writeError = true; return LoadStatus::IoError;
+            default: break;
+        }
+    }
+    return LoadStatus::Ready;
+}
+
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanModern()
+{
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    for (u32 i = 0; i < 3; ++i)
+    {
+        sModernStatus[i] = ReadModernStateFile(_modernPaths[i], sModernRecords[i]);
+        switch (sModernStatus[i])
+        {
+            case FileStatus::UnsupportedVersion: return LoadStatus::UnsupportedVersion;
+            case FileStatus::IdentityMismatch: return LoadStatus::IdentityMismatch;
+            case FileStatus::IoError: _writeError = true; return LoadStatus::IoError;
+            default: break;
+        }
+    }
+    return LoadStatus::Ready;
+}
+
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::CheckLegacyLineage(
+    const RtcPersistence::StateFileV2& state)
+{
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    for (u32 i = 0; i < 3; ++i)
+    {
+        const bool expected = (state.legacyPresence & (1u << i)) != 0;
+        if (expected != (sLegacyStatus[i] == FileStatus::ValidLegacy))
+            return LoadStatus::Conflict;
+        if (expected && memcmp(&sLegacyRecords[i], state.legacyBytes[i],
+                sizeof(RtcPersistence::StateFile)) != 0)
+            return LoadStatus::Conflict;
+    }
+    return LoadStatus::Ready;
+}
+
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::SelectModern(int& selected)
+{
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    selected = -1;
+    int firstValid = -1;
+    bool hasCorrupt = false;
+    bool hasReady = false;
+    for (int i = 0; i < 3; ++i)
+    {
+        if (sModernStatus[i] == FileStatus::Corrupt) hasCorrupt = true;
+        if (sModernStatus[i] != FileStatus::ValidCurrent) continue;
+        if (firstValid >= 0 &&
+            !RtcPersistence::SameLineage(sModernRecords[firstValid], sModernRecords[i]))
+            return LoadStatus::Conflict;
+        if (firstValid < 0) firstValid = i;
+        if (sModernRecords[i].phase == RtcPersistence::PHASE_READY) hasReady = true;
+    }
+    if (firstValid < 0) return hasCorrupt ? LoadStatus::Corrupt : LoadStatus::Ready;
+    if (!hasReady && hasCorrupt) return LoadStatus::Corrupt;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        if (sModernStatus[i] != FileStatus::ValidCurrent ||
+            (hasReady && sModernRecords[i].phase != RtcPersistence::PHASE_READY))
+            continue;
+        bool dominates = true;
+        for (int j = 0; j < 3; ++j)
+        {
+            if (i == j || sModernStatus[j] != FileStatus::ValidCurrent ||
+                (hasReady && sModernRecords[j].phase != RtcPersistence::PHASE_READY))
+                continue;
+            const u32 candidate = sModernRecords[i].sequence;
+            const u32 other = sModernRecords[j].sequence;
+            if (candidate == other)
+            {
+                if (memcmp(&sModernRecords[i], &sModernRecords[j],
+                        sizeof(RtcPersistence::StateFileV2)) != 0)
+                    return LoadStatus::Conflict;
+            }
+            else if (candidate - other == 0x80000000u)
+                return LoadStatus::Conflict;
+            else if (!RtcPersistence::IsSequenceNewer(candidate, other))
+                dominates = false;
+        }
+        if (dominates && selected < 0) selected = i;
+    }
+    return selected < 0 ? LoadStatus::Conflict : LoadStatus::Ready;
+}
+
+RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFileV2& state)
 {
     UpdateDSDateTime();
     const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
@@ -107,108 +281,132 @@ RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFile& state)
     _statusRegister = state.statusRegister &
         (RIO_RTC_STATUS_POWER | RIO_RTC_STATUS_WRITE_MASK);
     _intRegister = state.intRegister;
-    _sequence = state.sequence;
-
     if (hostSeconds < state.hostSecondsSince2000)
     {
         MarkStateDirty();
     }
 }
 
-RTC_EWRAM bool RomGpioRtc::LoadState()
+RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::LoadState()
 {
-    const char* paths[] = { _statePath, _tempPath, _backupPath };
-    RtcPersistence::StateFile selected { };
-    bool hasSelected = false;
-    u32 selectedPath = 0;
-
-    for (u32 i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i)
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    auto status = ScanLegacy();
+    if (status != LoadStatus::Ready) return status;
+    status = ScanModern();
+    if (status != LoadStatus::Ready) return status;
+    int selected = -1;
+    status = SelectModern(selected);
+    if (status != LoadStatus::Ready) return status;
+    if (selected >= 0)
     {
-        memset(&sRtcStateFileBuffer, 0, sizeof(sRtcStateFileBuffer));
-        if (!ReadStateFile(paths[i], sRtcStateFileBuffer))
+        _currentRecord = sModernRecords[selected];
+        _hasCurrent = true;
+        status = CheckLegacyLineage(_currentRecord);
+        if (status != LoadStatus::Ready) return status;
+        if (_currentRecord.phase == RtcPersistence::PHASE_PENDING)
         {
-            continue;
+            // Consent is recorded by the offline tool. Anchor only to the DS
+            // clock at this boot; the unknown earlier interval is not added.
+            RtcPersistence::StateFileV2& ready = sRtcWriteBuffer;
+            ready = _currentRecord;
+            UpdateDSDateTime();
+            ready.hostSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+            ready.sequence = 1;
+            ready.phase = RtcPersistence::PHASE_READY;
+            ready.checksum = RtcPersistence::CalculateV2Checksum(ready);
+            if (!WriteStateFile(ready)) return LoadStatus::WriteError;
+            _currentRecord = ready;
         }
-        if (!hasSelected ||
-            RtcPersistence::IsSequenceNewer(sRtcStateFileBuffer.sequence, selected.sequence))
-        {
-            selected = sRtcStateFileBuffer;
-            selectedPath = i;
-            hasSelected = true;
-        }
+        ApplyState(_currentRecord);
+        return LoadStatus::Ready;
     }
 
-    if (!hasSelected)
-    {
-        return false;
-    }
+    for (u32 i = 0; i < 3; ++i)
+        if (sLegacyStatus[i] == FileStatus::ValidLegacy)
+            return LoadStatus::LegacyFound;
 
-    ApplyState(selected);
-    if (selectedPath != 0)
-    {
-        MarkStateDirty();
-    }
-    return true;
+    // A fresh user remains in memory until an ordinary GPIO change is dirty.
+    // In particular, merely inspecting/starting the program writes no sidecar.
+    return LoadStatus::FreshInitialized;
 }
 
-RTC_EWRAM bool RomGpioRtc::WriteStateFile(const RtcPersistence::StateFile& state)
+RTC_EWRAM bool RomGpioRtc::WriteStateFile(const RtcPersistence::StateFileV2& state)
 {
-    if (!_statePath || !_tempPath || !_backupPath)
+    using RtcPersistence::FileStatus;
+    using RtcPersistence::LoadStatus;
+    if (_writeError || _fileHandleLive ||
+        !RtcPersistence::ValidateV2(state, _identity))
     {
+        _writeError = true;
+        return false;
+    }
+    if (ScanLegacy() != LoadStatus::Ready ||
+        CheckLegacyLineage(state) != LoadStatus::Ready ||
+        ScanModern() != LoadStatus::Ready)
+    {
+        _writeError = true;
+        return false;
+    }
+    int selected = -1;
+    if (SelectModern(selected) != LoadStatus::Ready ||
+        (_hasCurrent != (selected >= 0)) ||
+        (_hasCurrent && memcmp(&_currentRecord, &sModernRecords[selected],
+            sizeof(_currentRecord)) != 0))
+    {
+        _writeError = true;
         return false;
     }
 
-    memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
-    if (f_open(&sRtcStateFile, _tempPath, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+    int target = -1;
+    for (int i = 0; i < 3; ++i)
+        if (sModernStatus[i] == FileStatus::Missing) { target = i; break; }
+    if (target < 0)
     {
-        return false;
-    }
-
-    UINT bytesWritten = 0;
-    bool success = f_write(&sRtcStateFile, &state, sizeof(state), &bytesWritten) == FR_OK &&
-        bytesWritten == sizeof(state) && f_sync(&sRtcStateFile) == FR_OK;
-    if (f_close(&sRtcStateFile) != FR_OK)
-    {
-        success = false;
-    }
-    if (!success)
-    {
-        return false;
-    }
-
-    memset(&sRtcStateFileBuffer, 0, sizeof(sRtcStateFileBuffer));
-    if (!ReadStateFile(_tempPath, sRtcStateFileBuffer) ||
-        sRtcStateFileBuffer.sequence != state.sequence ||
-        sRtcStateFileBuffer.checksum != state.checksum)
-    {
-        return false;
-    }
-
-    const FRESULT unlinkBackupResult = f_unlink(_backupPath);
-    if (unlinkBackupResult != FR_OK && unlinkBackupResult != FR_NO_FILE)
-    {
-        return false;
-    }
-
-    const FRESULT movePrimaryResult = f_rename(_statePath, _backupPath);
-    const bool hadPrimary = movePrimaryResult == FR_OK;
-    if (!hadPrimary && movePrimaryResult != FR_NO_FILE)
-    {
-        return false;
-    }
-
-    if (f_rename(_tempPath, _statePath) != FR_OK)
-    {
-        if (hadPrimary)
+        // Once ready exists, a pending consent record is the oldest slot.
+        for (int i = 0; i < 3; ++i)
         {
-            f_rename(_backupPath, _statePath);
+            if (i == selected || sModernStatus[i] != FileStatus::ValidCurrent) continue;
+            if (sModernRecords[i].phase == RtcPersistence::PHASE_PENDING)
+            { target = i; break; }
+            if (target < 0) target = i;
+            else if (sModernRecords[target].phase != RtcPersistence::PHASE_PENDING)
+            {
+                const u32 a = sModernRecords[target].sequence;
+                const u32 b = sModernRecords[i].sequence;
+                if (a - b == 0x80000000u) { _writeError = true; return false; }
+                if (RtcPersistence::IsSequenceNewer(a, b)) target = i;
+            }
         }
+    }
+    if (target < 0) { _writeError = true; return false; }
+
+    const bool createNew = sModernStatus[target] == FileStatus::Missing;
+    memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
+    const FRESULT opened = f_open(&sRtcStateFile, _modernPaths[target],
+        (createNew ? FA_CREATE_NEW : FA_CREATE_ALWAYS) | FA_WRITE);
+    if (opened != FR_OK) { _writeError = true; return false; }
+    _fileHandleLive = true;
+    UINT bytesWritten = 0;
+    const FRESULT written = f_write(&sRtcStateFile, &state, sizeof(state), &bytesWritten);
+    const FRESULT synced = written == FR_OK && bytesWritten == sizeof(state)
+        ? f_sync(&sRtcStateFile) : FR_DISK_ERR;
+    const FRESULT closed = f_close(&sRtcStateFile);
+    if (closed == FR_OK) _fileHandleLive = false;
+    if (written != FR_OK || bytesWritten != sizeof(state) ||
+        synced != FR_OK || closed != FR_OK)
+    {
+        _writeError = true;
         return false;
     }
 
-    if (hadPrimary)
+    // A successful close is still not enough: read and compare all 200 bytes.
+    RtcPersistence::StateFileV2& readback = sModernRecords[target];
+    if (ReadModernStateFile(_modernPaths[target], readback) != FileStatus::ValidCurrent ||
+        memcmp(&readback, &state, sizeof(state)) != 0)
     {
-        f_unlink(_backupPath);
+        _writeError = true;
+        return false;
     }
     return true;
 }
@@ -219,32 +417,45 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     {
         return true;
     }
-    if (_flushRetryFrames != 0)
-    {
-        --_flushRetryFrames;
-        return false;
-    }
+    if (_writeError) rtc_persistenceFault();
 
     UpdateDSDateTime();
     const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
     const u32 rtcSeconds = NormalizeSecondsSinceJanuary2000(
         static_cast<s64>(hostSeconds) + _rtcOffset);
-    const auto state = RtcPersistence::CreateState(
-        _identity,
-        _sequence + 1,
-        hostSeconds,
-        rtcSeconds,
-        _weekDayOffset,
-        _statusRegister,
-        _intRegister);
+    RtcPersistence::StateFileV2& state = sRtcWriteBuffer;
+    if (_hasCurrent)
+    {
+        state = _currentRecord;
+        state.sequence++;
+    }
+    else
+    {
+        state = { };
+        state.magic = RtcPersistence::STATE_V2_MAGIC;
+        state.version = RtcPersistence::STATE_V2_VERSION;
+        state.payloadLength = RtcPersistence::STATE_V2_PAYLOAD_LENGTH;
+        state.gameCode = _identity.gameCode;
+        state.romSize = _identity.romSize;
+        state.headerHash = _identity.headerHash;
+        state.policy = RtcPersistence::POLICY_FRESH;
+        state.phase = RtcPersistence::PHASE_READY;
+        state.selectedLegacyRole = 0xFF;
+    }
+    state.hostSecondsSince2000 = hostSeconds;
+    state.rtcSecondsSince2000 = rtcSeconds;
+    state.weekDayOffset = _weekDayOffset;
+    state.statusRegister = _statusRegister;
+    state.intRegister = _intRegister;
+    state.checksum = RtcPersistence::CalculateV2Checksum(state);
 
     if (!WriteStateFile(state))
     {
-        _flushRetryFrames = RIO_RTC_FLUSH_RETRY_FRAMES;
-        return false;
+        rtc_persistenceFault();
     }
 
-    _sequence = state.sequence;
+    _currentRecord = state;
+    _hasCurrent = true;
     _stateDirty = false;
     gRomGpioRtcStateDirty = false;
     return true;
@@ -253,7 +464,6 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
 RTC_EWRAM void RomGpioRtc::MarkStateDirty()
 {
     _stateDirty = true;
-    _flushRetryFrames = 0;
     gRomGpioRtcStateDirty = true;
     sav_requestFileWrite();
 }

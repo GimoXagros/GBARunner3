@@ -1,0 +1,283 @@
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <initializer_list>
+#include <map>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+using u8=uint8_t; using u16=uint16_t; using u32=uint32_t;
+using s16=int16_t; using s64=int64_t; using UINT=unsigned;
+#define private public
+#include "Peripherals/RomGpio/RomGpioRtc.h"
+#include "Peripherals/RomGpio/RomGpio.h"
+#undef private
+#include "Peripherals/RomGpio/RtcFault.h"
+
+using RtcPersistence::LoadStatus;
+using RtcPersistence::StateFileV2;
+constexpr int FR_OK=0, FR_DISK_ERR=1, FR_NO_FILE=4, FR_NO_PATH=5, FR_EXIST=8;
+constexpr int FA_OPEN_EXISTING=0, FA_READ=1, FA_WRITE=2;
+constexpr int FA_CREATE_NEW=4, FA_CREATE_ALWAYS=8;
+using FRESULT=int;
+struct FIL { char path[64]; size_t position; bool live; int mode; };
+
+#include "rtc_v2_fixtures.h"
+
+std::map<std::string,std::vector<u8>> files;
+std::string failure;
+unsigned opens=0, writes=0, closes=0, renames=0, unlinks=0, schedules=0;
+int liveHandles=0;
+u32 hostSeconds=FIXTURE_HOST;
+bool wrote=false;
+bool forceNegativeLegacy=false, forceNegativeDirty=false;
+
+template<size_t N> std::vector<u8> bytes(const u8 (&data)[N]) { return {data,data+N}; }
+
+bool hit(const char* operation) { return failure == operation; }
+int f_open(FIL* file,const char* path,int mode)
+{
+    ++opens;
+    if (liveHandles != 0 || (mode & FA_WRITE && hit("open_write")) ||
+        (!(mode & FA_WRITE) && hit("open_read"))) return FR_DISK_ERR;
+    if (mode & FA_CREATE_NEW)
+    {
+        if (files.count(path)) return FR_EXIST;
+        files[path]={};
+    }
+    else if (mode & FA_CREATE_ALWAYS) files[path]={};
+    else if (!files.count(path)) return FR_NO_FILE;
+    std::strncpy(file->path,path,sizeof(file->path)-1);
+    file->path[sizeof(file->path)-1]=0;
+    file->position=0; file->mode=mode; file->live=true;
+    ++liveHandles;
+    return FR_OK;
+}
+u32 f_size(FIL* file) { return static_cast<u32>(files.at(file->path).size()); }
+int f_read(FIL* file,void* output,UINT requested,UINT* count)
+{
+    *count=0;
+    if (hit("read") || (wrote && hit("readback"))) return FR_DISK_ERR;
+    const auto& data=files.at(file->path);
+    if (file->position>data.size()) return FR_DISK_ERR;
+    size_t available=data.size()-file->position;
+    size_t amount=std::min<size_t>(requested,available);
+    if (hit("short_read") && amount) --amount;
+    if (amount) std::memcpy(output,data.data()+file->position,amount);
+    file->position+=amount; *count=static_cast<UINT>(amount);
+    return FR_OK;
+}
+int f_write(FIL* file,const void* input,UINT requested,UINT* count)
+{
+    ++writes; *count=0;
+    if (hit("write")) return FR_DISK_ERR;
+    size_t amount=requested;
+    if (hit("short_write") && amount) --amount;
+    auto& data=files.at(file->path);
+    if (data.size()<file->position+amount) data.resize(file->position+amount);
+    if (amount) std::memcpy(data.data()+file->position,input,amount);
+    file->position+=amount; *count=static_cast<UINT>(amount);
+    wrote=true;
+    return FR_OK;
+}
+int f_sync(FIL*) { return hit("sync") ? FR_DISK_ERR : FR_OK; }
+int f_close(FIL* file)
+{
+    ++closes;
+    if ((file->mode & FA_WRITE && hit("close_write")) ||
+        (!(file->mode & FA_WRITE) && hit("close_read"))) return FR_DISK_ERR;
+    file->live=false; --liveHandles;
+    return FR_OK;
+}
+int f_rename(const char*,const char*) { ++renames; return FR_DISK_ERR; }
+int f_unlink(const char*) { ++unlinks; return FR_DISK_ERR; }
+void sav_requestFileWrite() { ++schedules; }
+u8 mem_swapByte(u8 value,u8* target) { const u8 old=*target; *target=value; return old; }
+[[noreturn]] void rtc_persistenceFault(LoadStatus) { throw std::runtime_error("RTC terminal write fault"); }
+
+RomGpio gRomGpio;
+static RomGpioRtc sRomGpioRtc;
+#include "production_rtc.h"
+void RomGpioRtc::UpdateDSDateTime() { FromSecondsSinceJanuary2000(hostSeconds,sDSRtcDateTime,true); }
+
+constexpr RtcPersistence::Identity ID_A{0x45455042,32u*1024*1024,0x12345678};
+constexpr RtcPersistence::Identity ID_B{0x45565841,16u*1024*1024,0x87654321};
+unsigned checks=0, failures=0;
+void check(const char* name,bool condition)
+{
+    ++checks;
+    if(!condition) { ++failures; std::cout<<"FAIL "<<name<<'\n'; }
+}
+void reset()
+{
+    files.clear(); failure.clear(); opens=writes=closes=renames=unlinks=schedules=0;
+    liveHandles=0; sRtcStateFile={}; hostSeconds=FIXTURE_HOST; wrote=false;
+}
+void put(const char* path,const std::vector<u8>& data) { files[path]=data; }
+LoadStatus load(RomGpioRtc& rtc,const RtcPersistence::Identity& id=ID_A)
+{
+    return rtc.Initialize("legacy0","legacy1","legacy2",
+                          "modern0","modern1","modern2",id);
+}
+struct Bus
+{
+    RomGpioRtc rtc;
+    RomGpio gpio;
+    rio_registers_t registers{};
+    Bus() { gpio.Initialize(&registers); gpio.WriteControlRegister(1); }
+    void pins(unsigned value) { gpio.WriteDataRegister(value); rtc.Update(gpio); }
+    void command(unsigned value)
+    {
+        gpio.WriteDirectionRegister(7); pins(0);
+        for(int bit=7;bit>=0;--bit)
+        { const unsigned data=((value>>bit)&1)*2; pins(4|data); pins(5|data); }
+    }
+    void byte(u8 value)
+    {
+        for(unsigned bit=0;bit<8;++bit)
+        { const unsigned data=((value>>bit)&1)*2; pins(4|data); pins(5|data); }
+    }
+    void write(unsigned op,std::initializer_list<u8> data)
+    { command(op); for(u8 value:data) byte(value); pins(0); }
+    std::vector<u8> read(unsigned op,unsigned count)
+    {
+        command(op); gpio.WriteDirectionRegister(5); std::vector<u8> result(count);
+        for(unsigned bit=0;bit<count*8;++bit)
+        { pins(4); result[bit/8]|=gpio.GetPinState(1)<<(bit%8); pins(5); }
+        pins(0); return result;
+    }
+};
+void verify_no_rename_unlink() { check("journal uses zero rename/unlink calls",renames==0 && unlinks==0); }
+
+int main(int argc,char** argv)
+{
+    for(int argument=1;argument+1<argc;++argument)
+        if(std::string(argv[argument])=="--negative-control")
+        {
+            forceNegativeLegacy=std::string(argv[argument+1])=="legacy-auto-load";
+            forceNegativeDirty=std::string(argv[argument+1])=="uncleared-dirty";
+        }
+
+    reset();
+    put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));
+    put("legacy2",bytes(V1_BACKUP));
+    const auto originals=files;
+    RomGpioRtc legacy;
+    const auto legacyStatus=load(legacy);
+    check("legacy-only blocks before guest",forceNegativeLegacy
+          ? legacyStatus==LoadStatus::Ready : legacyStatus==LoadStatus::LegacyFound);
+    check("legacy-only performs no write",files==originals && writes==0);
+    verify_no_rename_unlink();
+
+    reset();
+    check("production RomGpio wrapper returns fresh gate status",
+          gRomGpio.LoadRtcState("legacy0","legacy1","legacy2",
+                                "modern0","modern1","modern2",ID_A)==
+          LoadStatus::FreshInitialized && files.empty() && writes==0);
+
+    reset();
+    put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));
+    put("legacy2",bytes(V1_BACKUP)); put("modern0",bytes(V2_PENDING));
+    const auto preserved0=files.at("legacy0"), preserved1=files.at("legacy1"),
+               preserved2=files.at("legacy2"), pending=files.at("modern0");
+    Bus adopted;
+    check("pending consent anchors before guest",load(adopted.rtc)==LoadStatus::Ready &&
+          files.count("modern1") && adopted.rtc._currentRecord.phase==RtcPersistence::PHASE_READY &&
+          adopted.rtc._currentRecord.hostSecondsSince2000==FIXTURE_HOST);
+    check("pending original and v1 triad unchanged",files.at("modern0")==pending &&
+          files.at("legacy0")==preserved0 && files.at("legacy1")==preserved1 &&
+          files.at("legacy2")==preserved2);
+    check("adopted GPIO exposes stored snapshot",adopted.read(0x65,7)==
+          std::vector<u8>({0x24,0x02,0x28,1,0x01,0x39,0x39}));
+    const unsigned committedWrites=writes;
+    Bus restarted;
+    check("recreated object reloads ready without migrating twice",
+          load(restarted.rtc)==LoadStatus::Ready && writes==committedWrites);
+    ++hostSeconds;
+    check("DS anchor advances adopted GPIO second",restarted.read(0x67,3)==
+          std::vector<u8>({0x01,0x39,0x40}));
+    verify_no_rename_unlink();
+
+    reset();
+    Bus fresh;
+    check("all missing defaults in memory without boot write",
+          load(fresh.rtc)==LoadStatus::FreshInitialized && files.empty() && writes==0);
+    fresh.write(0x64,{0x24,0x02,0x28,3,0x22,0x45,0x45});
+    check("GPIO date command marks dirty",fresh.rtc._stateDirty && schedules>0);
+    check("fresh flush writes and validates",fresh.rtc.FlushStateIfDirty() &&
+          files.count("modern0") && files.at("modern0").size()==200);
+    check("verified flush clears dirty",forceNegativeDirty
+          ? fresh.rtc._stateDirty : !fresh.rtc._stateDirty);
+    check("new record has fresh policy and ready phase",
+          fresh.rtc._currentRecord.policy==RtcPersistence::POLICY_FRESH &&
+          fresh.rtc._currentRecord.phase==RtcPersistence::PHASE_READY);
+    const auto freshBytes=files.at("modern0");
+    Bus freshReload;
+    check("write close recreate reload",load(freshReload.rtc)==LoadStatus::Ready &&
+          files.at("modern0")==freshBytes);
+    check("reloaded GPIO-visible date/time",freshReload.read(0x65,7)==
+          std::vector<u8>({0x24,0x02,0x28,3,0xA2,0x45,0x45}));
+    verify_no_rename_unlink();
+
+    reset(); put("modern0",bytes(V2_FRESH));
+    auto corrupt=files.at("modern0"); corrupt[100]^=1; files["modern0"]=corrupt;
+    put("modern2",bytes(V2_FRESH)); RomGpioRtc recovered;
+    check("corrupt primary may use valid ready backup",load(recovered)==LoadStatus::Ready &&
+          recovered._currentRecord.sequence==7 && files.at("modern0")==corrupt);
+    reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V2_FUTURE));
+    RomGpioRtc future;
+    check("unknown modern version blocks",load(future)==LoadStatus::UnsupportedVersion);
+    reset(); put("modern0",bytes(V2_FRESH));
+    RomGpioRtc foreign;
+    check("ROM identity mismatch blocks",load(foreign,ID_B)==LoadStatus::IdentityMismatch);
+    reset(); put("modern0",bytes(V2_PENDING)); put("modern1",bytes(V2_FRESH));
+    RomGpioRtc mixed;
+    check("different lineage blocks",load(mixed)==LoadStatus::Conflict);
+    reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V2_FRESH));
+    RomGpioRtc identicalTie;
+    check("equal identical sequence uses path order",load(identicalTie)==LoadStatus::Ready);
+    reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V2_EQUAL_DIFFERENT));
+    RomGpioRtc unequalTie;
+    check("equal differing sequence conflicts",load(unequalTie)==LoadStatus::Conflict);
+    reset(); put("modern0",bytes(V2_OLD_WRAP)); put("modern1",bytes(V2_WRAP));
+    RomGpioRtc wrapped;
+    check("modular sequence wrap chooses zero",load(wrapped)==LoadStatus::Ready &&
+          wrapped._currentRecord.sequence==0);
+    reset(); put("modern0",bytes(V2_WRAP)); put("modern1",bytes(V2_HALF_CYCLE));
+    RomGpioRtc half;
+    check("half cycle sequence conflicts",load(half)==LoadStatus::Conflict);
+    reset(); put("modern0",bytes(V2_WRAP)); put("modern1",bytes(V2_CYCLE_MID));
+    put("modern2",bytes(V2_CYCLE_LAST)); RomGpioRtc cycle;
+    check("cyclic three slot order conflicts",load(cycle)==LoadStatus::Conflict);
+    verify_no_rename_unlink();
+
+    for(const char* stage:{"open_read","read","short_read","close_read",
+                           "open_write","write","short_write","sync","close_write","readback"})
+    {
+        reset(); put("modern0",bytes(V2_FRESH));
+        Bus candidate;
+        check("failure setup loads selected record",load(candidate.rtc)==LoadStatus::Ready);
+        candidate.write(0x62,{0x40});
+        const auto selected=files.at("modern0");
+        failure=stage;
+        bool faulted=false;
+        try { candidate.rtc.FlushStateIfDirty(); }
+        catch(const std::runtime_error&) { faulted=true; }
+        check("injected operation latches terminal failure",faulted &&
+              candidate.rtc._stateDirty && candidate.rtc._writeError);
+        check("failed write preserves selected copy",files.at("modern0")==selected);
+        const auto operationCount=opens+writes+closes;
+        bool secondFault=false;
+        try { candidate.rtc.FlushStateIfDirty(); }
+        catch(const std::runtime_error&) { secondFault=true; }
+        check("latched failure prevents automatic retry",secondFault &&
+              opens+writes+closes==operationCount);
+        verify_no_rename_unlink();
+    }
+
+    std::cout<<checks<<" RTC v2 host cases, "<<failures
+             <<" failures; synthetic FatFs/clock, hardware NOT RUN\n";
+    return failures?1:0;
+}

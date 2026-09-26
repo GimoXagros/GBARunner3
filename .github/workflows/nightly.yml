@@ -23,7 +23,7 @@ jobs:
           submodules: recursive
       - name: Make application and test ROM
         run: |
-          make -C code debug
+          make -C code debug CC="$DEVKITARM/bin/arm-none-eabi-gcc -fstack-usage" CXX="$DEVKITARM/bin/arm-none-eabi-g++ -fstack-usage"
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -fno-builtin -fno-exceptions -fno-unwind-tables -Wl,-e,search_probe,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/save_search_probe.cpp code/core/arm9/source/MemFastSearch.s -o /tmp/save-search.elf
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
       - name: Prepare for build publishing
@@ -37,6 +37,8 @@ jobs:
           cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
           cp /tmp/save-search.elf out/tests/
+          mkdir -p out/tests/stack-usage
+          find code/core -name '*.su' -exec cp --parents {} out/tests/stack-usage/ \;
       - name: Preserve linker diagnostics on a failed build
         if: failure()
         run: |
@@ -75,12 +77,18 @@ jobs:
       - name: Execute host serializer regressions with sanitizers
         run: SANITIZE=1 python3 tools/tests/test_json_settings_host.py
       - name: Verify production RTC BCD and calendar conversions
-        run: SANITIZE=1 python3 tools/tests/test_rtc_calendar_host.py --output rtc-calendar-results.json
+        run: SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_calendar_host.py --output rtc-calendar-results.json
+      - name: Verify independent legacy fixtures and explicit offline adoption
+        run: |
+          python3 tools/tests/test_rtc_legacy_fixtures.py
+          python3 tools/tests/test_rtc_migrate.py
+      - name: Verify production RTC persistence and restart
+        run: SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
       - name: Verify RTC GPIO and recovery selection with synthetic files
         run: |
-          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py
-          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control no-dirty
-          SANITIZE=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control partial-offset
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control no-dirty
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_recovery_host.py --negative-control partial-offset
       - uses: actions/upload-artifact@v7
         with:
           name: rtc-calendar-results

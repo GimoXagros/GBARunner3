@@ -44,13 +44,18 @@ public:
         : _state(RtcTransferState::CommandWaitFallingEdge), _shiftRegister(0), _bitCount(0)
         , _command(0), _byteIndex(0), _statusRegister(0x40), _intRegister(0), _dateTime()
         , _rtcOffset(0), _weekDayOffset(0), _offsetUpdateRequired(false)
-        , _statePath(nullptr), _tempPath(nullptr), _backupPath(nullptr), _identity()
-        , _sequence(0), _stateDirty(false), _flushRetryFrames(0) { }
+        , _legacyPaths { nullptr, nullptr, nullptr }
+        , _modernPaths { nullptr, nullptr, nullptr }, _identity()
+        , _currentRecord(), _hasCurrent(false), _writeError(false)
+        , _fileHandleLive(false), _stateDirty(false) { }
 
-    void Initialize(
-        const char* statePath,
-        const char* tempPath,
-        const char* backupPath,
+    RtcPersistence::LoadStatus Initialize(
+        const char* legacyStatePath,
+        const char* legacyTempPath,
+        const char* legacyBackupPath,
+        const char* modernStatePath,
+        const char* modernTempPath,
+        const char* modernBackupPath,
         const RtcPersistence::Identity& identity);
     void Update(RomGpio& romGpio);
     bool FlushStateIfDirty();
@@ -69,13 +74,14 @@ private:
     s64 _rtcOffset;
     s16 _weekDayOffset;
     bool _offsetUpdateRequired;
-    const char* _statePath;
-    const char* _tempPath;
-    const char* _backupPath;
+    const char* _legacyPaths[3];
+    const char* _modernPaths[3];
     RtcPersistence::Identity _identity;
-    u32 _sequence;
+    RtcPersistence::StateFileV2 _currentRecord;
+    bool _hasCurrent;
+    bool _writeError;
+    bool _fileHandleLive;
     bool _stateDirty;
-    u16 _flushRetryFrames;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);
     void HandleInDataWaitRisingEdge(RomGpio& romGpio);
@@ -85,10 +91,20 @@ private:
     void UpdateDSDateTime();
     void UpdateDateTime();
     void UpdateRtcOffset();
-    bool LoadState();
-    bool ReadStateFile(const char* path, RtcPersistence::StateFile& state);
-    bool WriteStateFile(const RtcPersistence::StateFile& state);
-    void ApplyState(const RtcPersistence::StateFile& state);
+    RtcPersistence::LoadStatus LoadState();
+    RtcPersistence::FileStatus ReadRecord(
+        const char* path, void* record, u32 size, u32 magic, u16 version);
+    RtcPersistence::FileStatus ReadLegacyStateFile(
+        const char* path, RtcPersistence::StateFile& state);
+    RtcPersistence::FileStatus ReadModernStateFile(
+        const char* path, RtcPersistence::StateFileV2& state);
+    RtcPersistence::LoadStatus ScanLegacy();
+    RtcPersistence::LoadStatus ScanModern();
+    RtcPersistence::LoadStatus SelectModern(int& selected);
+    RtcPersistence::LoadStatus CheckLegacyLineage(
+        const RtcPersistence::StateFileV2& state);
+    bool WriteStateFile(const RtcPersistence::StateFileV2& state);
+    void ApplyState(const RtcPersistence::StateFileV2& state);
     void MarkStateDirty();
 
     void SetYear(u8 value);

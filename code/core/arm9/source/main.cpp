@@ -50,6 +50,7 @@
 #include "VirtualMachine/VMNestedIrq.h"
 #include "arm9Clock.h"
 #include "Peripherals/RomGpio/RomGpio.h"
+#include "Peripherals/RomGpio/RtcFault.h"
 
 #define DEFAULT_ROM_FILE_PATH           "/rom.gba"
 #define BIOS_FILE_PATH                  "/_gba/bios.bin"
@@ -520,6 +521,9 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     auto rtcStatePath = createSidecarPath(romPath, ".g3rtc");
     auto rtcTempPath = createSidecarPath(romPath, ".g3rtc.tmp");
     auto rtcBackupPath = createSidecarPath(romPath, ".g3rtc.bak");
+    auto rtcV2StatePath = createSidecarPath(romPath, ".g3rtc2");
+    auto rtcV2TempPath = createSidecarPath(romPath, ".g3rtc2.tmp");
+    auto rtcV2BackupPath = createSidecarPath(romPath, ".g3rtc2.bak");
     const RtcPersistence::Identity rtcIdentity
     {
         gRomHeader.gameCode,
@@ -528,11 +532,15 @@ extern "C" void gbaRunnerMain(int argc, char* argv[])
     };
     loadGameSpecificSettings();
     sav_initializeFileWriteScheduler();
+    // Block legacy/conflicting RTC state before save initialization can create
+    // or extend the game's .sav file, and before VM execution starts.
+    const auto rtcLoadStatus = gRomGpio.LoadRtcState(
+        rtcStatePath.get(), rtcTempPath.get(), rtcBackupPath.get(),
+        rtcV2StatePath.get(), rtcV2TempPath.get(), rtcV2BackupPath.get(), rtcIdentity);
+    if (rtcLoadStatus != RtcPersistence::LoadStatus::Ready &&
+        rtcLoadStatus != RtcPersistence::LoadStatus::FreshInitialized)
+        rtc_persistenceFault(rtcLoadStatus);
     handleSave(savePath.get());
-    // Keep all RTC filesystem I/O in the ordinary boot/save phase. Late GPIO
-    // initialization only attaches the already-restored RTC to ROM registers.
-    gRomGpio.LoadRtcState(
-        rtcStatePath.get(), rtcTempPath.get(), rtcBackupPath.get(), rtcIdentity);
     SelfModifyingPatches().ApplyPatches(gAppSettingsService.GetAppSettings().runSettings);
 
     waitSplashScreenAnimation();

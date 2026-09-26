@@ -36,6 +36,8 @@ time. The pending record itself never authorizes guest execution before commit.
 Cancel/inspect means no write. Without an explicit pending adoption record,
 legacy detection stops before VM execution with a readable action notice.
 Startup errors and conflicts likewise cannot silently initialize from the host.
+The legacy/error startup gate must precede `handleSave` or any other save-file
+initialization mutation, so cancel/block cannot create or extend a `.sav`.
 The notice is not a second migration UI. The offline tool is the only consent
 entry point. Runtime I/O failures retain dirty/error and prevent repeated file
 operations; an actionable terminal RTC notice must not claim recovery.
