@@ -17,6 +17,11 @@ void GbaSaveIpcService::OnMessageReceived(u32 data)
     }
 }
 
+bool GbaSaveIpcService::HasSaveError() const
+{
+    return _saveShared && _saveShared->saveState == GBA_SAVE_STATE_ERROR;
+}
+
 void GbaSaveIpcService::Update()
 {
     if (!_saveShared || _saveShared->saveDataSize == 0 || isDSiMode())
@@ -42,6 +47,9 @@ void GbaSaveIpcService::Update()
             }
             break;
         }
+        case GBA_SAVE_STATE_ERROR:
+            // No automatic retry of a failed attempt. Preserve the error.
+            break;
         case GBA_SAVE_STATE_WRITE:
         {
             // arm9 will set the state back to GBA_SAVE_STATE_CLEAN
@@ -50,37 +58,21 @@ void GbaSaveIpcService::Update()
     }
 }
 
-bool GbaSaveIpcService::FlushSaveIfDirty()
+SaveFlushResult GbaSaveIpcService::FlushSaveIfDirty()
 {
-    bool saveIsClean;
-    if (!_saveShared || _saveShared->saveDataSize == 0)
+    if (!_saveShared) return SaveFlushResult::Clean;
+    // File-backed EEPROM/FLASH has no shared SRAM buffer, but can still fail.
+    if (_saveShared->saveState == GBA_SAVE_STATE_ERROR) return SaveFlushResult::Error;
+    if (_saveShared->saveDataSize == 0) return SaveFlushResult::Clean;
+    switch (_saveShared->saveState)
     {
-        saveIsClean = true;
+        case GBA_SAVE_STATE_CLEAN:
+            return SaveFlushResult::Clean;
+        case GBA_SAVE_STATE_DIRTY:
+        case GBA_SAVE_STATE_WAIT:
+            _saveShared->saveState = GBA_SAVE_STATE_WRITE;
+            return SaveFlushResult::Pending;
+        default:
+            return SaveFlushResult::Pending;
     }
-    else
-    {
-        saveIsClean = false;
-        switch (_saveShared->saveState)
-        {
-            case GBA_SAVE_STATE_CLEAN:
-            {
-                saveIsClean = true;
-                break;
-            }
-            case GBA_SAVE_STATE_DIRTY:
-            case GBA_SAVE_STATE_WAIT:
-            {
-                // force write
-                _saveShared->saveState = GBA_SAVE_STATE_WRITE;
-                break;
-            }
-            case GBA_SAVE_STATE_WRITE:
-            {
-                // keep waiting for write to end
-                break;
-            }
-        }
-    }
-
-    return saveIsClean;
 }

@@ -24,6 +24,7 @@
 #include "Logger/NullLogger.h"
 #include "Save/SaveTagScanner.h"
 #include "Save/Save.h"
+#include "Save/SaveFault.h"
 #include "SdCache/SdCache.h"
 #include "JitPatcher/JitCommon.h"
 #include "JitPatcher/JitArm.h"
@@ -268,7 +269,7 @@ BOOT_EWRAM static void handleSave(const char* savePath)
 
     if (!sav_initializeSave(saveTypeInfo, savePath))
     {
-        gLogger->Log(LogLevel::Error, "Failed to open or create save file: %s\n", savePath);
+        sav_persistenceFault();
     }
 }
 

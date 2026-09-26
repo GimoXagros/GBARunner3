@@ -4,6 +4,18 @@ The authoritative user and build documentation now lives in
 [`README.md`](README.md), and the issue comparison lives in
 [`TODO.md`](TODO.md).
 
+## custom-v0.1.4 stable release
+
+The current stable release promotes the RC3 runtime after the user's normal
+hardware-operation report on 2026-09-27 and adds PR #18's checked save I/O with
+a terminal error screen. The new save-error path is not hardware verified and
+does not provide automatic recovery or guarantee data restoration. The dedicated
+stable package guard validates source ancestry, stable release metadata,
+application/test hashes, the 304-config manifest, checksums, and an exact file
+allowlist. See [v0.1.4 release details](docs/releases/custom-v0.1.4.md).
+
+The following sections describe historical releases.
+
 ## custom-v0.1.3 stable release
 
 The stable release promotes the RC1 production runtime on develop

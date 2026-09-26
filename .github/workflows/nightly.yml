@@ -24,6 +24,7 @@ jobs:
       - name: Make application and test ROM
         run: |
           make -C code debug
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -fno-builtin -fno-exceptions -fno-unwind-tables -Wl,-e,search_probe,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/save_search_probe.cpp code/core/arm9/source/MemFastSearch.s -o /tmp/save-search.elf
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=c++17 -O2 -marm -march=armv5te -nostdlib -Wl,-e,hex_parse,-Ttext=0x02000000 -Icode/core/arm9/source tools/tests/hex_address_probe.cpp -o /tmp/hex-address.elf
       - name: Prepare for build publishing
         run: |
@@ -33,12 +34,38 @@ jobs:
           mkdir -p out/tests
           cp code/test/test.nds out/tests/
           cp code/core/arm9/arm9.elf out/tests/
+          cp code/core/arm7/GBARunner3.elf out/tests/arm7.elf
           cp /tmp/hex-address.elf out/tests/
+          cp /tmp/save-search.elf out/tests/
+      - name: Preserve linker diagnostics on a failed build
+        if: failure()
+        run: |
+          mkdir -p link-diagnostics
+          find code/core/arm9 -name '*.map' -exec cp {} link-diagnostics/ \;
+          "$DEVKITARM/bin/arm-none-eabi-size" -A code/core/arm9/build/Save*.o > link-diagnostics/save-object-sections.txt || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: failed-link-diagnostics
+          path: link-diagnostics
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
           path: out
           name: GBARunner3
+
+  save-io-host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify save initialization and terminal error paths
+        run: SANITIZE=1 python3 tools/tests/test_save_io_host.py --require-fixed --output save-io-results.json
+      - name: Verify production save I/O through actual FatFs and ARM7 drivers
+        run: SANITIZE=1 python3 tools/tests/test_save_fatfs_host.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-results
+          path: save-io-results.json
 
   hicode-dispatch-semantics:
     needs: build
@@ -58,8 +85,20 @@ jobs:
         with:
           name: rtc-calendar-results
           path: rtc-calendar-results.json
+      - name: Verify production storage transaction failures with sanitizers
+        run: SANITIZE=1 python3 tools/tests/test_storage_failure_host.py --require-fixed --output storage-results.json
+      - name: Verify actual FatFs receives driver errors
+        run: SANITIZE=1 python3 tools/tests/test_storage_fatfs_host.py
+      - name: Verify all save-signature block offsets
+        run: SANITIZE=1 python3 tools/tests/test_save_search_host.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: storage-transaction-results
+          path: storage-results.json
       - name: Test release upload without network mutations
         run: node tools/tests/test_release_upload.cjs
+      - name: Test stable package guards
+        run: python3 tools/tests/test_v014_package.py
       - name: Execute EEPROM source-selection audit
         run: SANITIZE=1 python3 tools/tests/test_eeprom_source_host.py
       - name: Validate packaged configs and repository invariants
@@ -72,6 +111,20 @@ jobs:
         run: python3 -m pip install unicorn==2.1.4 pyelftools==0.32
       - name: Execute linked ARM parser
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
+      - name: Execute linked ARM save-signature corpus
+        run: python3 tools/tests/test_save_search_arm.py out/tests/save-search.elf
+      - name: Execute linked ARM7 and ARM9 storage transport
+        run: python3 tools/tests/test_storage_linked_arm.py out/tests/arm9.elf out/tests/arm7.elf --output storage-linked-results.json
+      - name: Execute linked save latches and guest SRAM writes after error
+        run: python3 tools/tests/test_save_io_elf.py out/tests/arm9.elf --arm7 out/tests/arm7.elf --output save-io-linked-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: save-io-linked-results
+          path: save-io-linked-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: storage-linked-results
+          path: storage-linked-results.json
       - name: Verify linked IRQ callbacks and ELF audit negative control
         run: |
           python3 tools/tests/test_irq_callbacks_elf.py out/tests/arm9.elf --output irq-results.json
@@ -82,6 +135,12 @@ jobs:
           path: irq-results.json
       - name: Execute linked JIT metadata and address regressions
         run: python3 tools/tests/test_jit_core_elf.py out/tests/arm9.elf --output jit-results.json
+      - name: Execute linked noncontiguous ROM DMA boundary cases
+        run: python3 tools/tests/test_dma_rom_elf.py out/tests/arm9.elf --output dma-rom-results.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dma-rom-results
+          path: dma-rom-results.json
       - uses: actions/upload-artifact@v7
         with:
           name: jit-core-results

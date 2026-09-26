@@ -9,6 +9,7 @@
 #include "SaveSwi.h"
 #include "SaveTypeInfo.h"
 #include "cp15.h"
+#include "Cpsr.h"
 #include "Peripherals/RomGpio/RomGpio.h"
 #include "VirtualMachine/VMNestedIrq.h"
 #include "MemoryEmulator/RomDefs.h"
@@ -16,6 +17,8 @@
 #include "IpcChannels.h"
 #include "GbaSaveIpcCommand.h"
 #include "Save.h"
+#include "SaveSignatureSearch.h"
+#include "SaveFault.h"
 
 #define DEFAULT_SAVE_SIZE   (32 * 1024)
 
@@ -30,6 +33,15 @@ gba_save_shared_t gGbaSaveShared;
 
 static DWORD sClusterTable[64];
 static u32 sSkipSaveCheckInstruction;
+[[gnu::section(".ewram.bss")]] static bool sSaveFileOpen;
+// No error path returns to the guest or performs further filesystem I/O.
+[[gnu::noreturn]] static void saveIoFailed()
+{
+    arm_disableIrqs();
+    gGbaSaveShared.saveState = GBA_SAVE_STATE_ERROR;
+    dc_drainWriteBuffer();
+    sav_persistenceFault();
+}
 
 [[gnu::section(".ewram")]] void sav_initializeFileWriteScheduler(void)
 {
@@ -47,20 +59,14 @@ extern FIL gFile;
 
 #ifdef GBAR3_HICODE_CACHE_MAPPING
 
+[[gnu::section(".ewram"), gnu::noinline]]
 static u32* searchHiCode(const u32* signature, u32 romStart, u32 romEnd)
 {
-    // todo: this doesn't work if the function lies on a cache block boundary
-    for (u32 i = romStart; i < romEnd; i += SDC_BLOCK_SIZE)
-    {
-        const void* block = sdc_getRomBlock(i);
-        u32* function = (u32*)mem_fastSearch16((const u32*)block, SDC_BLOCK_SIZE, signature);
-        if (function)
-        {
-            return (u32*)sdc_loadRomBlockForPatching(i + (u32)function - (u32)block);
-        }
-    }
-
-    return nullptr;
+    // The runtime cache accessor is fail-closed: an I/O error cannot be
+    // mistaken for a clean signature miss and proceed with unpatched saves.
+    const u32 address = sav_findSignature16(signature, romStart, romEnd,
+        sdc_getRomBlock, mem_fastSearch16);
+    return address == UINT32_MAX ? nullptr : (u32*)sdc_loadRomBlockForPatching(address);
 }
 
 #endif
@@ -76,7 +82,20 @@ bool sav_tryPatchFunction(const u32* signature, u32 saveSwiNumber, void* patchFu
     if (!function)
     {
         u32 romSize = f_size(&gFile);
-        function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
+        if (romSize >= ROM_LINEAR_SIZE + 4)
+        {
+            // The final 12 linear bytes and first cached block form one
+            // logical 4 KiB boundary. Keep the tail before resolving cache.
+            alignas(4) u8 linearTail[12];
+            memcpy(linearTail, (const void*)(ROM_LINEAR_END_DS_ADDRESS - 12), 12);
+            const auto* next = (const u8*)sdc_getRomBlock(ROM_LINEAR_END_GBA_ADDRESS);
+            const u32 match = sav_findSplitBoundary16(signature, ROM_LINEAR_END_GBA_ADDRESS,
+                linearTail, next, std::min<u32>(12, romSize - ROM_LINEAR_SIZE));
+            if (match != UINT32_MAX)
+                function = (u32*)(ROM_LINEAR_DS_ADDRESS + match - ROM_LINEAR_GBA_ADDRESS);
+        }
+        if (!function)
+            function = searchHiCode(signature, ROM_LINEAR_END_GBA_ADDRESS, 0x08000000 + romSize);
     }
 #endif
     if (!function)
@@ -114,7 +133,15 @@ static bool fillSaveFile(u32 start, u32 end)
 
 bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
 {
+    // Initialization is boot-only. Never overwrite or flush a live failed object.
+    if (sSaveFileOpen) return false;
     u32 saveSize = saveTypeInfo ? saveTypeInfo->size : DEFAULT_SAVE_SIZE;
+    if (Environment::IsIsNitroEmulator() && saveSize > ISNITRO_SAVE_BUFFER_SIZE)
+        return false;
+    const bool isSram = !saveTypeInfo ||
+        (saveTypeInfo->type & SAVE_TYPE_MASK) == SAVE_TYPE_SRAM;
+    if (isSram && saveSize > SAVE_DATA_SIZE)
+        return false;
     memset(gSaveData, SAVE_DATA_FILL, SAVE_DATA_SIZE);
     if (Environment::IsIsNitroEmulator())
     {
@@ -128,54 +155,38 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
     const FRESULT openResult = f_open(&gSaveFile, savePath, openMode);
     if (openResult == FR_OK)
     {
-        bool clusterMapLoaded = false;
-        u32 initialSize = f_size(&gSaveFile);
-        if (initialSize < saveSize)
+        sSaveFileOpen = true;
+        const u32 initialSize = f_size(&gSaveFile);
+        // Append initialized bytes before building the fast-seek map. Seeking
+        // to the final size first leaves an unidentifiable hole after failure.
+        if ((initialSize < saveSize && !fillSaveFile(initialSize, saveSize)) ||
+            !loadSaveClusterMap())
         {
-            if (f_lseek(&gSaveFile, saveSize) == FR_OK)
-            {
-                f_rewind(&gSaveFile);
-                clusterMapLoaded = loadSaveClusterMap();
-                if (!clusterMapLoaded || !fillSaveFile(initialSize, saveSize))
-                {
-                    f_close(&gSaveFile);
-                    return false;
-                }
-            }
-            else
-            {
-                f_close(&gSaveFile);
-                return false;
-            }
-        }
-
-        if (!clusterMapLoaded)
-        {
-            if (!loadSaveClusterMap())
-            {
-                f_close(&gSaveFile);
-                return false;
-            }
+            return false;
         }
 
         if (saveSize <= SAVE_DATA_SIZE)
         {
-            f_rewind(&gSaveFile);
+            if (f_rewind(&gSaveFile) != FR_OK)
+            {
+                return false;
+            }
             UINT read = 0;
             if (f_read(&gSaveFile, gSaveData, saveSize, &read) != FR_OK || read != saveSize)
             {
-                f_close(&gSaveFile);
                 return false;
             }
         }
 
         if (Environment::IsIsNitroEmulator())
         {
-            f_rewind(&gSaveFile);
+            if (f_rewind(&gSaveFile) != FR_OK)
+            {
+                return false;
+            }
             UINT read = 0;
             if (f_read(&gSaveFile, (void*)ISNITRO_SAVE_BUFFER, saveSize, &read) != FR_OK || read != saveSize)
             {
-                f_close(&gSaveFile);
                 return false;
             }
         }
@@ -187,7 +198,7 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
 
     gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
     sSkipSaveCheckInstruction = emu_vblankIrqSkipSaveCheckInstruction;
-    if (!saveTypeInfo || (saveTypeInfo->type & SAVE_TYPE_SRAM))
+    if (isSram)
     {
         gGbaSaveShared.saveData = gSaveData;
         gGbaSaveShared.saveDataSize = saveSize;
@@ -207,40 +218,55 @@ bool sav_initializeSave(const SaveTypeInfo* saveTypeInfo, const char* savePath)
     return true;
 }
 
-extern "C" u8 sav_readSaveByteFromFile(u32 saveAddress)
+// Keep these file-backed SWI helpers in existing EWRAM headroom; VRAM A
+// must leave its final aligned 2 KiB hicode backing intact.
+extern "C" [[gnu::section(".ewram")]] u8 sav_readSaveByteFromFile(u32 saveAddress)
 {
     vm_enableNestedIrqs();
-    u8 saveByte;
+    u8 saveByte = SAVE_DATA_FILL;
     if (Environment::IsIsNitroEmulator())
     {
         // save buffer in extended memory
-        saveByte = ISNITRO_SAVE_BUFFER[saveAddress];
+        if (saveAddress < ISNITRO_SAVE_BUFFER_SIZE)
+            saveByte = ISNITRO_SAVE_BUFFER[saveAddress];
     }
     else
     {
-        // write to file
-        f_lseek(&gSaveFile, saveAddress);
-        UINT bytesRead = 0;
-        f_read(&gSaveFile, &saveByte, 1, &bytesRead);
+        if (saveAddress < f_size(&gSaveFile))
+        {
+            if (f_lseek(&gSaveFile, saveAddress) != FR_OK)
+                saveIoFailed();
+            UINT bytesRead = 0;
+            if (f_read(&gSaveFile, &saveByte, 1, &bytesRead) != FR_OK || bytesRead != 1)
+                saveIoFailed();
+        }
     }
     vm_disableNestedIrqs();
     return saveByte;
 }
 
-extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
+extern "C" [[gnu::section(".ewram")]] void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
 {
     vm_enableNestedIrqs();
+    bool written = false;
     if (Environment::IsIsNitroEmulator())
     {
-        // save buffer in extended memory
-        ISNITRO_SAVE_BUFFER[saveAddress] = data;
+        if (saveAddress < ISNITRO_SAVE_BUFFER_SIZE)
+        {
+            ISNITRO_SAVE_BUFFER[saveAddress] = data;
+            written = true;
+        }
     }
-    else
+    else if (saveAddress < f_size(&gSaveFile) && f_lseek(&gSaveFile, saveAddress) == FR_OK)
     {
-        // write to file
-        f_lseek(&gSaveFile, saveAddress);
         UINT bytesWritten = 0;
-        f_write(&gSaveFile, &data, 1, &bytesWritten);
+        written = f_write(&gSaveFile, &data, 1, &bytesWritten) == FR_OK && bytesWritten == 1;
+    }
+    if (!written)
+    {
+        // Stop before the EEPROM/FLASH wrapper can discard this byte or
+        // report success and continue issuing the remainder of a save.
+        saveIoFailed();
     }
     vm_disableNestedIrqs();
 }
@@ -248,29 +274,35 @@ extern "C" void sav_writeSaveByteToFile(u32 saveAddress, u8 data)
 extern "C" void sav_flushSaveFile(void)
 {
     vm_enableNestedIrqs();
-    if (!Environment::IsIsNitroEmulator())
-    {
-        f_sync(&gSaveFile);
-    }
+    if (!Environment::IsIsNitroEmulator() && f_sync(&gSaveFile) != FR_OK)
+        saveIoFailed();
     vm_disableNestedIrqs();
 }
 
 extern "C" void sav_writeSaveToFile(void)
 {
-    if (gGbaSaveShared.saveDataSize != 0 && !Environment::IsIsNitroEmulator())
+    bool saved = true;
+    const u32 size = gGbaSaveShared.saveDataSize;
+    if (size != 0 && !Environment::IsIsNitroEmulator())
     {
-        f_lseek(&gSaveFile, 0);
         UINT bytesWritten = 0;
-        f_write(&gSaveFile, gSaveData, gGbaSaveShared.saveDataSize, &bytesWritten);
-        f_sync(&gSaveFile);
+        saved = size <= SAVE_DATA_SIZE && size <= f_size(&gSaveFile) &&
+            f_lseek(&gSaveFile, 0) == FR_OK &&
+            f_write(&gSaveFile, gSaveData, size, &bytesWritten) == FR_OK &&
+            bytesWritten == size && f_sync(&gSaveFile) == FR_OK;
     }
 
+    if (!saved)
+        saveIoFailed();
     gGbaSaveShared.saveState = GBA_SAVE_STATE_CLEAN;
+    dc_drainWriteBuffer();
     emu_vblankIrqSkipSaveCheckInstruction = sSkipSaveCheckInstruction;
 }
 
 [[gnu::section(".ewram")]] void sav_writePendingFiles(void)
 {
+    if (gGbaSaveShared.saveState == GBA_SAVE_STATE_ERROR)
+        saveIoFailed();
     if (gGbaSaveShared.saveState == GBA_SAVE_STATE_WRITE)
     {
         sav_writeSaveToFile();
