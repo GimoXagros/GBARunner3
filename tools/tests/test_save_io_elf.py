@@ -61,6 +61,7 @@ def call(cpu,address,*values,expect_fault=False):
     if expect_fault:
         assert cpu.reg_read(UC_ARM_REG_PC)==symbols['sav_persistenceFault'] & ~1,'terminal hook not reached'
         assert cpu.mem_read(symbols['gGbaSaveShared'],1)==b'\4','error not published before terminal hook'
+        assert cpu.reg_read(UC_ARM_REG_CPSR)&0x80,'terminal transition must mask IRQs'
         return None
     assert cpu.reg_read(UC_ARM_REG_PC)==0x07000000,'instruction budget exhausted'
     assert cpu.reg_read(UC_ARM_REG_SP)==0x0300F000,'stack imbalance'
@@ -119,6 +120,8 @@ def fixture(failure='',nitro=False):
             values=[c.reg_read(r) for r in REGS]
             events.append(name)
             result=0
+            if name=='vm_enableNestedIrqs': c.reg_write(UC_ARM_REG_CPSR,c.reg_read(UC_ARM_REG_CPSR)&~0x80)
+            elif name=='vm_disableNestedIrqs': c.reg_write(UC_ARM_REG_CPSR,c.reg_read(UC_ARM_REG_CPSR)|0x80)
             if name=='f_lseek':
                 if failure=='seek': result=1
                 else: cursor=values[1]
