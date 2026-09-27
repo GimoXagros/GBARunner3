@@ -132,6 +132,8 @@ jobs:
         run: python3 tools/tests/test_hex_address_arm.py out/tests/hex-address.elf
       - name: Execute linked production RTC adoption and restart
         run: python3 tools/tests/test_rtc_loader_elf.py out/tests/arm9.elf
+      - name: Verify RTC boot with ARM946 L4 interworking rules
+        run: python3 tools/tests/test_rtc_boot_l4_elf.py out/tests/arm9.elf
       - name: Execute linked ARM save-signature corpus
         run: python3 tools/tests/test_save_search_arm.py out/tests/save-search.elf
       - name: Execute linked ARM7 and ARM9 storage transport
