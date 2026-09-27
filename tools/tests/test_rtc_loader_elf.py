@@ -22,6 +22,7 @@ from unicorn.arm_const import (
     UC_ARM_REG_CPSR, UC_ARM_REG_LR, UC_ARM_REG_PC, UC_ARM_REG_R0,
     UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3, UC_ARM_REG_SP,
     UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, UC_ARM_REG_R8,
+    UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11,
 )
 
 from rtc_legacy_fixtures import (
@@ -257,7 +258,8 @@ class LinkedRtc:
         irq_top = 0x0300D000
         self.cpu.mem_write(irq_top - 288, bytes([0x5A] * 288))
         registers = (UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6,
-                     UC_ARM_REG_R7, UC_ARM_REG_R8)
+                     UC_ARM_REG_R7, UC_ARM_REG_R8, UC_ARM_REG_R9,
+                     UC_ARM_REG_R10, UC_ARM_REG_R11)
         expected = tuple(0x44550000 + i * 0x1111 for i in range(len(registers)))
         for register, value in zip(registers, expected):
             self.cpu.reg_write(register, value)

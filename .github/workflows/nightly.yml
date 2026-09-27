@@ -39,6 +39,8 @@ jobs:
           cp /tmp/save-search.elf out/tests/
           mkdir -p out/tests/stack-usage
           find code/core -name '*.su' -exec cp --parents {} out/tests/stack-usage/ \;
+          mkdir -p out/tests/link-layout
+          find code/core -name '*.map' -exec cp --parents {} out/tests/link-layout/ \;
       - name: Preserve linker diagnostics on a failed build
         if: failure()
         run: |

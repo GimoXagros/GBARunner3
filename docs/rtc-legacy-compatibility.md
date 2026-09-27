@@ -131,6 +131,38 @@ selected valid record survives every attempted write. A checksum-valid newer
 slot may be recovered on restart after the write reported failure; never assert
 FAT power-cut atomicity, durability or a commit point beyond the tested model.
 
+## Deferred-I/O stack and provisional memory measurements
+
+The previous IRQ stack budget is 288 bytes; the RTC call frame requires 292
+bytes before entering FatFs, so that stack is insufficient for RTC file I/O.
+The implementation runs deferred RTC persistence on a dedicated 2 KiB EWRAM
+stack wrapper. The wrapper preserves CPSR, SP, and the callee registers, with a
+guard, canary, and high-water counter. A linked synthetic-filesystem probe
+observed 248 bytes. A source call-graph plus `.su` audit found a conservative
+reachable bound of 224 bytes of RTC frames plus 528 bytes for FatFs/IPC, or 752
+bytes total, below the 2 KiB wrapper. The synthetic 248-byte observation is not
+the bound and is not a hardware measurement. The audited graph has no reachable
+indirect RTC calls or recursion.
+
+At linked application checkpoint `b72014b`, `.ewram` measured 15,824 bytes and
+ended at `0x02043DD0`, below the EWRAM BSS start at `0x02044000`. The heap began
+at `0x021F1000`, leaving 60 KiB in the configured heap region versus the stable
+64 KiB. RTC static records and alignment account for 4 KiB of this reduction.
+DTCM was full, ITCM ended at `0x7FF8` (8 bytes remaining), and VRAM-A ended at
+`0x06820000`; region limits were unchanged. The dedicated stack occupies the
+natural EWRAM gap before the cache: base `0x020F00F8`, end `0x020F08F8`, metadata
+end `0x020F0904`, cache start `0x020F1000`. The linked ELF and stack audit found
+no section overlap or stack-budget overrun.
+
+Three modern-path heap allocations were added for sidecar paths (path length
+plus suffix). Peak TLSF availability was not measured. The resulting heap
+headroom and its effect under real game/application load remain an accepted
+hardware limitation; the stable 64 KiB free-heap figure must not be claimed for
+this build. These results apply to the linked `b72014b` production ELF, whose
+production code is unchanged through `236e4ff`; repeat the required checks for
+the frozen final candidate. Do not add arbitrary padding or relax linker limits
+to conceal memory use.
+
 ## Verification obligations
 
 Independent legacy fixtures use the frozen old masks/serializer, not new records
