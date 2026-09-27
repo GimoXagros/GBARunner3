@@ -107,7 +107,14 @@ RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadRecord(
     if (!path || sRtcFileHandleLive) return FileStatus::IoError;
     memset(&sRtcStateFile, 0, sizeof(sRtcStateFile));
     const FRESULT opened = f_open(&sRtcStateFile, path, FA_OPEN_EXISTING | FA_READ);
-    if (opened == FR_NO_FILE) return FileStatus::Missing;
+    if (opened == FR_NO_FILE)
+    {
+        // This FatFs also reports FR_NO_FILE when the path names a directory.
+        // Only a second, read-only lookup can establish genuine absence.
+        const FRESULT stat = f_stat(path, nullptr);
+        return stat == FR_NO_FILE ? FileStatus::Missing
+            : stat == FR_OK ? FileStatus::Corrupt : FileStatus::IoError;
+    }
     if (opened != FR_OK) return FileStatus::IoError;
     sRtcFileHandleLive = true;
 
@@ -362,9 +369,25 @@ RTC_EWRAM bool RomGpioRtc::WriteStateFile(const RtcPersistence::StateFileV2& sta
         return false;
     }
 
+    // Before choosing a slot, check the journal that would remain after the
+    // write. A missing slot is unsafe if the next sequence is exactly half a
+    // range away from an older ready copy. Such a copy must be the target.
     int target = -1;
     for (int i = 0; i < 3; ++i)
-        if (sModernStatus[i] == FileStatus::Missing) { target = i; break; }
+    {
+        if (sModernStatus[i] != FileStatus::ValidCurrent ||
+            sModernRecords[i].phase != RtcPersistence::PHASE_READY) continue;
+        const u32 oldSequence = sModernRecords[i].sequence;
+        if (state.sequence == oldSequence ||
+            !RtcPersistence::IsSequenceNewer(state.sequence, oldSequence))
+        {
+            if (i == selected || target >= 0) { _writeError = true; return false; }
+            target = i;
+        }
+    }
+    if (target < 0)
+        for (int i = 0; i < 3; ++i)
+            if (sModernStatus[i] == FileStatus::Missing) { target = i; break; }
     if (target < 0)
     {
         // Once ready exists, a pending consent record is the oldest slot.

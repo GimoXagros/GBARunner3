@@ -24,6 +24,7 @@ from rtc_legacy_fixtures import (
 ROOT = Path(__file__).resolve().parents[2]
 RTC = ROOT / "code/core/arm9/source/Peripherals/RomGpio/RomGpioRtc.cpp"
 GPIO = ROOT / "code/core/arm9/source/Peripherals/RomGpio/RomGpio.cpp"
+FATFS = ROOT / "code/core/arm9/source/Fat/ff.c"
 
 
 def array(name: str, data: bytes) -> str:
@@ -50,6 +51,13 @@ def fixture_source() -> str:
     old_wrap = modern_record(ID_A, sequence=0xFFFFFFFF,
                              host_seconds=correct_seconds(clock),
                              game_seconds=correct_seconds(clock))
+    sequence_edges = {
+        "V2_SEQ_ZERO": 0,
+        "V2_SEQ_NEAR_HALF": 0x7FFFFFFE,
+        "V2_SEQ_HALF_PRE": 0x7FFFFFFF,
+        "V2_SEQ_ROTATED_OLD": 0xFFFFFFFE,
+        "V2_SEQ_ROTATED_NEW": 0x7FFFFFFD,
+    }
     half_cycle = modern_record(ID_A, sequence=0x80000000,
                                host_seconds=correct_seconds(clock),
                                game_seconds=correct_seconds(clock))
@@ -75,13 +83,20 @@ def fixture_source() -> str:
         "V2_WRAP": wrapped, "V2_OLD_WRAP": old_wrap, "V2_FUTURE": future,
         "V2_HALF_CYCLE": half_cycle, "V2_CYCLE_MID": cycle_mid,
         "V2_CYCLE_LAST": cycle_last, "V2_EQUAL_DIFFERENT": equal_different,
+        **{name: modern_record(ID_A, sequence=sequence,
+                               host_seconds=correct_seconds(clock),
+                               game_seconds=correct_seconds(clock))
+           for name, sequence in sequence_edges.items()},
     }.items():
         result += array(name, data)
     return result
 
 
-def production_source() -> str:
-    source = RTC.read_text(encoding="utf-8")
+def production_source(ref: str | None = None) -> str:
+    source = (subprocess.check_output(
+        ["git", "show", f"{ref}:{RTC.relative_to(ROOT).as_posix()}"],
+        cwd=ROOT, text=True,
+    ) if ref else RTC.read_text(encoding="utf-8"))
     begin = source.index("#define RTC_EWRAM")
     rtc = source[begin:]
     clock_begin = rtc.index("RTC_EWRAM void RomGpioRtc::UpdateDSDateTime()")
@@ -109,18 +124,35 @@ def check_boot_caller() -> None:
         "production caller must build all three modern sidecar paths"
 
 
+def check_fatfs_directory_semantics() -> None:
+    """Keep the synthetic directory result tied to bundled FatFs source."""
+    source = FATFS.read_text(encoding="utf-8")
+    directory = source.index("if (dj.obj.attr & AM_DIR)",
+                             source.index("/* Open an existing file */"))
+    assert "res = FR_NO_FILE;" in source[directory:directory + 160], \
+        "bundled f_open directory behavior changed; update synthetic media seam"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--negative-control", choices=[
         "legacy-auto-load", "legacy-overwrite", "backup-delete",
         "direct-old-delta", "version-bypass", "identity-bypass",
         "uncleared-dirty", "repeat-migration", "no-dirty", "partial-offset",
+        "prospective-select-bypass", "missing-directory-guard",
+    ])
+    parser.add_argument("--baseline-ref", help="read-only production RTC source revision")
+    parser.add_argument("--baseline-control", choices=[
+        "prospective-select-bypass", "missing-directory-guard",
     ])
     args = parser.parse_args()
+    assert not (args.baseline_ref and args.negative_control)
+    assert bool(args.baseline_ref) == bool(args.baseline_control)
     check_boot_caller()
+    check_fatfs_directory_semantics()
     with tempfile.TemporaryDirectory(prefix="gbar3-rtc-v2-host-") as directory:
         temporary = Path(directory)
-        production = production_source()
+        production = production_source(args.baseline_ref)
         if args.negative_control == "no-dirty":
             begin = production.index("RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()")
             end = production.index("RTC_EWRAM void RomGpioRtc::SetYear(")
@@ -160,6 +192,14 @@ def main() -> None:
             old = "if (_currentRecord.phase == RtcPersistence::PHASE_PENDING)"
             assert production.count(old) == 1
             production = production.replace(old, "if (true)")
+        elif args.negative_control == "prospective-select-bypass":
+            old = "if (state.sequence == oldSequence ||\n            !RtcPersistence::IsSequenceNewer(state.sequence, oldSequence))"
+            assert production.count(old) == 1
+            production = production.replace(old, "if (false)")
+        elif args.negative_control == "missing-directory-guard":
+            old = "const FRESULT stat = f_stat(path, nullptr);\n        return stat == FR_NO_FILE ? FileStatus::Missing\n            : stat == FR_OK ? FileStatus::Corrupt : FileStatus::IoError;"
+            assert production.count(old) == 1
+            production = production.replace(old, "return FileStatus::Missing;")
         elif args.negative_control in ("version-bypass", "identity-bypass"):
             begin = production.index("RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadModernStateFile(")
             end = production.index("RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanLegacy()")
@@ -190,14 +230,15 @@ def main() -> None:
             command += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all",
                         "-fno-omit-frame-pointer"]
         subprocess.run(command, check=True)
-        run = subprocess.run([str(executable), *(["--negative-control", args.negative_control]
-                                             if args.negative_control else [])],
+        control = args.negative_control or args.baseline_control
+        run = subprocess.run([str(executable), *(["--negative-control", control]
+                                             if control else [])],
                              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              timeout=30)
         print(run.stdout, end="")
         if run.stderr:
             print(run.stderr, end="", file=__import__("sys").stderr)
-        if args.negative_control:
+        if control:
             expected = {
                 "legacy-auto-load": "legacy-only blocks before guest",
                 "legacy-overwrite": "pending original and v1 triad unchanged",
@@ -209,10 +250,13 @@ def main() -> None:
                 "repeat-migration": "recreated object reloads ready without migrating twice",
                 "no-dirty": "GPIO write persists offset",
                 "partial-offset": "incomplete command does not commit offset",
-            }[args.negative_control]
+                "prospective-select-bypass": "half-cycle boundary flush preserves reboot selection",
+                "missing-directory-guard": "existing RTC directory blocks startup",
+            }[control]
             assert run.returncode != 0 and "FAIL " + expected in run.stdout, \
                 "negative control did not reach its intended assertion"
-            print("PASS negative control rejected", args.negative_control)
+            print("PASS baseline rejected" if args.baseline_ref else
+                  "PASS negative control rejected", control)
         else:
             run.check_returncode()
 

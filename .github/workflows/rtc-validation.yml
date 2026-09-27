@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - name: Independent legacy byte fixtures
         run: python3 tools/tests/test_rtc_legacy_fixtures.py
       - name: Offline inspect and explicit adoption
@@ -25,8 +27,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
-          for control in legacy-auto-load legacy-overwrite backup-delete direct-old-delta version-bypass identity-bypass uncleared-dirty repeat-migration; do
+          for control in legacy-auto-load legacy-overwrite backup-delete direct-old-delta version-bypass identity-bypass uncleared-dirty repeat-migration prospective-select-bypass missing-directory-guard; do
             SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --negative-control "$control"
+          done
+          for control in prospective-select-bypass missing-directory-guard; do
+            SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --baseline-ref de6982341bdf24b5ec4817a503332d0b9422c3bd --baseline-control "$control"
           done
       - uses: actions/upload-artifact@v7
         if: always()

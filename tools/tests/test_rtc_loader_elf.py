@@ -35,7 +35,8 @@ FA_WRITE, FA_CREATE_NEW, FA_CREATE_ALWAYS = 2, 4, 8
 SENTINEL = 0x0300F000
 HEAP_BASE = 0x023E0000
 STACK = 0x023D0000
-STATUS_READY, STATUS_FRESH, STATUS_LEGACY, STATUS_CONFLICT = 0, 1, 2, 7
+STATUS_READY, STATUS_FRESH, STATUS_LEGACY = 0, 1, 2
+STATUS_CORRUPT, STATUS_CONFLICT = 3, 7
 
 
 def bcd(value: int) -> int:
@@ -71,6 +72,7 @@ class LinkedRtc:
             self.cpu.mem_write(address, name.encode() + b"\0")
         self.cpu.mem_write(HEAP_BASE + 0x300, struct.pack("<III", *ID_A))
         self.media: dict[str, bytes] = {}
+        self.directories: set[str] = set()
         self.handles: dict[int, tuple[str, int, int]] = {}
         self.clock = datetime(2024, 2, 28, 22, 45, 45)
         self.writes = 0
@@ -89,6 +91,8 @@ class LinkedRtc:
         self.clock_buffer = find_symbol(symbols, "RomGpioRtc14sDSRtcDateTime")
         self.hooks = {symbols[name] & ~1: name for name in
                       ("f_open", "f_read", "f_write", "f_sync", "f_close")}
+        if "f_stat" in symbols:
+            self.hooks[symbols["f_stat"] & ~1] = "f_stat"
         for name in ("f_unlink", "f_rename", "sav_requestFileWrite"):
             if name in symbols:
                 self.hooks[symbols[name] & ~1] = name
@@ -164,6 +168,8 @@ class LinkedRtc:
             self.cpu.emu_stop()
         elif name == "f_open":
             path = self._cstring(r1)
+            if path in self.directories:
+                self._return(FR_NO_FILE); return
             if path.startswith("m") and not (r2 & FA_WRITE) and self.writes:
                 self.readbacks += 1
             if r2 & FA_CREATE_NEW:
@@ -181,6 +187,10 @@ class LinkedRtc:
             # in this project's FF_FS_EXFAT=0 configuration.
             self._put32(r0 + 12, len(self.media[path]))
             self._return(FR_OK)
+        elif name == "f_stat":
+            path = self._cstring(r0)
+            self._return(FR_OK if path in self.media or path in self.directories
+                         else FR_NO_FILE)
         elif name == "f_read":
             path, position, mode = self.handles[r0]
             chunk = self.media[path][position:position + r2]
@@ -304,6 +314,8 @@ def main() -> None:
                         help="baseline probe only; final candidate must link RTC work stack")
     args = parser.parse_args()
     symbols, sections = load_elf(args.arm9)
+    if not args.allow_old_no_stack_wrapper:
+        assert "f_stat" in symbols, "candidate ELF must link RTC directory distinction"
     clock = datetime(2024, 2, 28, 22, 45, 45)
     game = datetime(2024, 2, 28, 21, 39, 39)
     triad = tuple(legacy_record_from_old_clock(
@@ -352,6 +364,32 @@ def main() -> None:
         "downgrade-changed legacy bytes must block re-upgrade"
     assert adopted.writes == writes and adopted.rename_unlink == 0
 
+    if "f_stat" in symbols:
+        for slot in ("l2", "m2"):
+            directory = LinkedRtc(symbols, sections)
+            directory.directories.add(slot)
+            assert directory.initialize(HEAP_BASE + 0x800) == STATUS_CORRUPT, \
+                "linked loader must reject an RTC path naming a directory"
+            assert directory.writes == 0 and not directory.media
+
+        boundary = LinkedRtc(symbols, sections)
+        boundary.media["m0"] = modern_record(
+            ID_A, sequence=0, host_seconds=correct_seconds(clock),
+            game_seconds=correct_seconds(clock))
+        boundary.media["m1"] = modern_record(
+            ID_A, sequence=0x7FFFFFFF, host_seconds=correct_seconds(clock),
+            game_seconds=correct_seconds(clock))
+        static_boundary_rtc = find_symbol(symbols, "sRomGpioRtc")
+        mark_boundary_dirty = find_symbol(symbols, "RomGpioRtc14MarkStateDirty")
+        assert boundary.initialize(static_boundary_rtc) == STATUS_READY
+        boundary.call(mark_boundary_dirty, static_boundary_rtc)
+        result, faulted = boundary.work_stack_call()
+        assert result == 1 and not faulted and boundary.writes == 1 and \
+            "m2" not in boundary.media, \
+            "linked writer must replace old sequence before half-cycle conflict"
+        assert boundary.initialize(HEAP_BASE + 0xA00) == STATUS_READY, \
+            "linked half-cycle journal must remain readable after reboot"
+
     stacked = LinkedRtc(symbols, sections)
     if not stacked.work_available:
         assert args.allow_old_no_stack_wrapper, \
@@ -391,8 +429,10 @@ def main() -> None:
 
     stack_result = (f"work-stack guards PASS, successful-flush high-water {high_water} bytes"
                     if stacked.work_available else "work-stack guards NOT RUN")
+    stat_result = "directory and sequence boundary PASS" if "f_stat" in symbols else \
+        "directory and sequence boundary NOT RUN"
     print("linked ARM9 RTC loader: fresh, legacy gate, pending commit/readback, "
-          f"restart GPIO, conflict, {stack_result}; synthetic FatFs/DS clock, "
+          f"restart GPIO, conflict, {stat_result}, {stack_result}; synthetic FatFs/DS clock, "
           "backend callee stack excluded; hardware NOT RUN")
 
 

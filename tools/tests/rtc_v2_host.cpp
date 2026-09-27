@@ -5,6 +5,7 @@
 #include <iostream>
 #include <initializer_list>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -24,12 +25,15 @@ constexpr int FA_OPEN_EXISTING=0, FA_READ=1, FA_WRITE=2;
 constexpr int FA_CREATE_NEW=4, FA_CREATE_ALWAYS=8;
 using FRESULT=int;
 struct FIL { char path[64]; size_t position; bool live; int mode; };
+struct FILINFO { unsigned char fattrib; };
 
 #include "rtc_v2_fixtures.h"
 
 std::map<std::string,std::vector<u8>> files;
+std::set<std::string> directories;
+std::map<std::string,int> forcedOpenStatus, forcedStatStatus;
 std::string failure;
-unsigned opens=0, writes=0, closes=0, renames=0, unlinks=0, schedules=0;
+unsigned opens=0, stats=0, writes=0, closes=0, renames=0, unlinks=0, schedules=0;
 int liveHandles=0;
 u32 hostSeconds=FIXTURE_HOST;
 bool wrote=false;
@@ -44,6 +48,9 @@ int f_open(FIL* file,const char* path,int mode)
     ++opens;
     if (liveHandles != 0 || (mode & FA_WRITE && hit("open_write")) ||
         (!(mode & FA_WRITE) && hit("open_read"))) return FR_DISK_ERR;
+    if (forcedOpenStatus.count(path)) return forcedOpenStatus.at(path);
+    // Bundled FatFs ff.c returns FR_NO_FILE for f_open on an existing directory.
+    if (directories.count(path)) return FR_NO_FILE;
     if (mode & FA_CREATE_NEW)
     {
         if (files.count(path)) return FR_EXIST;
@@ -56,6 +63,12 @@ int f_open(FIL* file,const char* path,int mode)
     file->position=0; file->mode=mode; file->live=true;
     ++liveHandles;
     return FR_OK;
+}
+int f_stat(const char* path,FILINFO*)
+{
+    ++stats;
+    if (forcedStatStatus.count(path)) return forcedStatStatus.at(path);
+    return files.count(path) || directories.count(path) ? FR_OK : FR_NO_FILE;
 }
 u32 f_size(FIL* file) { return static_cast<u32>(files.at(file->path).size()); }
 int f_read(FIL* file,void* output,UINT requested,UINT* count)
@@ -131,7 +144,7 @@ void check(const char* name,bool condition)
 }
 void rebootPreservingMedia()
 {
-    failure.clear(); opens=writes=closes=renames=unlinks=schedules=0;
+    failure.clear(); opens=stats=writes=closes=renames=unlinks=schedules=0;
     // An explicit simulated process restart is the only place that releases
     // a FIL left live by a failed close.
     liveHandles=0; sRtcFileHandleLive=false; sRtcStateFile={};
@@ -139,7 +152,8 @@ void rebootPreservingMedia()
 }
 void reset()
 {
-    files.clear(); rebootPreservingMedia();
+    files.clear(); directories.clear(); forcedOpenStatus.clear();
+    forcedStatStatus.clear(); rebootPreservingMedia();
 }
 void put(const char* path,const std::vector<u8>& data) { files[path]=data; }
 LoadStatus load(RomGpioRtc& rtc,const RtcPersistence::Identity& id=ID_A)
@@ -196,6 +210,10 @@ int main(int argc,char** argv)
             else if(control=="uncleared-dirty") negativeExpected="verified flush clears dirty";
             else if(control=="repeat-migration")
                 negativeExpected="recreated object reloads ready without migrating twice";
+            else if(control=="prospective-select-bypass")
+                negativeExpected="half-cycle boundary flush preserves reboot selection";
+            else if(control=="missing-directory-guard")
+                negativeExpected="existing RTC directory blocks startup";
         }
 
     for(bool mode24:{false,true})
@@ -368,6 +386,101 @@ int main(int argc,char** argv)
     put("modern2",bytes(V2_CYCLE_LAST)); RomGpioRtc cycle;
     check("cyclic three slot order conflicts",load(cycle)==LoadStatus::Conflict);
     verify_no_rename_unlink();
+
+    // Each pair is initially orderable. Writing one more sequence to a free
+    // slot can make the old and new records exactly half a u32 range apart.
+    // The writer must replace the incompatible old copy before any reboot.
+    for(const auto& edge: {
+        std::pair{std::pair{V2_SEQ_ZERO,V2_SEQ_HALF_PRE},0x80000000u},
+        std::pair{std::pair{V2_SEQ_ROTATED_OLD,V2_SEQ_ROTATED_NEW},0x7FFFFFFEu},
+    })
+    {
+        reset();
+        files["modern0"]=std::vector<u8>(edge.first.first,
+                                           edge.first.first+sizeof(V2_SEQ_ZERO));
+        files["modern1"]=std::vector<u8>(edge.first.second,
+                                           edge.first.second+sizeof(V2_SEQ_ZERO));
+        const auto previousOlder=files.at("modern0");
+        const auto previousSelected=files.at("modern1");
+        Bus writer;
+        check("half-cycle boundary setup selects newer copy",
+              load(writer.rtc)==LoadStatus::Ready &&
+              writer.rtc._currentRecord.sequence==edge.second-1);
+        writer.write(0x62,{0x40});
+        bool faulted=false;
+        try { writer.rtc.FlushStateIfDirty(); }
+        catch(const std::runtime_error&) { faulted=true; }
+        const bool replacedOlder=!faulted && writes==1 &&
+            files.at("modern0")!=previousOlder && !files.count("modern2");
+        rebootPreservingMedia();
+        RomGpioRtc afterBoundary;
+        check("half-cycle boundary flush preserves reboot selection",
+              replacedOlder && writes==0 && files.at("modern1")==previousSelected &&
+              load(afterBoundary)==LoadStatus::Ready &&
+              afterBoundary._currentRecord.sequence==edge.second);
+        verify_no_rename_unlink();
+    }
+
+    reset(); put("modern0",bytes(V2_SEQ_ZERO));
+    put("modern1",bytes(V2_SEQ_NEAR_HALF));
+    Bus beforeBoundary;
+    check("forward boundary setup loads",load(beforeBoundary.rtc)==LoadStatus::Ready &&
+          beforeBoundary.rtc._currentRecord.sequence==0x7FFFFFFEu);
+    beforeBoundary.write(0x62,{0x40});
+    check("forward boundary first flush uses missing slot",
+          beforeBoundary.rtc.FlushStateIfDirty() && files.count("modern2") &&
+          files.at("modern0")==bytes(V2_SEQ_ZERO));
+    rebootPreservingMedia();
+    Bus atBoundary;
+    check("forward boundary first reboot remains selectable",
+          load(atBoundary.rtc)==LoadStatus::Ready &&
+          atBoundary.rtc._currentRecord.sequence==0x7FFFFFFFu);
+    const auto selectedAtBoundary=files.at("modern2");
+    atBoundary.write(0x62,{0x40});
+    check("forward boundary second flush replaces incompatible older",
+          atBoundary.rtc.FlushStateIfDirty() &&
+          atBoundary.rtc._currentRecord.sequence==0x80000000u &&
+          files.at("modern0")!=bytes(V2_SEQ_ZERO) &&
+          files.at("modern2")==selectedAtBoundary);
+    rebootPreservingMedia();
+    RomGpioRtc afterForwardBoundary;
+    check("forward boundary second reboot remains selectable",
+          load(afterForwardBoundary)==LoadStatus::Ready &&
+          afterForwardBoundary._currentRecord.sequence==0x80000000u);
+    verify_no_rename_unlink();
+
+    for(const char* path:{"legacy0","legacy1","legacy2",
+                          "modern0","modern1","modern2"})
+    {
+        reset(); directories.insert(path);
+        RomGpioRtc directorySlot;
+        check("existing RTC directory blocks startup",
+              load(directorySlot)==LoadStatus::Corrupt && writes==0 &&
+              files.empty() && directories.count(path) && stats>0);
+    }
+    reset();
+    RomGpioRtc trulyMissing;
+    check("stat confirms true no-file is fresh without write",
+          load(trulyMissing)==LoadStatus::FreshInitialized &&
+          stats==6 && writes==0 && files.empty());
+    reset(); put("modern0",bytes(V2_FRESH));
+    forcedOpenStatus["modern0"]=FR_NO_FILE;
+    RomGpioRtc existingAfterNoFile;
+    check("open no-file with stat-confirmed existing object is not missing",
+          load(existingAfterNoFile)==LoadStatus::Corrupt &&
+          files.at("modern0")==bytes(V2_FRESH) && writes==0);
+    reset(); forcedOpenStatus["modern0"]=FR_NO_PATH;
+    RomGpioRtc missingParent;
+    check("no-path cannot masquerade as missing RTC file",
+          load(missingParent)==LoadStatus::IoError && writes==0);
+    reset(); forcedStatStatus["modern0"]=FR_DISK_ERR;
+    RomGpioRtc failedStat;
+    check("stat failure cannot masquerade as missing RTC file",
+          load(failedStat)==LoadStatus::IoError && writes==0 && stats>0);
+    reset(); forcedStatStatus["modern0"]=FR_NO_PATH;
+    RomGpioRtc failedStatPath;
+    check("stat no-path cannot masquerade as missing RTC file",
+          load(failedStatPath)==LoadStatus::IoError && writes==0 && stats>0);
 
     for(const char* stage:{"open_read","read","short_read","close_read",
                            "open_write","write","short_write","sync","close_write","readback"})
