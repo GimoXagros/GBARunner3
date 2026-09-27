@@ -166,7 +166,7 @@ $(OUTPUT).elf	:	$(OFILES)
 endif
 #---------------------------------------------------------------------------------------
 
-# RTC persistence is cold code: use the existing *.size.cpp Thumb/size flags.
-# The terminal notice must stay ARM because its CPSR/CP15 helpers use ARM asm.
-RomGpioRtc.o: CXXFLAGS += -mthumb -Os
+# RTC must stay ARM: CP15 L4 compatibility disables load-PC interworking.
+# Thumb here can strand the loader entry veneer or a FatFs return in ARM state.
+RomGpioRtc.o: CXXFLAGS += -Os
 RtcFault.o: CXXFLAGS += -Os
