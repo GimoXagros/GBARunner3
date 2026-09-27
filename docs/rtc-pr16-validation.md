@@ -1,79 +1,84 @@
 # PR #16 validation record
 
-**State: automated checkpoint passes; final gate remains open.** The results
-below apply to named checkpoints and do not imply hardware verification.
+**State: target build and memory audit pass at the current checkpoint; final
+matrix and review remain pending. Hardware verification has not been run.**
+Results below are tied to named source checkpoints and runs.
 
-## Historical arithmetic candidate
+## Focused automated checks
 
-The earlier arithmetic-only head `53c9545c47499a97016885894da3b92770366a22`
-reported 428,351 calendar cases and 424 GPIO/recovery checks. That head had no
-v2 migration or production write/restart/reload coverage. These figures are
-historical and do not substitute for the v2 checks below.
+At `f24e3d0e8a3025df5923b4ec17e964c6ef884dcd`, focused RTC workflow
+[36282878735](https://github.com/GimoXagros/GBARunner3/actions/runs/36282878735)
+passed:
 
-## Passing automated checkpoints
+- 428,351 calendar cases, zero failures, Python `datetime` oracle, fatal
+  ASan/UBSan.
+- 2,363 cases in the shared RTC/GPIO/recovery/persistence/restart suite, zero
+  failures. Two workflow steps invoke that same suite; count it once.
+- All 12 named negative controls, including two regression assertions that
+  fail against the preceding `de698234` production implementation.
+- Retained legacy corpus: 352 v1 bit-flip fixtures, 44 truncation fixtures,
+  and 16 GPIO protocol cases. Legacy recovery expectations use the approved
+  explicit-adoption policy.
 
-The focused RTC workflow [36281135086](https://github.com/GimoXagros/GBARunner3/actions/runs/36281135086)
-passed at runtime checkpoint `236e4ff03c209a6d6517166d5c5012d1c1efc372`:
+## Current target link and memory audit
 
-- Frozen v1 byte fixtures and the read-only inspect / explicit-adoption tool
-  tests passed.
-- Calendar conversion passed 428,351 cases with zero failures, a Python
-  `datetime` oracle, and fatal ASan/UBSan settings.
-- The shared RTC/GPIO/recovery/persistence/restart suite passed 2,340 cases
-  with zero failures under synthetic FatFs and clock seams. CI invoked this same
-  suite through both the GPIO/recovery and production-persistence entry points;
-  these are not 4,680 independent cases.
-- The suite retains 352 version-1 bit-flip cases, 44 truncation cases, and 16
-  GPIO protocol cases. Old automatic-recovery expectations were replaced by the
-  approved legacy gate and explicit adoption policy.
-- All 10 named negative controls were rejected by their intended assertions:
-  `no-dirty`, `partial-offset`, `legacy-auto-load`, `legacy-overwrite`,
-  `backup-delete`, `direct-old-delta`, `version-bypass`, `identity-bypass`,
-  `uncleared-dirty`, and `repeat-migration`.
+At source checkpoint `04b6a3f32e85e57e4ac94a72ce03c6a3f25835d1`, the
+application target link passed. Full nightly workflow
+[36283099966](https://github.com/GimoXagros/GBARunner3/actions/runs/36283099966)
+was still running when this note was updated; the focused RTC workflow at
+this checkpoint,
+[36283099934](https://github.com/GimoXagros/GBARunner3/actions/runs/36283099934),
+passed. Full nightly completed successfully across all three jobs: application
+and test build, save-I/O host tests, and linked hicode semantics.
 
-The pinned nightly [36281135017](https://github.com/GimoXagros/GBARunner3/actions/runs/36281135017)
-passed all jobs at the same checkpoint, including the devkitARM application
-and test NDS build, repository checks, RTC host checks, and linked ARM
-regressions including the production RTC adoption/restart path. This is build
-and controlled linked-test evidence, not device execution.
+The final ARM9 layout has `.text` ending at `0x0680D548`, VRAM-A BSS ending at
+`0x06820000`, and `.ewram` ending exactly at EWRAM BSS start `0x02044000`:
+16,384 bytes with zero slack before BSS. Heap remains `0x021F1000` through
+`0x02200000`, 60 KiB versus the stable 64 KiB. ITCM ends at `0x7FF8` (8 bytes
+free); DTCM is full at 16 KiB. No section overlap was found.
 
-## Memory and remaining gates
+The helpers are placed in distinct appropriate target sections:
+`get_fileinfo` is Thumb/`-Os`, 438 bytes at `0x020439B1`; `f_stat` is ARM,
+112 bytes at `0x0680AC28`. Required interworking veneers are present and were
+verified. A null `FILINFO` bypasses the helper call at runtime. The helper
+bodies are unchanged. `.su` reports 40 bytes for `get_fileinfo` and 72 bytes
+for `f_stat`; existing RTC frames remain `ReadRecord` 64, `WriteStateFile`
+56, and `Flush` 32 bytes. `f_stat`'s backend path is 488 bytes, below the
+existing `f_open` path at 528 bytes.
 
-The linked application probe at `b72014b` passed through the production loader
-and RTC-only stack wrapper, including ARM `r4-r11`, SP/CPSR, guard/canary, and
-re-entry checks. A source call-graph plus `.su` audit found a conservative
-reachable stack bound of 224 bytes for RTC frames plus 528 bytes for FatFs/IPC,
-752 bytes total within the 2 KiB EWRAM wrapper; the audited call graph has no
-reachable indirect RTC calls or recursion. A synthetic seam observed 248 bytes
-high-water, which is not the bound and is not a hardware measurement.
+The direct/tail-call graph plus `.su` audit gives a conservative RTC path bound
+of 224 bytes of RTC frames plus 528 bytes of FatFs/IPC frames, 752 bytes total
+within the dedicated 2 KiB EWRAM stack. No reachable indirect RTC calls or
+recursion were found. The linked runner passed directory-slot, sequential
+boundary, and wrapper checks; 248 bytes was the observed synthetic high-water,
+not a maximum and not hardware evidence.
 
-At `b72014b`, `.ewram` was 15,824 bytes, ending at `0x02043DD0`; EWRAM BSS began
-at `0x02044000`, and heap began at `0x021F1000`, leaving 60 KiB versus the stable
-64 KiB. RTC static records plus alignment account for 4 KiB; three modern-path
-heap path-string allocations were added. The dedicated stack occupies the
-natural EWRAM gap before the cache (base `0x020F00F8`, end `0x020F08F8`, metadata
-end `0x020F0904`, cache start `0x020F1000`). DTCM was full; ITCM ended at
-`0x7FF8` (8 bytes remaining); VRAM-A ended at `0x06820000`, with region limits
-unchanged. The linked ELF has no section overlap or stack-bound overrun. Peak
-TLSF heap availability was not measured; runtime heap headroom remains an
+The previous `f_stat`/`get_fileinfo` link attempt at `f24e3d0` exceeded VRAM-A
+by `0x800`; the current placement resolves that target link. Peak TLSF heap
+use is unmeasured, and the three modern-sidecar path allocations remain an
 accepted hardware limitation. Do not claim the stable 64 KiB heap availability
 for this build.
 
-| Final gate | Status |
+The NDS artifact for `04b6a3f` is under external evidence directory
+`../pr16-evidence/04b6a3f/nightly`. Application SHA-256 is
+`d7b00a3c1b88c1698f12f217482c71da27a52a66780770392e2f056f579eee3b`;
+test NDS remains `50cce7e4ee4f5ae5fd814d0dea14edf39a0ecb4c017af5395cb327d32b713de7`.
+
+| Gate | Status at this checkpoint |
 |---|---|
-| Frozen-candidate nightly and required linked checks | Pending final source SHA |
-| Pinned reproducibility matrix | Pending memory audit and candidate freeze |
-| Section and conservative stack audit | Pass at `b72014b`; repeat on frozen SHA |
-| Peak TLSF heap use under application load | Not measured; accepted hardware limitation |
-| Independent read-only review | Pending frozen candidate |
+| Focused RTC tests, run 36283099934 | Pass: 428,351 calendar, 2,363 shared host, 12 negative controls |
+| Application target link and section audit, `04b6a3f` | Pass; no overlap, zero EWRAM code slack before BSS |
+| Linked directory/sequence/RTC wrapper runner | Pass; synthetic high-water 248 bytes only |
+| Full nightly, run 36283099966 | Pass: all three jobs |
+| Pinned reproducibility matrix on final frozen SHA | Pending |
+| Independent read-only review of final candidate | Pending |
+| Peak TLSF heap use | Not measured; hardware limitation |
 | NDS/DSi-compatible hardware | NOT RUN; HARDWARE VERIFICATION REQUIRED |
-| Single hardware-check artifact and manifest | Pending all automated, memory, and review gates |
+| Single hardware-check artifact and manifest | Pending final CI, matrix, and review |
 
-The final user package is planned to contain one application NDS, a manifest
-with exact source SHA/NDS SHA-256/toolchain, this user guide, and
-`tools/rtc_migrate.py` plus its usage instructions. Test NDS, ELF/MAP, logs,
-ROMs, BIOS, save, and RTC files are excluded.
-
-Host and linked tests use controlled filesystems and clocks. They do not prove
-FAT power-cut atomicity or durability. An NDS build does not prove hardware
-execution. Hardware procedure: [`RTC-PR16-HARDWARE.md`](RTC-PR16-HARDWARE.md).
+The planned user package contains one application NDS, an exact-source/NDS
+hash and toolchain manifest, this hardware guide, and `tools/rtc_migrate.py`
+with usage instructions. Test NDS, ELF/MAP, logs, ROMs, BIOS, save, and RTC
+files are excluded. Controlled host tests do not establish FAT power-cut
+atomicity or durability. See
+[`RTC-PR16-HARDWARE.md`](RTC-PR16-HARDWARE.md) for the hardware procedure.
