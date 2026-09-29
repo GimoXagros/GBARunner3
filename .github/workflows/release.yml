@@ -19,7 +19,7 @@ jobs:
         run: |
           make -C code debug
       - name: Prepare for build publishing
-        if: github.ref != 'refs/tags/custom-v0.1.3-rc3' && github.ref != 'refs/tags/custom-v0.1.4'
+        if: github.ref != 'refs/tags/custom-v0.1.3-rc3' && github.ref != 'refs/tags/custom-v0.1.4' && github.ref != 'refs/tags/custom-v0.1.5'
         run: |
           mkdir -p out/_gba/
           cp -f code/bootstrap/GBARunner3.nds out/
@@ -49,13 +49,22 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 .github/scripts/package-v014.py --mode published --out out --zip GBARunner3.zip
+      - name: Verify and package v0.1.5 stable
+        if: github.ref == 'refs/tags/custom-v0.1.5'
+        env:
+          V015_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          V015_RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          V015_RELEASE_DRAFT: ${{ github.event.release.draft }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 .github/scripts/package-v015.py --mode published --out out --zip GBARunner3.zip
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
           path: out
           name: GBARunner3
       - name: Package for release
-        if: github.ref != 'refs/tags/custom-v0.1.3-rc3' && github.ref != 'refs/tags/custom-v0.1.4'
+        if: github.ref != 'refs/tags/custom-v0.1.3-rc3' && github.ref != 'refs/tags/custom-v0.1.4' && github.ref != 'refs/tags/custom-v0.1.5'
         run: |
           cd out && zip -r ../GBARunner3.zip *
       - name: Upload to the published release
