@@ -20,7 +20,7 @@ compatibility path:
   interworking.
 
 The architectural background is in the [Technical Reference Manual,
-CPU compatibility section](Technical%20Reference%20Manual/main.tex#L71),
+CPU compatibility section](https://github.com/GimoXagros/GBARunner3/blob/0e54f515270eed85b63a9cb31f7b403b9fcba3b7/docs/Technical%20Reference%20Manual/main.tex#L71),
 especially lines 71–81. This is a binary-level diagnosis consistent with the
 user report, not confirmation that the physical hang has been fixed.
 
