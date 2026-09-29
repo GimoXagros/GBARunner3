@@ -72,7 +72,7 @@ jobs:
           path: evidence
 
   v014-package-dry-run:
-    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/release/custom-v0.1.4' || github.ref == 'refs/heads/develop')
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/release/custom-v0.1.4'
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:20241104
     steps:
@@ -89,6 +89,29 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: v014-package-dry-run
+          path: |
+            GBARunner3.zip
+            out/RELEASE-MANIFEST.json
+            out/SHA256SUMS
+
+  v015-package-dry-run:
+    if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/release/custom-v0.1.5' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20241104
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Clean pinned build and validate v0.1.5 package
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          make -C code clean
+          make -C code debug
+          python3 .github/scripts/package-v015.py --mode dry-run --out out --zip GBARunner3.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: v015-package-dry-run
           path: |
             GBARunner3.zip
             out/RELEASE-MANIFEST.json
