@@ -17,9 +17,9 @@ NITRO_FILES	:=
 endif
 
 # These set the information text in the nds file
-GAME_TITLE     := GBARunner 3
-GAME_SUBTITLE1 := By Gericom
-GAME_SUBTITLE2 :=
+GAME_TITLE     := GBARunner3 Custom
+GAME_SUBTITLE1 := A GBA Hypervisor for DS
+GAME_SUBTITLE2 := GimoXagros
 GAME_ICON      := icon.bmp
 
 include $(DEVKITARM)/ds_rules
