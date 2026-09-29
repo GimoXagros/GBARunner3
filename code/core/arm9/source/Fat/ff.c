@@ -2665,6 +2665,11 @@ static FRESULT dir_remove (	/* FR_OK:Succeeded, FR_DISK_ERR:A disk error */
 /* Get file information from directory entry                             */
 /*-----------------------------------------------------------------------*/
 
+/* RTC's f_stat(path, 0) probe links this cold helper even though it never
+ * calls it. Keep the helper out of the full VRAM-A code region on ARM9. */
+#if defined(__arm__) || defined(__thumb__)
+__attribute__((section(".ewram"), optimize("Os")))
+#endif
 static void get_fileinfo (
 	DIR* dp,			/* Pointer to the directory object */
 	FILINFO* fno		/* Pointer to the file information to be filled */

@@ -21,10 +21,13 @@ class RomGpio
 {
 public:
     void Initialize(rio_registers_t* romGpioRegisters);
-    void LoadRtcState(
-        const char* statePath,
-        const char* tempPath,
-        const char* backupPath,
+    RtcPersistence::LoadStatus LoadRtcState(
+        const char* legacyStatePath,
+        const char* legacyTempPath,
+        const char* legacyBackupPath,
+        const char* modernStatePath,
+        const char* modernTempPath,
+        const char* modernBackupPath,
         const RtcPersistence::Identity& identity);
     void Reset();
     void UpdateRomRegisters();

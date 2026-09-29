@@ -165,3 +165,8 @@ $(OUTPUT).elf	:	$(OFILES)
 #---------------------------------------------------------------------------------------
 endif
 #---------------------------------------------------------------------------------------
+
+# RTC must stay ARM: CP15 L4 compatibility disables load-PC interworking.
+# Thumb here can strand the loader entry veneer or a FatFs return in ARM state.
+RomGpioRtc.o: CXXFLAGS += -Os
+RtcFault.o: CXXFLAGS += -Os
