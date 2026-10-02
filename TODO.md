@@ -1,4 +1,55 @@
-# GBARunner3 TODO and upstream issue comparison
+# GBARunner3 work list
+
+Current release status: 2026-10-02. Recommended stable:
+[custom-v0.1.5](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.5).
+This is a maintenance work list, not a live query of upstream issues.
+
+## Completed through v0.1.5
+
+- [x] Integrate sequence-owned storage results and logical 4 KiB save-signature
+  search (PR #15/#19), plus checked save I/O (PR #18), in v0.1.4. Legacy drafts
+  #5/#6 were superseded and closed; they are not pending release work.
+- [x] Integrate PR #16 RTC BCD correction, explicit legacy-state adoption and
+  the ARM946 L4 boot fix in v0.1.5. Modern RTC state uses `.g3rtc2` sidecars;
+  `.sav` format remains unchanged.
+- [x] Record the user's 3DS + DSpico report of normal boot/saving and Pokemon
+  Emerald elapsed RTC time across save, exit, wait and restart on candidate
+  `22fb48dfeca7575804476abf5f1a5c2a707ae606`. The v0.1.5 runtime matches that
+  candidate; its final banner was not separately hardware tested.
+- [x] Publish v0.1.5 with the custom launcher banner, preserved transparent icon,
+  pinned build verification and public package checksum verification. See the
+  [release record](docs/releases/custom-v0.1.5.md) and release page for evidence.
+
+## Remaining verification and development
+
+- [ ] Broaden device, launcher, ROM revision and save-type coverage. Record exact
+  build/ROM hashes and distinguish boot, gameplay, save, restart and load results.
+- [ ] Extend RTC hardware coverage beyond the reported Emerald elapsed-time
+  test: date rollover, 12/24-hour mode, weekday, independent game offsets, explicit
+  legacy adoption, downgrade/re-upgrade conflicts and failure handling.
+- [ ] Validate physical storage errors and interrupted writes under a dedicated
+  developer test plan with disposable data. Normal boot/saving does not verify
+  these paths; automatic retry/recovery UI is not implemented.
+- [ ] Complete the historical B8CJ progression beyond the specifically recorded
+  `Main Menu -> New Game -> Save Slot` observation. Do not infer a full playthrough.
+- [ ] Reproduce issue-specific EEPROM V124, patched-ROM, timing, graphics and
+  audio reports before declaring fixes. Historical issue numbers below are leads,
+  not current upstream status or v0.1.5 failure confirmations.
+- [ ] Keep the pinned toolchain reproducible and investigate latest-toolchain
+  compatibility separately; see [build audit](docs/build-reproducibility.md).
+- [ ] Resolve repository-wide licensing with the relevant copyright holders;
+  [LICENSE.md](LICENSE.md) records the existing grant limitations.
+
+## Historical investigation and release checklists
+
+**Archive scope:** the comparison below began with the 2026-09-05 upstream
+snapshot (95 issues open at that time) and accumulated pre-v0.1.5 release notes.
+Its issue states, checkboxes, branch/PR labels, "current" wording and hardware
+claims describe those historical baselines only. It is retained as investigation
+evidence, not a current upstream issue inventory. In particular, PR #16 is now
+merged, PR #5/#6 are superseded, and v0.1.5 is the current stable release. The
+completed/current sections above take precedence for this fork's release status.
+No linked upstream issue is claimed closed by this cleanup.
 
 Upstream issue snapshot date: 2026-09-05; release status updated 2026-09-13
 
@@ -15,7 +66,7 @@ code. `Partial` means an implementation exists but a stated condition is still
 missing. `Retest` means the branch could affect the symptom, but the exact issue
 input and route have not been verified on rc5.
 
-## custom-v0.1.3 stable status
+### custom-v0.1.3 stable status
 
 - [x] Record the user's confirmation that both distortion and flicker disappeared
   after removing the temporary display-comparison config and restoring defaults.
@@ -31,14 +82,14 @@ input and route have not been verified on rc5.
 
 The following RC1 checklist is historical; current stable is `custom-v0.1.3`.
 
-## custom-v0.1.3-rc1 release status
+### custom-v0.1.3-rc1 release status
 
 - [x] Audit release base `504a2d67177d6e4432c51addfeabaa07b9996654` and prepare
   RC documentation without changing runtime, configs or submodule revisions.
 - [x] Publish [custom-v0.1.3-rc1](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1)
   as a Pre-release after required build/test gates; independently downloaded and
   verified its public ZIP. Exact source, workflow and hashes are recorded in
-  [CUSTOM_BUILD.md](CUSTOM_BUILD.md#custom-v013-rc1-release-candidate).
+  [historical release page](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc1).
   This completion record is a documentation update after the immutable RC tag.
 - [ ] Complete new RC hardware validation: B8CJ slot selection after Save Slot,
   intro, gameplay, save, restart and load; RTC cold start and interrupted-write
@@ -49,7 +100,7 @@ The following RC1 checklist is historical; current stable is `custom-v0.1.3`.
 `custom-v0.1.2` was the stable release when RC1 was published. RC publication
 was an automated-verification milestone, not a new hardware compatibility certification.
 
-## Completed in custom-v0.1.2
+### Completed in custom-v0.1.2
 
 - [x] **Fix the reported B8CJ New Game transition.** The generic fix preserves
   mapped high-ROM Thumb state, selects the correct cached halfword, resolves
@@ -59,7 +110,7 @@ was an automated-verification milestone, not a new hardware compatibility certif
   `CC09916848C6FB92092DB15D5D8EBDA21F4543A63589804F44268D2D810601CE`.
   Later progression remains a separate open verification item below.
 
-## P0: release and integration blockers
+### P0: release and integration blockers
 
 - [x] **Persist RTC state per game** — Implemented for
   [#30](https://github.com/Gericom/GBARunner3/issues/30). The branch now stores
@@ -104,7 +155,7 @@ was an automated-verification milestone, not a new hardware compatibility certif
   experiment is non-blocking. The conflicting BlocksDS port in PR
   [#178](https://github.com/Gericom/GBARunner3/pull/178) remains separate.
 
-## P1: compatibility work directly adjacent to the current custom release
+### P1: compatibility work directly adjacent to the current custom release
 
 - [ ] **Extend hardware regression coverage for the high-ROM Thumb/JIT fix.**
   Nintendo 3DS + DSpico testing of build
@@ -149,7 +200,7 @@ was an automated-verification milestone, not a new hardware compatibility certif
   calculable ARM PC+8/high-ROM mapping cases in the test NDS and keep
   title-specific runtime evidence bound to exact NDS hashes.
 
-## P1: application, documentation, and user experience
+### P1: application, documentation, and user experience
 
 - [ ] **Merge and maintain a canonical README/build entry point** —
   [#153](https://github.com/Gericom/GBARunner3/issues/153). This fork now has a
@@ -179,7 +230,7 @@ was an automated-verification milestone, not a new hardware compatibility certif
   branches, supported build, release policy, and how experimental forks relate
   to upstream.
 
-## P2: cartridge peripherals, saves, and connectivity
+### P2: cartridge peripherals, saves, and connectivity
 
 - [ ] Multi-save slots [#17](https://github.com/Gericom/GBARunner3/issues/17).
 - [ ] Boktai solar level/sensor input
@@ -193,7 +244,7 @@ was an automated-verification milestone, not a new hardware compatibility certif
   [#161](https://github.com/Gericom/GBARunner3/issues/161).
 - [ ] Rumble Pak support [#175](https://github.com/Gericom/GBARunner3/issues/175).
 
-## P2: core emulation, timing, JIT, DMA, graphics, and audio
+### P2: core emulation, timing, JIT, DMA, graphics, and audio
 
 These issues remain open and have no issue-specific rc5 closure evidence. Group
 work by causal subsystem before adding per-game exceptions.
@@ -261,7 +312,7 @@ Jet Set Radio also has an open fix PR
 [#209](https://github.com/Gericom/GBARunner3/pull/209); verify its patch against
 the current hicode branch instead of duplicating title configuration.
 
-## Verification gates before closing an issue
+### Verification gates before closing an issue
 
 - Reproduce the original symptom using an identified ROM revision, exact build,
   console/mode, launcher, storage path, configuration, and starting state.
@@ -275,22 +326,22 @@ the current hicode branch instead of duplicating title configuration.
   copyrighted saves. Record hashes and lawful patch/reproduction instructions
   instead.
 
-## Strict external patch addresses (2026-09-05)
+### Strict external patch addresses (2026-09-05)
 
 - Implemented per-array validation and atomic replacement; see [format and verification](docs/config-patch-addresses.md).
 - Shipped 304 configs / 2,513 addresses retain their values. Patch mapping and hardware compatibility remain separate checks.
 
-## ROM-hack source-profile design (2026-09-05)
+### ROM-hack source-profile design (2026-09-05)
 
 - [Lifecycle audit and upstream #205 conflict map](docs/romhack-source-profile-design.md) documented.
 - Source/effective metadata, patch-view transaction, profile selection and save/RTC migration are design proposals, not implemented support.
 
-## EEPROM V124 source audit (2026-09-05)
+### EEPROM V124 source audit (2026-09-05)
 
 - [Source research and reproduction checklist](docs/eeprom-v124-research.md) complete; version-selection and wrapper tests added.
 - Compatibility, new signatures/masks and issue #198 remain blocked on reproduction; no protocol fix claimed.
 
-## Autonomous maintenance result index (2026-09-05)
+### Autonomous maintenance result index (2026-09-05)
 
 See the [task results, evidence and single hardware queue](docs/autonomous-maintenance-20260905.md)
 for merged changes, retained drafts and remaining gates. Software-only tests do

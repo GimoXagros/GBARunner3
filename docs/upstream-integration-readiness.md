@@ -1,5 +1,11 @@
 # Upstream integration readiness
 
+> Current status (2026-10-02): PR #16 is merged and custom-v0.1.5 is stable.
+> See the [release record](releases/custom-v0.1.5.md) for completed automated
+> gates and the limited user-reported hardware result. The checkpoint statements
+> below, including pending/NOT RUN and upstream issue status, are historical.
+
+
 Fork baseline: `custom-v0.1.2` at
 `dd3f44be5e9412ba29f3d831fc236dcc6016b71e`
 

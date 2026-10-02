@@ -67,3 +67,20 @@ Runtime matches the tested RTC candidate; banner metadata is changed. The RTC
 candidate has a 56 KiB heap and a conservative pending-adoption boot stack bound
 of 960/992 bytes. These are linked/static measurements, not hardware peak usage
 or performance claims.
+
+## Post-publication verification record
+
+Recorded after the immutable release tag; no released binary was changed.
+Source/tag target: `76fec2fd6a2a8422fc51b961374c0208d3932ef6`.
+Release workflow [36589715672](https://github.com/GimoXagros/GBARunner3/actions/runs/36589715672)
+succeeded. A fresh public download on 2026-09-30 KST matched the CI dry-run ZIP
+and GitHub asset digest:
+`bdc5cecdd166d2ebe0ada3f5e7479da7081c01f534a7f8607a82d428694df1c0`.
+The 165568-byte ZIP contains 310 allowlisted files. All checksums, banner fields,
+transparent icon, source manifest and 304 source-identical configs passed.
+
+Exact-source [nightly](https://github.com/GimoXagros/GBARunner3/actions/runs/36588692142)
+and [six-build/package validation](https://github.com/GimoXagros/GBARunner3/actions/runs/36588741933)
+passed, with no actionable findings in the independent release review. The
+optional latest-toolchain failure remained the known libtwl setVectorBase issue.
+Hardware scope is unchanged from the user report above.

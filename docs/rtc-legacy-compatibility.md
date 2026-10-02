@@ -1,10 +1,11 @@
 # PR16 RTC compatibility contract
 
-Status: coordinator-approved implementation contract; hardware NOT RUN.
-Baseline PR16: 53c9545c47499a97016885894da3b92770366a22.
-Explicit stable develop integration: 7687974ea133bdf11ca6fde2192c75da794a8edd,
-merged normally on the PR branch at d32563d2575a2df56fbe04fb4869251a1e4fba1e.
-This PR must not be merged or released by this task.
+Status: implemented and included in stable custom-v0.1.5 via merged PR #16.
+The user reported normal boot/save and Pokemon Emerald elapsed RTC on 3DS +
+DSpico with candidate `22fb48d`; physical media faults and legacy migration
+failure scenarios remain unverified on hardware. See the [user guide](releases/RTC-v0.1.5.md)
+and [release record](releases/custom-v0.1.5.md). The contract below remains the
+technical source of truth; its original PR implementation baseline was `53c9545`.
 
 ## Information we can and cannot preserve
 
