@@ -1,5 +1,11 @@
 # PR #16 validation record
 
+> Current status (2026-10-02): PR #16 is merged and custom-v0.1.5 is stable.
+> See the [release record](releases/custom-v0.1.5.md) for completed automated
+> gates and the limited user-reported hardware result. The checkpoint statements
+> below, including pending/NOT RUN and upstream issue status, are historical.
+
+
 **State: candidate `90a0e8b` passes the current nightly and focused suites;
 the ARM/Thumb correction is checked locally and its memory audit is complete.
 Final frozen-source CI, matrix, review, and device retest remain pending.**

@@ -1,5 +1,11 @@
 # PR #16 RTC 실기 검증 안내
 
+> Current status (2026-10-02): PR #16 is merged and custom-v0.1.5 is stable.
+> See the [release record](releases/custom-v0.1.5.md) for completed automated
+> gates and the limited user-reported hardware result. The checkpoint statements
+> below, including pending/NOT RUN and upstream issue status, are historical.
+
+
 **실기 검증 상태: HARDWARE VERIFICATION REQUIRED.** 이 문서 작성 시점에
 NDS/DSi 호환 기기 검증은 수행하지 않았다. 이 안내만으로 현재 PR 브랜치의
 빌드나 실험용 파일을 배포 가능한 버전으로 간주하지 않는다.
