@@ -32,7 +32,7 @@ def main():
     start = find_symbol(symbols, "RtcIpcService5Start")
     irq = find_symbol(symbols, "rtcTimerIrq")
     high_address = find_symbol(symbols, "sRtcTimerOverflows")
-    thread_start = find_symbol(symbols, "ThreadIpcService5Start")
+    thread_start = symbols["_ZN16ThreadIpcService5StartEv"]
     results = []
 
     def run(address, high=0, lows=(0,), pending=False, cpsr=0x1F):
