@@ -214,6 +214,8 @@ int main(int argc,char** argv)
                 negativeExpected="half-cycle boundary flush preserves reboot selection";
             else if(control=="missing-directory-guard")
                 negativeExpected="existing RTC directory blocks startup";
+            else if(control=="eager-seconds")
+                negativeExpected="GBA E5 immediate masked readback";
         }
 
     for(bool mode24:{false,true})
@@ -248,6 +250,120 @@ int main(int argc,char** argv)
         check("GPIO reset",bus.read(0x65,7)==
               std::vector<u8>({0,1,1,0,0,0,0}));
     }
+
+    // ws-rtc-test's GBA E5 oracle: masked 65 until the next tick, then minute carry.
+    reset(); hostSeconds=100; Bus seconds;
+    seconds.write(0x64,{0,1,1,0,0,0,0xE5});
+    check("GBA E5 immediate masked readback",seconds.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    check("GBA E5 repeated same-second readback",seconds.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    ++hostSeconds;
+    check("GBA E5 next tick carries minute",seconds.read(0x67,3)==std::vector<u8>({0,1,0}));
+
+    // Generalized implementation boundary checks; these are not 40 hardware observations.
+    for(unsigned decimal=60;decimal<80;++decimal) for(unsigned flag:{0u,0x80u})
+    {
+        reset(); hostSeconds=100; Bus bus;
+        const u8 raw=static_cast<u8>((decimal/10)*16+decimal%10);
+        bus.write(0x64,{0,1,1,0,0,0,static_cast<u8>(raw|flag)});
+        check("BCD60..79 delayed readback design",bus.read(0x67,3)==std::vector<u8>({0,0,raw}));
+        ++hostSeconds;
+        check("BCD60..79 delayed carry design",bus.read(0x67,3)==std::vector<u8>({0,1,0}));
+    }
+    for(u8 raw:{0x6A,0x7F,0xFF})
+    {
+        reset(); hostSeconds=100; Bus bus;
+        bus.write(0x64,{0,1,1,0,0,0,raw});
+        check("malformed BCD nibble retains prior policy",bus.read(0x67,3)==std::vector<u8>({0,0,0}));
+        ++hostSeconds;
+        check("malformed BCD nibble has no pending carry",bus.read(0x67,3)==std::vector<u8>({0,0,1}));
+    }
+    reset(); hostSeconds=100; Bus interrupted;
+    interrupted.write(0x64,{0,1,1,0,0,0,0xE5});
+    interrupted.command(0x66); interrupted.byte(0x12); interrupted.byte(0x34); interrupted.pins(0);
+    check("incomplete time write preserves pending second",interrupted.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    ++hostSeconds;
+    check("incomplete time write preserves pending carry",interrupted.read(0x67,3)==std::vector<u8>({0,1,0}));
+
+    reset(); hostSeconds=100; Bus replace;
+    replace.write(0x64,{0,1,1,0,0,0,0xE5});
+    replace.write(0x66,{0x01,0x02,0x03});
+    check("valid time replaces pending second",replace.read(0x67,3)==std::vector<u8>({1,2,3}));
+    ++hostSeconds;
+    check("valid time cancels pending carry",replace.read(0x67,3)==std::vector<u8>({1,2,4}));
+
+    reset(); hostSeconds=100; Bus modes;
+    modes.write(0x64,{0,1,1,0,0x20,0,0xE5});
+    modes.write(0x62,{0});
+    check("12h switch retains pending second",modes.read(0x67,3)==std::vector<u8>({0x88,0,0x65}));
+    modes.write(0x62,{0x40});
+    check("24h switch retains pending second",modes.read(0x67,3)==std::vector<u8>({0xA0,0,0x65}));
+    ++hostSeconds;
+    check("status switch preserves pending carry",modes.read(0x67,3)==std::vector<u8>({0xA0,1,0}));
+    modes.write(0x66,{0,0,0xE5}); modes.write(0x60,{});
+    check("reset clears pending second",modes.read(0x67,3)==std::vector<u8>({0,0,0}));
+    ++hostSeconds;
+    check("reset clears pending carry",modes.read(0x67,3)==std::vector<u8>({0,0,1}));
+
+    reset(); hostSeconds=100; Bus leap;
+    leap.write(0x64,{0x24,2,0x28,3,0x23,0x59,0xE5});
+    ++hostSeconds;
+    check("pending carry reaches leap day",leap.read(0x65,7)==std::vector<u8>({0x24,2,0x29,4,0,0,0}));
+    reset(); hostSeconds=100; Bus monthEnd;
+    monthEnd.write(0x64,{0x24,4,0x30,2,0x23,0x59,0xE5});
+    ++hostSeconds;
+    check("pending carry reaches next month",monthEnd.read(0x65,7)==std::vector<u8>({0x24,5,1,3,0,0,0}));
+    reset(); hostSeconds=100; Bus century;
+    century.write(0x64,{0x99,0x12,0x31,6,0x23,0x59,0xE5});
+    ++hostSeconds;
+    check("pending carry wraps century",century.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+    for(u8 second:{0x59,0xE5}) for(unsigned restartCase:{0u,1u,2u})
+    {
+        reset(); hostSeconds=100; Bus savedCentury;
+        check("century persistence starts fresh",load(savedCentury.rtc)==LoadStatus::FreshInitialized);
+        savedCentury.write(0x64,{0x99,0x12,0x31,6,0x23,0x59,second});
+        if(restartCase==2) ++hostSeconds;
+        check("century persistence flush succeeds",savedCentury.rtc.FlushStateIfDirty());
+        // Loading after elapsed time crosses the boundary also exercises ApplyState.
+        if(restartCase==1) ++hostSeconds;
+        Bus loadedCentury;
+        check("century persistence reload succeeds",load(loadedCentury.rtc)==LoadStatus::Ready);
+        if(restartCase==0)
+        {
+            check("century restart before boundary restores canonical59",
+                  loadedCentury.read(0x65,7)==std::vector<u8>({0x99,0x12,0x31,6,0xA3,0x59,0x59}));
+            ++hostSeconds;
+        }
+        for(unsigned repeat=0;repeat<3;++repeat)
+        {
+            check("century live repeated reads preserve weekday",
+                  savedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+            check("century reload repeated reads preserve weekday",
+                  loadedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+        }
+        ++hostSeconds;
+        check("century reloaded next second preserves weekday",
+              loadedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,1}));
+    }
+    reset(); hostSeconds=100; Bus noon;
+    noon.write(0x62,{0}); noon.write(0x64,{0,1,1,0,0x11,0x59,0xE5});
+    ++hostSeconds;
+    check("pending carry crosses12h noon",noon.read(0x67,3)==std::vector<u8>({0x80,0,0}));
+    reset(); hostSeconds=100; Bus skipped;
+    skipped.write(0x64,{0,1,1,0,0,0,0xE5}); hostSeconds+=5;
+    check("skipped host ticks apply one correction",skipped.read(0x67,3)==std::vector<u8>({0,1,4}));
+
+    reset(); hostSeconds=100; Bus savedPending;
+    check("pending persistence starts fresh",load(savedPending.rtc)==LoadStatus::FreshInitialized);
+    savedPending.write(0x64,{0,1,1,0,0,0,0xE5});
+    check("pending persistence flush succeeds",savedPending.rtc.FlushStateIfDirty());
+    check("pending persistence keeps V2 canonical59",
+          savedPending.rtc._currentRecord.rtcSecondsSince2000==59 && files.at("modern0").size()==200);
+    check("flush retains live transient second",savedPending.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    Bus restartedPending;
+    check("pending persistence reload",load(restartedPending.rtc)==LoadStatus::Ready);
+    check("restart deliberately loses raw transient",restartedPending.read(0x67,3)==std::vector<u8>({0,0,0x59}));
+    ++hostSeconds;
+    check("restarted canonical anchor carries",restartedPending.read(0x67,3)==std::vector<u8>({0,1,0}));
 
     reset();
     put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));

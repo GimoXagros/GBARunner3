@@ -67,6 +67,12 @@ not read `.g3rtc2`, and changes to legacy files can cause a later upgrade confli
 
 ## Hardware evidence and remaining limits
 
+The development branch also corrects delayed out-of-range BCD seconds after
+comparison with the GBA path of `ws-rtc-test`, and preserves weekdays across
+the guest calendar's century wrap. See the
+[protocol findings and remaining timing limits](docs/rtc-s3511a-protocol.md).
+This source change is not included in the existing v0.1.5 release files.
+
 On 2026-09-30 the user reported normal boot and saving on **3DS + DSpico** with
 the RTC candidate `22fb48dfeca7575804476abf5f1a5c2a707ae606`. In Pokemon Emerald,
 setting the clock, saving, exiting, waiting and restarting showed the expected

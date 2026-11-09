@@ -89,6 +89,8 @@ jobs:
       - name: Verify production RTC persistence and restart
         run: |
           SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --baseline-ref bf2c95324ff5336f57b639cbaef8a2b4f7a849bd --baseline-control eager-seconds
+          SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --negative-control eager-seconds
           for control in legacy-auto-load legacy-overwrite backup-delete direct-old-delta version-bypass identity-bypass uncleared-dirty repeat-migration prospective-select-bypass missing-directory-guard; do
             SANITIZE=1 UBSAN_OPTIONS=halt_on_error=1 python3 tools/tests/test_rtc_v2_host.py --negative-control "$control"
           done

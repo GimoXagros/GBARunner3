@@ -334,6 +334,64 @@ def main() -> None:
     assert fresh.initialize(HEAP_BASE + 0x800) == STATUS_FRESH
     assert not fresh.media and fresh.writes == 0 and fresh.clock_reads == 0
 
+    # Bit-bang the linked public GPIO write entry, not a Python RTC model.
+    serial = LinkedRtc(symbols, sections)
+    serial_rtc = find_symbol(symbols, "sRomGpioRtc")
+    serial_registers = HEAP_BASE + 0x1200
+    assert serial.initialize(serial_rtc) == STATUS_FRESH
+    serial.cpu.mem_write(serial_registers, bytes(6))
+    serial.cpu.reg_write(UC_ARM_REG_R1, serial_registers)
+    serial.call(find_symbol(symbols, "RomGpio10Initialize"), symbols["gRomGpio"])
+
+    def gpio_write(offset: int, value: int) -> None:
+        serial.cpu.reg_write(UC_ARM_REG_R1, value)
+        serial.call(symbols["rio_write"], offset)
+
+    def command(value: int) -> None:
+        gpio_write(2, 7)
+        gpio_write(0, 0)
+        for bit in range(7, -1, -1):
+            data = ((value >> bit) & 1) << 1
+            gpio_write(0, 4 | data)
+            gpio_write(0, 5 | data)
+
+    def write_serial(op: int, values: bytes) -> None:
+        command(op)
+        for value in values:
+            for bit in range(8):
+                data = ((value >> bit) & 1) << 1
+                gpio_write(0, 4 | data)
+                gpio_write(0, 5 | data)
+        gpio_write(0, 0)
+
+    def read_serial(op: int = 0x67, count: int = 3) -> bytes:
+        command(op)
+        gpio_write(2, 5)
+        result = bytearray(count)
+        for bit in range(count * 8):
+            gpio_write(0, 4)
+            result[bit // 8] |= ((serial.cpu.mem_read(serial_registers, 1)[0] >> 1) & 1) << (bit % 8)
+            gpio_write(0, 5)
+        gpio_write(0, 0)
+        return bytes(result)
+
+    gpio_write(4, 1)
+    write_serial(0x64, bytes.fromhex("00 01 01 00 00 00 E5"))
+    assert read_serial() == bytes.fromhex("00 00 65"), \
+        "linked GPIO E5 must read masked65 before the next tick"
+    assert read_serial() == bytes.fromhex("00 00 65"), \
+        "linked GPIO repeated read must retain pending seconds"
+    serial.clock += timedelta(seconds=1)
+    assert read_serial() == bytes.fromhex("00 01 00"), \
+        "linked GPIO E5 must correct with minute carry on the next tick"
+    assert serial.writes == 0 and serial.scheduler_calls > 0, \
+        "linked GPIO write must schedule persistence without synchronous FatFs I/O"
+    write_serial(0x64, bytes.fromhex("99 12 31 06 23 59 59"))
+    serial.clock += timedelta(seconds=1)
+    for _ in range(3):
+        assert read_serial(0x65, 7) == bytes.fromhex("00 01 01 00 00 00 00"), \
+            "linked ordinary59 century rollover must increment weekday exactly once"
+
     legacy = LinkedRtc(symbols, sections)
     legacy.media.update(zip(("l0", "l1", "l2"), triad))
     before_legacy = dict(legacy.media)
@@ -431,7 +489,7 @@ def main() -> None:
                     if stacked.work_available else "work-stack guards NOT RUN")
     stat_result = "directory and sequence boundary PASS" if "f_stat" in symbols else \
         "directory and sequence boundary NOT RUN"
-    print("linked ARM9 RTC loader: fresh, legacy gate, pending commit/readback, "
+    print("linked ARM9 RTC loader: GPIO E5 delayed correction/carry, fresh, legacy gate, pending commit/readback, "
           f"restart GPIO, conflict, {stat_result}, {stack_result}; synthetic FatFs/DS clock, "
           "backend callee stack excluded; hardware NOT RUN")
 

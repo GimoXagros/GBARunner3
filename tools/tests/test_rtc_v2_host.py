@@ -140,10 +140,12 @@ def main() -> None:
         "direct-old-delta", "version-bypass", "identity-bypass",
         "uncleared-dirty", "repeat-migration", "no-dirty", "partial-offset",
         "prospective-select-bypass", "missing-directory-guard",
+        "eager-seconds",
     ])
     parser.add_argument("--baseline-ref", help="read-only production RTC source revision")
     parser.add_argument("--baseline-control", choices=[
         "prospective-select-bypass", "missing-directory-guard",
+        "eager-seconds",
     ])
     args = parser.parse_args()
     assert not (args.baseline_ref and args.negative_control)
@@ -153,7 +155,14 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="gbar3-rtc-v2-host-") as directory:
         temporary = Path(directory)
         production = production_source(args.baseline_ref)
-        if args.negative_control == "no-dirty":
+        if args.negative_control == "eager-seconds":
+            begin = production.index("RTC_EWRAM void RomGpioRtc::SetSecond(")
+            body = production[begin:]
+            old = "if ((value & 0xF) > 9)"
+            assert body.count(old) == 1
+            production = production[:begin] + body.replace(
+                old, "if (value >= 0x60 || (value & 0xF) > 9)")
+        elif args.negative_control == "no-dirty":
             begin = production.index("RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()")
             end = production.index("RTC_EWRAM void RomGpioRtc::SetYear(")
             body = production[begin:end]
@@ -252,6 +261,7 @@ def main() -> None:
                 "partial-offset": "incomplete command does not commit offset",
                 "prospective-select-bypass": "half-cycle boundary flush preserves reboot selection",
                 "missing-directory-guard": "existing RTC directory blocks startup",
+                "eager-seconds": "GBA E5 immediate masked readback",
             }[control]
             assert run.returncode != 0 and "FAIL " + expected in run.stdout, \
                 "negative control did not reach its intended assertion"

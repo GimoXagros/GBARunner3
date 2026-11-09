@@ -47,7 +47,7 @@ public:
         , _legacyPaths { nullptr, nullptr, nullptr }
         , _modernPaths { nullptr, nullptr, nullptr }, _identity()
         , _currentRecord(), _hasCurrent(false), _writeError(false)
-        , _stateDirty(false) { }
+        , _stateDirty(false), _pendingSecondHost(0), _pendingSecond(0xFF) { }
 
     RtcPersistence::LoadStatus Initialize(
         const char* legacyStatePath,
@@ -81,6 +81,8 @@ private:
     bool _hasCurrent;
     bool _writeError;
     bool _stateDirty;
+    u32 _pendingSecondHost;
+    u8 _pendingSecond;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);
     void HandleInDataWaitRisingEdge(RomGpio& romGpio);
@@ -120,5 +122,6 @@ private:
     u32 ToSecondsSinceJanuary2000(const rio_rtc_datetime_t& dateTime, bool time24h) const;
     void FromSecondsSinceJanuary2000(u32 secondsSinceJanuary2000, rio_rtc_datetime_t& dateTime, bool time24h) const;
     u32 NormalizeSecondsSinceJanuary2000(s64 secondsSinceJanuary2000) const;
+    s16 GetWeekDayOffset(s64 secondsSinceJanuary2000, u32 normalizedSeconds) const;
     u32 GetNumberOfDaysInMonth(u32 year, u32 month) const;
 };
