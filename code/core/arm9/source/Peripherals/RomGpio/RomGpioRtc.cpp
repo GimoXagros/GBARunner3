@@ -37,7 +37,7 @@
 #define RIO_RTC_STATUS_WRITE_MASK   0b01101010
 
 [[gnu::section(".ewram.bss")]]
-RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);
+RtcClockSample RomGpioRtc::sDSRtcDateTime alignas(32);
 
 // FIL owns a sector-sized window and cannot live on the small IRQ stack used
 // by the deferred VBlank writer.
@@ -98,6 +98,8 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::Initialize(
     _rtcOffset = 0;
     _weekDayOffset = 0;
     _pendingSecond = 0xFF;
+    _clockAnchored = false;
+    _clockPhase = 0;
     return LoadState();
 }
 
@@ -133,7 +135,8 @@ RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadRecord(
         u16 foundVersion;
         memcpy(&foundMagic, header, sizeof(foundMagic));
         memcpy(&foundVersion, header + 4, sizeof(foundVersion));
-        if (foundMagic == magic && foundVersion != version)
+        if (foundMagic == magic && foundVersion != version &&
+            !(magic == RtcPersistence::STATE_V2_MAGIC && foundVersion == RtcPersistence::STATE_V3_VERSION))
             result = FileStatus::UnsupportedVersion;
         else if (foundMagic == magic && actualSize == size)
         {
@@ -284,7 +287,7 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::SelectModern(int& selected)
 RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFileV2& state)
 {
     UpdateDSDateTime();
-    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime, true);
     _rtcOffset = RtcPersistence::RestoreOffset(
         state.rtcSecondsSince2000,
         state.hostSecondsSince2000,
@@ -294,6 +297,11 @@ RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFileV2& state)
         ? hostSeconds - state.hostSecondsSince2000 : 0;
     _weekDayOffset = GetWeekDayOffset(state.rtcSecondsSince2000 + elapsed,
         static_cast<u32>(hostSeconds + _rtcOffset));
+    _clockAnchorSeconds = hostSeconds + _rtcOffset;
+    _clockAnchorTicks = sDSRtcDateTime.ticks;
+    _clockPhase = RtcPersistence::GetSubsecond(state);
+    _clockAnchored = true;
+    _pendingSecond = elapsed == 0 ? RtcPersistence::GetPendingSecond(state) : 0xFF;
     _statusRegister = state.statusRegister &
         (RIO_RTC_STATUS_POWER | RIO_RTC_STATUS_WRITE_MASK);
     _intRegister = state.intRegister;
@@ -327,7 +335,7 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::LoadState()
             RtcPersistence::StateFileV2& ready = sRtcWriteBuffer;
             ready = _currentRecord;
             UpdateDSDateTime();
-            ready.hostSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+            ready.hostSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime, true);
             ready.sequence = 1;
             ready.phase = RtcPersistence::PHASE_READY;
             ready.checksum = RtcPersistence::CalculateV2Checksum(ready);
@@ -452,9 +460,10 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     if (_writeError) rtc_persistenceFault();
 
     UpdateDSDateTime();
-    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
-    const u32 rtcSeconds = NormalizeSecondsSinceJanuary2000(
-        static_cast<s64>(hostSeconds) + _rtcOffset);
+    const u32 hostSeconds = ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime, true);
+    u16 phase;
+    const s64 rawRtcSeconds = ReadClock(phase);
+    const u32 rtcSeconds = NormalizeSecondsSinceJanuary2000(rawRtcSeconds);
     RtcPersistence::StateFileV2& state = sRtcWriteBuffer;
     if (_hasCurrent)
     {
@@ -476,7 +485,11 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     }
     state.hostSecondsSince2000 = hostSeconds;
     state.rtcSecondsSince2000 = rtcSeconds;
-    state.weekDayOffset = GetWeekDayOffset(static_cast<s64>(hostSeconds) + _rtcOffset, rtcSeconds);
+    state.weekDayOffset = GetWeekDayOffset(rawRtcSeconds, rtcSeconds);
+    state.version = RtcPersistence::STATE_V3_VERSION;
+    state.reserved[0] = _pendingSecond;
+    state.reserved[1] = phase & 0xFF;
+    state.reserved[2] = phase >> 8;
     state.statusRegister = _statusRegister;
     state.intRegister = _intRegister;
     state.checksum = RtcPersistence::CalculateV2Checksum(state);
@@ -793,44 +806,57 @@ RTC_EWRAM void RomGpioRtc::UpdateDSDateTime()
     ipc_recvWordDirect();
 }
 
+RTC_EWRAM s64 RomGpioRtc::ReadClock(u16& phase)
+{
+    if (!_clockAnchored)
+    {
+        _clockAnchorSeconds = static_cast<s64>(ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime, true)) + _rtcOffset;
+        _clockAnchorTicks = sDSRtcDateTime.ticks;
+        _clockPhase = 0;
+        _clockAnchored = true;
+    }
+    const uint64_t cycles = (sDSRtcDateTime.ticks - _clockAnchorTicks) * RTC_CLOCK_DIVIDER
+        + (static_cast<uint64_t>(_clockPhase) * RTC_CLOCK_HZ + RTC_PHASE_UNITS - 1) / RTC_PHASE_UNITS;
+    const uint64_t seconds = cycles / RTC_CLOCK_HZ;
+    phase = (cycles % RTC_CLOCK_HZ) * RTC_PHASE_UNITS / RTC_CLOCK_HZ;
+    if (seconds != 0) _pendingSecond = 0xFF;
+    return _clockAnchorSeconds + static_cast<s64>(seconds);
+}
+
 RTC_EWRAM void RomGpioRtc::UpdateDateTime()
 {
     UpdateDSDateTime();
-    u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
-    u32 secondsSince2000 = NormalizeSecondsSinceJanuary2000(
-        static_cast<s64>(dsRtcSecondsSince2000) + _rtcOffset);
+    u16 phase;
+    const s64 rawRtcSeconds = ReadClock(phase);
+    u32 secondsSince2000 = NormalizeSecondsSinceJanuary2000(rawRtcSeconds);
     FromSecondsSinceJanuary2000(secondsSince2000, _dateTime, _statusRegister & RIO_RTC_STATUS_24H);
     int weekDay = (_dateTime.date.weekDay + GetWeekDayOffset(
-        static_cast<s64>(dsRtcSecondsSince2000) + _rtcOffset, secondsSince2000)) % 7;
+        rawRtcSeconds, secondsSince2000)) % 7;
     _dateTime.date.weekDay = weekDay < 0 ? weekDay + 7 : weekDay;
     if (_pendingSecond != 0xFF)
-    {
-        if (dsRtcSecondsSince2000 == _pendingSecondHost)
-            _dateTime.time.second = _pendingSecond;
-        else
-            _pendingSecond = 0xFF;
-    }
+        _dateTime.time.second = _pendingSecond;
 }
 
 RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()
 {
     UpdateDSDateTime();
-    u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
+    u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime, true);
     rio_rtc_datetime_t canonicalDateTime = _dateTime;
     _pendingSecond = 0xFF;
     if (_dateTime.time.second >= 0x60)
     {
         // Keep out-of-range BCD seconds visible until the next minute carry.
         _pendingSecond = _dateTime.time.second;
-        _pendingSecondHost = dsRtcSecondsSince2000;
         canonicalDateTime.time.second = 0x59;
     }
-    // shortcut: whole DS seconds and canonical saves omit write phase/raw state;
-    // extend the clock adapter and saved-state format before certifying those.
     u32 gbaRtcSecondsSince2000 = ToSecondsSinceJanuary2000(canonicalDateTime, _statusRegister & RIO_RTC_STATUS_24H);
     rio_rtc_datetime_t newDateTime;
     FromSecondsSinceJanuary2000(gbaRtcSecondsSince2000, newDateTime, true);
     _rtcOffset = static_cast<s64>(gbaRtcSecondsSince2000) - dsRtcSecondsSince2000;
+    _clockAnchorSeconds = gbaRtcSecondsSince2000;
+    _clockAnchorTicks = sDSRtcDateTime.ticks;
+    _clockPhase = 0;
+    _clockAnchored = true;
     _weekDayOffset = (_dateTime.date.weekDay - newDateTime.date.weekDay) % 7;
     MarkStateDirty();
 }

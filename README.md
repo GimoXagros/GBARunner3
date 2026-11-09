@@ -69,7 +69,10 @@ not read `.g3rtc2`, and changes to legacy files can cause a later upgrade confli
 
 The development branch also corrects delayed out-of-range BCD seconds after
 comparison with the GBA path of `ws-rtc-test`, and preserves weekdays across
-the guest calendar's century wrap. See the
+the guest calendar's century wrap. An ARM7 clock resets subsecond timing on
+time writes; version 3 RTC records preserve that phase and pending seconds.
+Version 2 records remain readable, but older builds stop on version 3 files;
+retain pre-upgrade backups for rollback. See the
 [protocol findings and remaining timing limits](docs/rtc-s3511a-protocol.md).
 This source change is not included in the existing v0.1.5 release files.
 

@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory(prefix='gbar3-rtc-calendar-') as temp:
     exe = tmp/('rtc.exe' if os.name == 'nt' else 'rtc')
     command = [os.environ.get('CXX','g++'), '-std=c++17', '-O2', '-g', '-Wall', '-Wextra',
                '-I',str(tmp), '-I',str(ROOT/'code/core/arm9/source'),
+               '-I',str(ROOT/'code/core/common'),
                str(ROOT/'tools/tests/rtc_calendar_host.cpp'), '-o',str(exe)]
     if os.environ.get('SANITIZE') == '1':
         command += ['-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-omit-frame-pointer']

@@ -11,7 +11,7 @@
 #include <vector>
 
 using u8=uint8_t; using u16=uint16_t; using u32=uint32_t;
-using s16=int16_t; using s64=int64_t; using UINT=unsigned;
+using s16=int16_t; using s64=int64_t; using u64=uint64_t; using UINT=unsigned;
 #define private public
 #include "Peripherals/RomGpio/RomGpioRtc.h"
 #include "Peripherals/RomGpio/RomGpio.h"
@@ -36,6 +36,7 @@ std::string failure;
 unsigned opens=0, stats=0, writes=0, closes=0, renames=0, unlinks=0, schedules=0;
 int liveHandles=0;
 u32 hostSeconds=FIXTURE_HOST;
+u64 controlledTicks=UINT64_MAX;
 bool wrote=false;
 bool forceLegacyOverwrite=false, forceBackupDelete=false;
 std::string negativeExpected;
@@ -127,7 +128,18 @@ extern "C" bool rtc_runOnWorkStack();
 // Host extraction keeps the production RomGpio bridge but cannot execute the
 // target assembly stack switch. The linked ARM test executes that wrapper.
 extern "C" bool rtc_runOnWorkStack() { return rtc_flushOnWorkStackBody(); }
-void RomGpioRtc::UpdateDSDateTime() { FromSecondsSinceJanuary2000(hostSeconds,sDSRtcDateTime,true); }
+void RomGpioRtc::UpdateDSDateTime()
+{
+    FromSecondsSinceJanuary2000(hostSeconds,sDSRtcDateTime.dateTime,true);
+    // Integer-only legacy cases advance by at least one complete timer second.
+    sDSRtcDateTime.ticks=controlledTicks==UINT64_MAX
+        ? u64(hostSeconds)*((RTC_CLOCK_HZ+RTC_CLOCK_DIVIDER-1)/RTC_CLOCK_DIVIDER)
+        : controlledTicks;
+}
+u64 ticksForMilliseconds(u64 milliseconds)
+{
+    return (milliseconds*RTC_CLOCK_HZ+RTC_CLOCK_DIVIDER*1000-1)/(RTC_CLOCK_DIVIDER*1000);
+}
 
 constexpr RtcPersistence::Identity ID_A{0x45455042,32u*1024*1024,0x12345678};
 constexpr RtcPersistence::Identity ID_B{0x45565841,16u*1024*1024,0x87654321};
@@ -148,7 +160,7 @@ void rebootPreservingMedia()
     // An explicit simulated process restart is the only place that releases
     // a FIL left live by a failed close.
     liveHandles=0; sRtcFileHandleLive=false; sRtcStateFile={};
-    hostSeconds=FIXTURE_HOST; wrote=false;
+    hostSeconds=FIXTURE_HOST; controlledTicks=UINT64_MAX; wrote=false;
 }
 void reset()
 {
@@ -193,6 +205,7 @@ void verify_no_rename_unlink() { check("journal uses zero rename/unlink calls",r
 
 int main(int argc,char** argv)
 {
+    bool oldReaderCheck=false;
     for(int argument=1;argument+1<argc;++argument)
         if(std::string(argv[argument])=="--negative-control")
         {
@@ -216,7 +229,20 @@ int main(int argc,char** argv)
                 negativeExpected="existing RTC directory blocks startup";
             else if(control=="eager-seconds")
                 negativeExpected="GBA E5 immediate masked readback";
+            else if(control=="write-phase")
+                negativeExpected="750ms rewrite525ms read retains zero";
+            else if(control=="old-reader-v3") oldReaderCheck=true;
         }
+
+    if(oldReaderCheck)
+    {
+        reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V3_RAW_PHASE));
+        const auto before=files; RomGpioRtc oldReader;
+        check("old reader refuses V3 without writes",load(oldReader)==LoadStatus::UnsupportedVersion &&
+              files==before && writes==0 && schedules==0);
+        if(!failures) std::cout<<"PASS old reader refuses V3 without writes\n";
+        return failures?1:0;
+    }
 
     for(bool mode24:{false,true})
     {
@@ -329,8 +355,9 @@ int main(int argc,char** argv)
         check("century persistence reload succeeds",load(loadedCentury.rtc)==LoadStatus::Ready);
         if(restartCase==0)
         {
-            check("century restart before boundary restores canonical59",
-                  loadedCentury.read(0x65,7)==std::vector<u8>({0x99,0x12,0x31,6,0xA3,0x59,0x59}));
+            check("century restart before boundary preserves seconds",
+                  loadedCentury.read(0x65,7)==std::vector<u8>({0x99,0x12,0x31,6,0xA3,0x59,
+                      static_cast<u8>(second==0xE5?0x65:0x59)}));
             ++hostSeconds;
         }
         for(unsigned repeat=0;repeat<3;++repeat)
@@ -356,14 +383,96 @@ int main(int argc,char** argv)
     check("pending persistence starts fresh",load(savedPending.rtc)==LoadStatus::FreshInitialized);
     savedPending.write(0x64,{0,1,1,0,0,0,0xE5});
     check("pending persistence flush succeeds",savedPending.rtc.FlushStateIfDirty());
-    check("pending persistence keeps V2 canonical59",
-          savedPending.rtc._currentRecord.rtcSecondsSince2000==59 && files.at("modern0").size()==200);
+    check("pending persistence keeps V3 canonical59 and raw65",
+          savedPending.rtc._currentRecord.rtcSecondsSince2000==59 && files.at("modern0").size()==200 &&
+          savedPending.rtc._currentRecord.version==3 &&
+          RtcPersistence::GetPendingSecond(savedPending.rtc._currentRecord)==0x65);
     check("flush retains live transient second",savedPending.read(0x67,3)==std::vector<u8>({0,0,0x65}));
     Bus restartedPending;
     check("pending persistence reload",load(restartedPending.rtc)==LoadStatus::Ready);
-    check("restart deliberately loses raw transient",restartedPending.read(0x67,3)==std::vector<u8>({0,0,0x59}));
+    check("restart preserves raw transient",restartedPending.read(0x67,3)==std::vector<u8>({0,0,0x65}));
     ++hostSeconds;
     check("restarted canonical anchor carries",restartedPending.read(0x67,3)==std::vector<u8>({0,1,0}));
+
+    reset(); hostSeconds=100; controlledTicks=0; Bus phase;
+    phase.write(0x64,{0,1,1,0,0,0,0});
+    controlledTicks=ticksForMilliseconds(750); phase.write(0x66,{0,0,0});
+    controlledTicks=ticksForMilliseconds(1275); hostSeconds=101;
+    check("750ms rewrite525ms read retains zero",phase.read(0x67,3)==std::vector<u8>({0,0,0}));
+    controlledTicks=ticksForMilliseconds(1751);
+    check("rewritten phase reaches one second",phase.read(0x67,3)==std::vector<u8>({0,0,1}));
+
+    reset(); hostSeconds=100; controlledTicks=ticksForMilliseconds(995); Bus edge;
+    edge.write(0x64,{0,1,1,0,0,0,0xE5});
+    controlledTicks=ticksForMilliseconds(1005); hostSeconds=101;
+    check("DS boundary does not expire fresh raw second",edge.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    controlledTicks=ticksForMilliseconds(1996);
+    check("raw second expires after own write phase",edge.read(0x67,3)==std::vector<u8>({0,1,0}));
+
+    reset(); hostSeconds=100; controlledTicks=0; Bus phasePreserved;
+    phasePreserved.write(0x64,{0,1,1,0,0,0,0});
+    controlledTicks=ticksForMilliseconds(750);
+    phasePreserved.write(0x62,{0});
+    phasePreserved.command(0x66); phasePreserved.byte(2); phasePreserved.pins(0);
+    controlledTicks=ticksForMilliseconds(1001);
+    check("status and partial write do not reset phase",phasePreserved.read(0x67,3)==std::vector<u8>({0,0,1}));
+    controlledTicks=ticksForMilliseconds(1750); phasePreserved.write(0x60,{});
+    controlledTicks=ticksForMilliseconds(2275);
+    check("reset restarts phase",phasePreserved.read(0x67,3)==std::vector<u8>({0,0,0}));
+
+    reset(); hostSeconds=100; controlledTicks=(u64(1)<<32)-100; Bus timerWrap;
+    timerWrap.write(0x64,{0,1,1,0,0,0,0});
+    controlledTicks+=ticksForMilliseconds(1001);
+    check("extended timer crosses low32bit wrap",timerWrap.read(0x67,3)==std::vector<u8>({0,0,1}));
+
+    reset(); hostSeconds=100; controlledTicks=0; Bus phaseSaved;
+    check("phase persistence starts fresh",load(phaseSaved.rtc)==LoadStatus::FreshInitialized);
+    phaseSaved.write(0x64,{0,1,1,0,0,0,0xE5});
+    controlledTicks=ticksForMilliseconds(750);
+    check("phase persistence flush",phaseSaved.rtc.FlushStateIfDirty());
+    const auto savedFraction=RtcPersistence::GetSubsecond(phaseSaved.rtc._currentRecord);
+    check("phase persistence stores Q15 fraction",savedFraction>=24576 && savedFraction<=24578);
+    controlledTicks=0; Bus phaseReload;
+    check("phase persistence reload",load(phaseReload.rtc)==LoadStatus::Ready);
+    check("phase restart restores raw second",phaseReload.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    controlledTicks=ticksForMilliseconds(249);
+    check("phase restart retains remaining fraction",phaseReload.read(0x67,3)==std::vector<u8>({0,0,0x65}));
+    controlledTicks=ticksForMilliseconds(251);
+    check("phase restart completes remaining fraction",phaseReload.read(0x67,3)==std::vector<u8>({0,1,0}));
+    hostSeconds=101; controlledTicks=0; Bus offline;
+    check("phase restart after offline second",load(offline.rtc)==LoadStatus::Ready);
+    check("offline second consumes raw pending state",offline.read(0x67,3)==std::vector<u8>({0,1,0}));
+    controlledTicks=ticksForMilliseconds(251);
+    check("offline restart retains fractional policy",offline.read(0x67,3)==std::vector<u8>({0,1,1}));
+
+    StateFileV2 schema{};
+    std::memcpy(&schema,V2_FRESH,sizeof(schema));
+    check("V2 metadata remains compatible",RtcPersistence::ValidateV2(schema,ID_A) &&
+          RtcPersistence::GetPendingSecond(schema)==0xFF && RtcPersistence::GetSubsecond(schema)==0);
+    schema.version=3; schema.rtcSecondsSince2000=59;
+    schema.reserved[0]=0x65; schema.reserved[1]=0; schema.reserved[2]=0x40;
+    schema.checksum=RtcPersistence::CalculateV2Checksum(schema);
+    check("V3 pending raw and phase validate",RtcPersistence::ValidateV2(schema,ID_A));
+    const auto validSchema=schema;
+    for(unsigned invalid=0;invalid<7;++invalid)
+    {
+        schema=validSchema;
+        if(invalid==0) schema.reserved[0]=0x6A;
+        if(invalid==1) schema.reserved[0]=0x59;
+        if(invalid==2) schema.reserved[2]=0x80;
+        if(invalid==3) schema.rtcSecondsSince2000=58;
+        if(invalid==4) schema.phase=RtcPersistence::PHASE_PENDING;
+        if(invalid==5) schema.version=2;
+        if(invalid==6) schema.flags=1;
+        schema.checksum=RtcPersistence::CalculateV2Checksum(schema);
+        check("invalid V3 metadata fails validation",!RtcPersistence::ValidateV2(schema,ID_A));
+    }
+    reset(); put("modern0",bytes(V2_FRESH)); put("modern1",bytes(V3_RAW_PHASE));
+    Bus mixedVersions;
+    check("new reader selects V3 above V2 sibling",load(mixedVersions.rtc)==LoadStatus::Ready &&
+          mixedVersions.rtc._currentRecord.version==3 && mixedVersions.rtc._currentRecord.sequence==8);
+    check("V3 fixture restores raw and phase",mixedVersions.read(0x67,3)==std::vector<u8>({0,0,0x65}) &&
+          RtcPersistence::GetSubsecond(mixedVersions.rtc._currentRecord)==24576);
 
     reset();
     put("legacy0",bytes(V1_PRIMARY)); put("legacy1",bytes(V1_TEMP));
@@ -460,12 +569,17 @@ int main(int argc,char** argv)
         {
             reset(); put("modern0",originalCurrent); put("modern2",originalCurrent);
             files["modern0"][byte]^=1u<<bit;
+            const auto damaged=files.at("modern0");
             RomGpioRtc bitflip;
             const auto status=load(bitflip);
-            const auto expected=(byte==4 || byte==5)
+            // Version2 xor1 is supported V3, but its unchanged checksum is invalid.
+            const auto expected=(byte==5 || (byte==4 && bit!=0))
                 ? LoadStatus::UnsupportedVersion : LoadStatus::Ready;
             check("bitflip classifies unknown version or uses intact backup",
-                  status==expected && files.at("modern2")==originalCurrent);
+                  status==expected && files.at("modern0")==damaged &&
+                  files.at("modern2")==originalCurrent && writes==0 &&
+                  (status!=LoadStatus::Ready ||
+                   std::memcmp(&bitflip._currentRecord,originalCurrent.data(),originalCurrent.size())==0));
         }
     for(unsigned length=0;length<originalCurrent.size();++length)
     {
