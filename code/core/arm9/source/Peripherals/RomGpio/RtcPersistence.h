@@ -12,6 +12,8 @@ constexpr uint64_t CYCLE_SECONDS = 36525ULL * 24 * 60 * 60;
 constexpr uint32_t STATE_V2_MAGIC = 0x32523347; // G3R2
 constexpr uint16_t STATE_V2_VERSION = 2;
 constexpr uint16_t STATE_V2_PAYLOAD_LENGTH = 188;
+constexpr uint16_t STATE_V3_VERSION = 3;
+constexpr uint32_t PHASE_UNITS = 32768;
 
 enum class FileStatus : uint8_t
 {
@@ -81,6 +83,17 @@ struct StateFileV2
 static_assert(sizeof(StateFileV2) == 200);
 static_assert(offsetof(StateFileV2, checksum) == 196);
 static_assert(offsetof(StateFileV2, legacyBytes) == 64);
+
+static inline uint8_t GetPendingSecond(const StateFileV2& state)
+{
+    return state.version == STATE_V3_VERSION ? state.reserved[0] : 0xFF;
+}
+
+static inline uint16_t GetSubsecond(const StateFileV2& state)
+{
+    return state.version == STATE_V3_VERSION
+        ? state.reserved[1] | (uint16_t(state.reserved[2]) << 8) : 0;
+}
 
 constexpr uint16_t POLICY_FRESH = 0;
 constexpr uint16_t POLICY_ADOPT_SNAPSHOT = 1;
@@ -160,9 +173,11 @@ constexpr uint16_t STATE_PAYLOAD_LENGTH =
 [[gnu::section(".ewram"), gnu::noinline]] static inline bool ValidateV2(
     const StateFileV2& state, const Identity& identity)
 {
-    if (state.magic != STATE_V2_MAGIC || state.version != STATE_V2_VERSION ||
+    const bool version2 = state.version == STATE_V2_VERSION;
+    const bool version3 = state.version == STATE_V3_VERSION;
+    if (state.magic != STATE_V2_MAGIC || (!version2 && !version3) ||
         state.payloadLength != STATE_V2_PAYLOAD_LENGTH || state.flags != 0 ||
-        state.reserved[0] != 0 || state.reserved[1] != 0 || state.reserved[2] != 0 ||
+        (version2 && (state.reserved[0] != 0 || state.reserved[1] != 0 || state.reserved[2] != 0)) ||
         state.gameCode != identity.gameCode || state.romSize != identity.romSize ||
         state.headerHash != identity.headerHash ||
         state.checksum != CalculateV2Checksum(state) ||
@@ -172,6 +187,15 @@ constexpr uint16_t STATE_PAYLOAD_LENGTH =
         (state.statusRegister & ~uint16_t(0xEA)) != 0 ||
         state.phase > PHASE_READY || state.legacyPresence > 7)
         return false;
+
+    if (version3)
+    {
+        const uint8_t pending = GetPendingSecond(state);
+        if (state.phase != PHASE_READY || GetSubsecond(state) >= PHASE_UNITS ||
+            (pending != 0xFF && (pending < 0x60 || pending > 0x79 ||
+                (pending & 0xF) > 9 || state.rtcSecondsSince2000 % 60 != 59)))
+            return false;
+    }
 
     if (state.policy == POLICY_FRESH)
     {

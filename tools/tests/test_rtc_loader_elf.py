@@ -26,7 +26,7 @@ from unicorn.arm_const import (
 )
 
 from rtc_legacy_fixtures import (
-    ID_A, correct_seconds, legacy_record_from_old_clock, modern_record,
+    ID_A, correct_seconds, fnv1a, legacy_record_from_old_clock, modern_record,
 )
 from test_hicode_dispatch_elf import load_elf
 
@@ -37,6 +37,20 @@ HEAP_BASE = 0x023E0000
 STACK = 0x023D0000
 STATUS_READY, STATUS_FRESH, STATUS_LEGACY = 0, 1, 2
 STATUS_CORRUPT, STATUS_CONFLICT = 3, 7
+
+
+def ticks_for_microseconds(microseconds: int) -> int:
+    # Round upward so an exact synthetic second reaches the hardware threshold.
+    return (microseconds * 33513982 + 1024_000000 - 1) // 1024_000000
+
+
+def current_record(**kwargs) -> bytes:
+    """Independent v3 extension of the existing 200-byte record contract."""
+    data = bytearray(modern_record(ID_A, **kwargs))
+    struct.pack_into("<H", data, 4, 3)
+    data[45] = 0xFF
+    struct.pack_into("<I", data, 196, fnv1a(data[:196]))
+    return bytes(data)
 
 
 def bcd(value: int) -> int:
@@ -75,6 +89,8 @@ class LinkedRtc:
         self.directories: set[str] = set()
         self.handles: dict[int, tuple[str, int, int]] = {}
         self.clock = datetime(2024, 2, 28, 22, 45, 45)
+        self.clock_epoch = self.clock
+        self.ticks: int | None = None
         self.writes = 0
         self.syncs = 0
         self.closed_writes = 0
@@ -114,11 +130,16 @@ class LinkedRtc:
     def _supply_ds_clock(self) -> None:
         self.clock_reads += 1
         clock = self.clock
+        elapsed = self.clock - self.clock_epoch
+        # Existing whole-second vectors must not stop one timer tick short.
+        default_ticks = ((elapsed.days * 86400 + elapsed.seconds) * ticks_for_microseconds(1000000)
+                         + ticks_for_microseconds(elapsed.microseconds))
+        ticks = self.ticks if self.ticks is not None else default_ticks
         self.cpu.mem_write(self.clock_buffer, bytes((
             bcd(clock.year - 2000), bcd(clock.month), bcd(clock.day),
             clock.weekday(), bcd(clock.hour) | (0x80 if clock.hour >= 12 else 0),
-            bcd(clock.minute), bcd(clock.second),
-        )))
+            bcd(clock.minute), bcd(clock.second), 0,
+        )) + struct.pack("<Q", ticks))
 
     def _ipc_write(self, cpu: Uc, access: int, address: int,
                    size: int, value: int, _: object) -> None:
@@ -392,6 +413,49 @@ def main() -> None:
         assert read_serial(0x65, 7) == bytes.fromhex("00 01 01 00 00 00 00"), \
             "linked ordinary59 century rollover must increment weekday exactly once"
 
+    # The external GBA vector rewrites after750ms, then observes after525ms.
+    # Advance the wall clock across a second independently of monotonic phase.
+    serial.ticks = 1_000_000
+    write_serial(0x66, bytes.fromhex("08 20 30"))
+    serial.ticks += ticks_for_microseconds(750_000)
+    write_serial(0x66, bytes.fromhex("08 20 31"))
+    serial.ticks += ticks_for_microseconds(525_000)
+    serial.clock += timedelta(seconds=1)
+    assert read_serial() == bytes.fromhex("08 20 31"), \
+        "linked GPIO rewrite must reset subsecond phase across a host-second edge"
+    serial.ticks += ticks_for_microseconds(500_000)
+    assert read_serial() == bytes.fromhex("08 20 32"), \
+        "linked GPIO rewritten clock must resume after a full elapsed second"
+
+    write_serial(0x66, bytes.fromhex("00 00 E5"))
+    serial.ticks += ticks_for_microseconds(250_000)
+    result, faulted = serial.work_stack_call()
+    assert result == 1 and not faulted, "linked pending raw/phase flush failed"
+    saved = dict(serial.media)
+    record = saved["m0"]
+    assert len(record) == 200 and struct.unpack_from("<H", record, 4)[0] == 3, \
+        "linked flush must use the fixed-size v3 record"
+    assert record[45] == 0x65 and 8191 <= struct.unpack_from("<H", record, 46)[0] <= 8193, \
+        "linked flush must serialize raw65 and quarter-second Q15 phase"
+    saved_clock = serial.clock
+    serial = LinkedRtc(symbols, sections)
+    serial.clock = saved_clock
+    serial.ticks = 7_000_000
+    serial.media.update(saved)
+    assert serial.initialize(serial_rtc) == STATUS_READY
+    serial.cpu.mem_write(serial_registers, bytes(6))
+    serial.cpu.reg_write(UC_ARM_REG_R1, serial_registers)
+    serial.call(find_symbol(symbols, "RomGpio10Initialize"), symbols["gRomGpio"])
+    gpio_write(4, 1)
+    assert read_serial() == bytes.fromhex("00 00 65"), \
+        "linked restart must retain raw65 in the same wall second"
+    serial.ticks += ticks_for_microseconds(500_000)
+    assert read_serial() == bytes.fromhex("00 00 65"), \
+        "linked restart must preserve the remaining subsecond interval"
+    serial.ticks += ticks_for_microseconds(300_000)
+    assert read_serial() == bytes.fromhex("00 01 00"), \
+        "linked restored phase must carry once after the remaining interval"
+
     legacy = LinkedRtc(symbols, sections)
     legacy.media.update(zip(("l0", "l1", "l2"), triad))
     before_legacy = dict(legacy.media)
@@ -460,8 +524,8 @@ def main() -> None:
         assert stacked.scheduler_calls == 1
         result, faulted = stacked.work_stack_call()
         assert result == 1 and not faulted
-        expected_fresh = modern_record(
-            ID_A, sequence=0, host_seconds=correct_seconds(clock),
+        expected_fresh = current_record(
+            sequence=0, host_seconds=correct_seconds(clock),
             game_seconds=correct_seconds(clock), weekday_offset=0,
             status=0x40, interrupt=0,
         )
@@ -489,7 +553,8 @@ def main() -> None:
                     if stacked.work_available else "work-stack guards NOT RUN")
     stat_result = "directory and sequence boundary PASS" if "f_stat" in symbols else \
         "directory and sequence boundary NOT RUN"
-    print("linked ARM9 RTC loader: GPIO E5 delayed correction/carry, fresh, legacy gate, pending commit/readback, "
+    print("linked ARM9 RTC loader: GPIO E5 delayed correction/carry, subsecond rewrite, raw/phase restart, "
+          "fresh, legacy gate, pending commit/readback, "
           f"restart GPIO, conflict, {stat_result}, {stack_result}; synthetic FatFs/DS clock, "
           "backend callee stack excluded; hardware NOT RUN")
 

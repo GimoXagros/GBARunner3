@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RtcPersistence.h"
+#include "RtcClock.h"
 
 class RomGpio;
 
@@ -18,26 +19,7 @@ private:
         Done
     };
 
-    typedef struct
-    {
-        u8 year;
-        u8 month;
-        u8 monthDay;
-        u8 weekDay;
-    } rio_rtc_date_t;
-
-    typedef struct
-    {
-        u8 hour;
-        u8 minute;
-        u8 second;
-    } rio_rtc_time_t;
-
-    typedef struct
-    {
-        rio_rtc_date_t date;
-        rio_rtc_time_t time;
-    } rio_rtc_datetime_t;
+    using rio_rtc_datetime_t = RtcDateTime;
 
 public:
     RomGpioRtc()
@@ -47,7 +29,8 @@ public:
         , _legacyPaths { nullptr, nullptr, nullptr }
         , _modernPaths { nullptr, nullptr, nullptr }, _identity()
         , _currentRecord(), _hasCurrent(false), _writeError(false)
-        , _stateDirty(false), _pendingSecondHost(0), _pendingSecond(0xFF) { }
+        , _stateDirty(false), _pendingSecond(0xFF)
+        , _clockAnchorTicks(0), _clockAnchorSeconds(0), _clockPhase(0), _clockAnchored(false) { }
 
     RtcPersistence::LoadStatus Initialize(
         const char* legacyStatePath,
@@ -61,7 +44,7 @@ public:
     bool FlushStateIfDirty();
 
 private:
-    static rio_rtc_datetime_t sDSRtcDateTime;
+    static RtcClockSample sDSRtcDateTime;
 
     RtcTransferState _state;
     u32 _shiftRegister;
@@ -81,8 +64,11 @@ private:
     bool _hasCurrent;
     bool _writeError;
     bool _stateDirty;
-    u32 _pendingSecondHost;
     u8 _pendingSecond;
+    uint64_t _clockAnchorTicks;
+    s64 _clockAnchorSeconds;
+    u16 _clockPhase;
+    bool _clockAnchored;
 
     void CommandWaitRisingEdge(RomGpio& romGpio);
     void HandleInDataWaitRisingEdge(RomGpio& romGpio);
@@ -90,6 +76,7 @@ private:
 
     void RtcReset();
     void UpdateDSDateTime();
+    s64 ReadClock(u16& phase);
     void UpdateDateTime();
     void UpdateRtcOffset();
     RtcPersistence::LoadStatus LoadState();

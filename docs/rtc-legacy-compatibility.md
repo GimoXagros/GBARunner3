@@ -1,5 +1,12 @@
 # PR16 RTC compatibility contract
 
+Development update (2026-11-09): the same modern journal now also supports
+version 3 to preserve raw pending seconds and Q15 subsecond phase. Version 2
+records and explicit legacy adoption remain readable. A version 2-only build
+stops on any version 3 slot before writing; keep pre-upgrade backups for rollback.
+See [the phase and restart contract](rtc-s3511a-protocol.md). The original
+version 2 layout and adoption contract below remain applicable to older records.
+
 Status: implemented and included in stable custom-v0.1.5 via merged PR #16.
 The user reported normal boot/save and Pokemon Emerald elapsed RTC on 3DS +
 DSpico with candidate `22fb48d`; physical media faults and legacy migration

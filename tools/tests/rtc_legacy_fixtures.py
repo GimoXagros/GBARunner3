@@ -91,12 +91,21 @@ def modern_record(
     game_seconds: int, weekday_offset: int = -2, status: int = 0x40,
     interrupt: int = 0x1234, legacy: tuple[bytes | None, bytes | None, bytes | None]
     = (None, None, None), selected_role: int = 255, pending: bool = False,
+    version: int = 2, pending_second: int = 0xFF, subsecond: int = 0,
 ) -> bytes:
-    """Independent little-endian v2 contract serializer for test inputs."""
+    """Independent little-endian v2/v3 contract serializer for test inputs."""
     assert len(legacy) == 3
     assert 0 <= host_seconds < CYCLE_SECONDS and 0 <= game_seconds < CYCLE_SECONDS
     data = bytearray(V2_SIZE)
-    struct.pack_into("<IHH", data, 0, 0x32523347, 2, 188)
+    assert version in (2, 3)
+    if version == 2:
+        assert pending_second == 0xFF and subsecond == 0
+    else:
+        assert not pending and 0 <= subsecond < 32768
+        assert pending_second == 0xFF or (
+            0x60 <= pending_second <= 0x79 and pending_second & 15 <= 9
+            and game_seconds % 60 == 59)
+    struct.pack_into("<IHH", data, 0, 0x32523347, version, 188)
     struct.pack_into("<III", data, 8, *identity)
     struct.pack_into("<III", data, 20, sequence, host_seconds, game_seconds)
     struct.pack_into("<hHHH", data, 32, weekday_offset, status, interrupt, 0)
@@ -110,6 +119,8 @@ def modern_record(
         selected_sequence = 0
     struct.pack_into("<HBBB", data, 40, policy, 0 if pending else 1,
                      presence, selected_role)
+    if version == 3:
+        struct.pack_into("<BH", data, 45, pending_second, subsecond)
     struct.pack_into("<I", data, 48, selected_sequence)
     for role, record in enumerate(legacy):
         if record is not None:

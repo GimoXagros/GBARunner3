@@ -71,7 +71,7 @@ def fixture_source() -> str:
                                     host_seconds=correct_seconds(clock),
                                     game_seconds=correct_seconds(clock) + 1)
     future = bytearray(fresh)
-    future[4:6] = (3).to_bytes(2, "little")
+    future[4:6] = (4).to_bytes(2, "little")
     # Header metadata changes need an otherwise valid checksum to distinguish
     # unsupported version from checksum corruption.
     from rtc_legacy_fixtures import fnv1a
@@ -83,6 +83,8 @@ def fixture_source() -> str:
         "V2_WRAP": wrapped, "V2_OLD_WRAP": old_wrap, "V2_FUTURE": future,
         "V2_HALF_CYCLE": half_cycle, "V2_CYCLE_MID": cycle_mid,
         "V2_CYCLE_LAST": cycle_last, "V2_EQUAL_DIFFERENT": equal_different,
+        "V3_RAW_PHASE": modern_record(ID_A, sequence=8, host_seconds=correct_seconds(clock),
+            game_seconds=59, version=3, pending_second=0x65, subsecond=24576),
         **{name: modern_record(ID_A, sequence=sequence,
                                host_seconds=correct_seconds(clock),
                                game_seconds=correct_seconds(clock))
@@ -100,8 +102,18 @@ def production_source(ref: str | None = None) -> str:
     begin = source.index("#define RTC_EWRAM")
     rtc = source[begin:]
     clock_begin = rtc.index("RTC_EWRAM void RomGpioRtc::UpdateDSDateTime()")
-    clock_end = rtc.index("RTC_EWRAM void RomGpioRtc::UpdateDateTime()")
+    clock_end = rtc.index("RTC_EWRAM s64 RomGpioRtc::ReadClock(") if \
+        "RTC_EWRAM s64 RomGpioRtc::ReadClock(" in rtc else \
+        rtc.index("RTC_EWRAM void RomGpioRtc::UpdateDateTime()")
     rtc = rtc[:clock_begin] + rtc[clock_end:]
+    if ref:
+        # Adapt only the replaced IPC seam to the new clock reply container.
+        rtc = rtc.replace("RomGpioRtc::rio_rtc_datetime_t RomGpioRtc::sDSRtcDateTime alignas(32);",
+                          "RtcClockSample RomGpioRtc::sDSRtcDateTime alignas(32);")
+        rtc = rtc.replace("ToSecondsSinceJanuary2000(sDSRtcDateTime,",
+                          "ToSecondsSinceJanuary2000(sDSRtcDateTime.dateTime,")
+        # Old private host-second anchor fits the otherwise unused new u64 storage.
+        rtc = rtc.replace("_pendingSecondHost", "_clockAnchorTicks")
     gpio = GPIO.read_text(encoding="utf-8")
     gpio_methods = gpio[gpio.index("void RomGpio::Initialize("):
                         gpio.index("static void updateRomGpioPeripherals()")]
@@ -145,7 +157,7 @@ def main() -> None:
     parser.add_argument("--baseline-ref", help="read-only production RTC source revision")
     parser.add_argument("--baseline-control", choices=[
         "prospective-select-bypass", "missing-directory-guard",
-        "eager-seconds",
+        "eager-seconds", "old-reader-v3", "write-phase",
     ])
     args = parser.parse_args()
     assert not (args.baseline_ref and args.negative_control)
@@ -214,7 +226,7 @@ def main() -> None:
             end = production.index("RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::ScanLegacy()")
             body = production[begin:end]
             if args.negative_control == "version-bypass":
-                old = "if (foundMagic == magic && foundVersion != version)"
+                old = "if (foundMagic == magic && foundVersion != version &&\n            !(magic == RtcPersistence::STATE_V2_MAGIC && foundVersion == RtcPersistence::STATE_V3_VERSION))"
                 assert production.count(old) == 1
                 production = production.replace(old, "if (false)")
                 begin = production.index("RTC_EWRAM RtcPersistence::FileStatus RomGpioRtc::ReadModernStateFile(")
@@ -234,6 +246,7 @@ def main() -> None:
         command = [os.environ.get("CXX", "g++"), "-std=c++17", "-O2", "-g",
                    "-Wall", "-Wextra", "-I", str(temporary),
                    "-I", str(ROOT / "code/core/arm9/source"),
+                   "-I", str(ROOT / "code/core/common"),
                    str(ROOT / "tools/tests/rtc_v2_host.cpp"), "-o", str(executable)]
         if os.environ.get("SANITIZE") == "1":
             command += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all",
@@ -248,6 +261,9 @@ def main() -> None:
         if run.stderr:
             print(run.stderr, end="", file=__import__("sys").stderr)
         if control:
+            if control == "old-reader-v3":
+                assert run.returncode == 0 and "PASS old reader refuses V3 without writes" in run.stdout
+                return
             expected = {
                 "legacy-auto-load": "legacy-only blocks before guest",
                 "legacy-overwrite": "pending original and v1 triad unchanged",
@@ -262,6 +278,7 @@ def main() -> None:
                 "prospective-select-bypass": "half-cycle boundary flush preserves reboot selection",
                 "missing-directory-guard": "existing RTC directory blocks startup",
                 "eager-seconds": "GBA E5 immediate masked readback",
+                "write-phase": "750ms rewrite525ms read retains zero",
             }[control]
             assert run.returncode != 0 and "FAIL " + expected in run.stdout, \
                 "negative control did not reach its intended assertion"
