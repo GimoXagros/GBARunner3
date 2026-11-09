@@ -97,6 +97,7 @@ RTC_EWRAM RtcPersistence::LoadStatus RomGpioRtc::Initialize(
     _intRegister = 0;
     _rtcOffset = 0;
     _weekDayOffset = 0;
+    _pendingSecond = 0xFF;
     return LoadState();
 }
 
@@ -797,13 +798,31 @@ RTC_EWRAM void RomGpioRtc::UpdateDateTime()
     FromSecondsSinceJanuary2000(secondsSince2000, _dateTime, _statusRegister & RIO_RTC_STATUS_24H);
     int weekDay = (_dateTime.date.weekDay + _weekDayOffset) % 7;
     _dateTime.date.weekDay = weekDay < 0 ? weekDay + 7 : weekDay;
+    if (_pendingSecond != 0xFF)
+    {
+        if (dsRtcSecondsSince2000 == _pendingSecondHost)
+            _dateTime.time.second = _pendingSecond;
+        else
+            _pendingSecond = 0xFF;
+    }
 }
 
 RTC_EWRAM void RomGpioRtc::UpdateRtcOffset()
 {
     UpdateDSDateTime();
     u32 dsRtcSecondsSince2000 = ToSecondsSinceJanuary2000(sDSRtcDateTime, true);
-    u32 gbaRtcSecondsSince2000 = ToSecondsSinceJanuary2000(_dateTime, _statusRegister & RIO_RTC_STATUS_24H);
+    rio_rtc_datetime_t canonicalDateTime = _dateTime;
+    _pendingSecond = 0xFF;
+    if (_dateTime.time.second >= 0x60)
+    {
+        // Keep out-of-range BCD seconds visible until the next minute carry.
+        _pendingSecond = _dateTime.time.second;
+        _pendingSecondHost = dsRtcSecondsSince2000;
+        canonicalDateTime.time.second = 0x59;
+    }
+    // shortcut: whole DS seconds and canonical saves omit write phase/raw state;
+    // extend the clock adapter and saved-state format before certifying those.
+    u32 gbaRtcSecondsSince2000 = ToSecondsSinceJanuary2000(canonicalDateTime, _statusRegister & RIO_RTC_STATUS_24H);
     rio_rtc_datetime_t newDateTime;
     FromSecondsSinceJanuary2000(gbaRtcSecondsSince2000, newDateTime, true);
     _rtcOffset = static_cast<s64>(gbaRtcSecondsSince2000) - dsRtcSecondsSince2000;
@@ -912,8 +931,7 @@ RTC_EWRAM void RomGpioRtc::SetMinute(u8 value)
 RTC_EWRAM void RomGpioRtc::SetSecond(u8 value)
 {
     value &= 0x7F;
-    if ((value >= 0x60 && value <= 0x79) ||
-        (value & 0xF) > 9)
+    if ((value & 0xF) > 9)
     {
         value = 0;
     }
