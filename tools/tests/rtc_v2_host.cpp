@@ -316,6 +316,34 @@ int main(int argc,char** argv)
     century.write(0x64,{0x99,0x12,0x31,6,0x23,0x59,0xE5});
     ++hostSeconds;
     check("pending carry wraps century",century.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+    for(u8 second:{0x59,0xE5}) for(unsigned restartCase:{0u,1u,2u})
+    {
+        reset(); hostSeconds=100; Bus savedCentury;
+        check("century persistence starts fresh",load(savedCentury.rtc)==LoadStatus::FreshInitialized);
+        savedCentury.write(0x64,{0x99,0x12,0x31,6,0x23,0x59,second});
+        if(restartCase==2) ++hostSeconds;
+        check("century persistence flush succeeds",savedCentury.rtc.FlushStateIfDirty());
+        // Loading after elapsed time crosses the boundary also exercises ApplyState.
+        if(restartCase==1) ++hostSeconds;
+        Bus loadedCentury;
+        check("century persistence reload succeeds",load(loadedCentury.rtc)==LoadStatus::Ready);
+        if(restartCase==0)
+        {
+            check("century restart before boundary restores canonical59",
+                  loadedCentury.read(0x65,7)==std::vector<u8>({0x99,0x12,0x31,6,0xA3,0x59,0x59}));
+            ++hostSeconds;
+        }
+        for(unsigned repeat=0;repeat<3;++repeat)
+        {
+            check("century live repeated reads preserve weekday",
+                  savedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+            check("century reload repeated reads preserve weekday",
+                  loadedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,0}));
+        }
+        ++hostSeconds;
+        check("century reloaded next second preserves weekday",
+              loadedCentury.read(0x65,7)==std::vector<u8>({0,1,1,0,0,0,1}));
+    }
     reset(); hostSeconds=100; Bus noon;
     noon.write(0x62,{0}); noon.write(0x64,{0,1,1,0,0x11,0x59,0xE5});
     ++hostSeconds;

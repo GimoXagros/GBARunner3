@@ -27,6 +27,14 @@ Existing 12/24-hour conversion, calendar arithmetic and explicit legacy state
 adoption remain in use. No WSRTC source or WonderSwan register transport is
 imported. The 200-byte V2 file format and original legacy sidecars are unchanged.
 
+The rollover regression also exposed an existing weekday discontinuity at the
+guest calendar's `2099` to `2000` wrap. Removing a 36,525-day cycle from epoch
+seconds must not remove those days from weekday progression. A shared offset
+correction now accounts for the removed days during reads, saving and loading
+after offline elapsed time. This preserves both live rollover and restart
+across the boundary without changing the file format or backward-host policy.
+This is a calendar consistency finding, not a vector from the external suite.
+
 ## Verification
 
 The existing host harness executes production RTC/GPIO method bodies using
@@ -34,6 +42,8 @@ controlled DS seconds and synthetic FatFs. It covers the external `E5` vector,
 the BCD range extension, repeated reads, replacement/aborted commands, mode
 changes, reset, date rollover and canonical persistence. The pinned pre-fix
 source and an eager-clamp mutation must fail the immediate-read assertion.
+Century tests cover ordinary valid seconds as well as delayed correction,
+repeated reads and saving/restarting on either side of the boundary.
 
 The existing linked ARM loader harness also drives the real `rio_write` entry
 and reads the GPIO register window. CI builds both the application and test
@@ -46,6 +56,9 @@ Consult the exact commit's nightly workflow for execution results.
 - DS RTC IPC supplies whole seconds. The shared test's subsecond write-phase
   reset (rewrite after 750 ms, then read after 525 ms) remains unresolved. A
   write near a DS second boundary can tick earlier than one elapsed second.
+  The DS host clock's own century wrap is not tracked; its existing
+  backward-clock policy remains in place. Guest calendar rollover tests use a
+  normally advancing host clock.
 - Raw out-of-range seconds are not serialized. Saving and restarting within
   the same host second restores canonical `59`, not transient `65`. Continuing
   in the same process preserves the raw readback; later ticks carry normally.

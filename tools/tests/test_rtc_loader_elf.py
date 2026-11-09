@@ -364,11 +364,11 @@ def main() -> None:
                 gpio_write(0, 5 | data)
         gpio_write(0, 0)
 
-    def read_time() -> bytes:
-        command(0x67)
+    def read_serial(op: int = 0x67, count: int = 3) -> bytes:
+        command(op)
         gpio_write(2, 5)
-        result = bytearray(3)
-        for bit in range(24):
+        result = bytearray(count)
+        for bit in range(count * 8):
             gpio_write(0, 4)
             result[bit // 8] |= ((serial.cpu.mem_read(serial_registers, 1)[0] >> 1) & 1) << (bit % 8)
             gpio_write(0, 5)
@@ -377,15 +377,20 @@ def main() -> None:
 
     gpio_write(4, 1)
     write_serial(0x64, bytes.fromhex("00 01 01 00 00 00 E5"))
-    assert read_time() == bytes.fromhex("00 00 65"), \
+    assert read_serial() == bytes.fromhex("00 00 65"), \
         "linked GPIO E5 must read masked65 before the next tick"
-    assert read_time() == bytes.fromhex("00 00 65"), \
+    assert read_serial() == bytes.fromhex("00 00 65"), \
         "linked GPIO repeated read must retain pending seconds"
     serial.clock += timedelta(seconds=1)
-    assert read_time() == bytes.fromhex("00 01 00"), \
+    assert read_serial() == bytes.fromhex("00 01 00"), \
         "linked GPIO E5 must correct with minute carry on the next tick"
     assert serial.writes == 0 and serial.scheduler_calls > 0, \
         "linked GPIO write must schedule persistence without synchronous FatFs I/O"
+    write_serial(0x64, bytes.fromhex("99 12 31 06 23 59 59"))
+    serial.clock += timedelta(seconds=1)
+    for _ in range(3):
+        assert read_serial(0x65, 7) == bytes.fromhex("00 01 01 00 00 00 00"), \
+            "linked ordinary59 century rollover must increment weekday exactly once"
 
     legacy = LinkedRtc(symbols, sections)
     legacy.media.update(zip(("l0", "l1", "l2"), triad))

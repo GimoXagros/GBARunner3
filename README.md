@@ -68,7 +68,8 @@ not read `.g3rtc2`, and changes to legacy files can cause a later upgrade confli
 ## Hardware evidence and remaining limits
 
 The development branch also corrects delayed out-of-range BCD seconds after
-comparison with the GBA path of `ws-rtc-test`. See the
+comparison with the GBA path of `ws-rtc-test`, and preserves weekdays across
+the guest calendar's century wrap. See the
 [protocol findings and remaining timing limits](docs/rtc-s3511a-protocol.md).
 This source change is not included in the existing v0.1.5 release files.
 

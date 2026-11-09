@@ -290,6 +290,10 @@ RTC_EWRAM void RomGpioRtc::ApplyState(const RtcPersistence::StateFileV2& state)
         state.hostSecondsSince2000,
         hostSeconds);
     _weekDayOffset = state.weekDayOffset % 7;
+    const s64 elapsed = hostSeconds >= state.hostSecondsSince2000
+        ? hostSeconds - state.hostSecondsSince2000 : 0;
+    _weekDayOffset = GetWeekDayOffset(state.rtcSecondsSince2000 + elapsed,
+        static_cast<u32>(hostSeconds + _rtcOffset));
     _statusRegister = state.statusRegister &
         (RIO_RTC_STATUS_POWER | RIO_RTC_STATUS_WRITE_MASK);
     _intRegister = state.intRegister;
@@ -472,7 +476,7 @@ RTC_EWRAM bool RomGpioRtc::FlushStateIfDirty()
     }
     state.hostSecondsSince2000 = hostSeconds;
     state.rtcSecondsSince2000 = rtcSeconds;
-    state.weekDayOffset = _weekDayOffset;
+    state.weekDayOffset = GetWeekDayOffset(static_cast<s64>(hostSeconds) + _rtcOffset, rtcSeconds);
     state.statusRegister = _statusRegister;
     state.intRegister = _intRegister;
     state.checksum = RtcPersistence::CalculateV2Checksum(state);
@@ -796,7 +800,8 @@ RTC_EWRAM void RomGpioRtc::UpdateDateTime()
     u32 secondsSince2000 = NormalizeSecondsSinceJanuary2000(
         static_cast<s64>(dsRtcSecondsSince2000) + _rtcOffset);
     FromSecondsSinceJanuary2000(secondsSince2000, _dateTime, _statusRegister & RIO_RTC_STATUS_24H);
-    int weekDay = (_dateTime.date.weekDay + _weekDayOffset) % 7;
+    int weekDay = (_dateTime.date.weekDay + GetWeekDayOffset(
+        static_cast<s64>(dsRtcSecondsSince2000) + _rtcOffset, secondsSince2000)) % 7;
     _dateTime.date.weekDay = weekDay < 0 ? weekDay + 7 : weekDay;
     if (_pendingSecond != 0xFF)
     {
@@ -1049,6 +1054,13 @@ RTC_EWRAM u32 RomGpioRtc::NormalizeSecondsSinceJanuary2000(s64 secondsSinceJanua
         result += RtcPersistence::CYCLE_SECONDS;
     }
     return static_cast<u32>(result);
+}
+
+RTC_EWRAM s16 RomGpioRtc::GetWeekDayOffset(s64 secondsSinceJanuary2000, u32 normalizedSeconds) const
+{
+    // The 100-year date cycle is 36,525 days, not a whole number of weeks.
+    const s64 wrappedDays = (secondsSinceJanuary2000 - normalizedSeconds) / 86400;
+    return static_cast<s16>((_weekDayOffset + wrappedDays) % 7);
 }
 
 RTC_EWRAM u32 RomGpioRtc::GetNumberOfDaysInMonth(u32 year, u32 month) const
