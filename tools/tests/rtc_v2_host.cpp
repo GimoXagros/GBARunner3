@@ -492,7 +492,7 @@ int main(int argc,char** argv)
             const auto damaged=files.at("legacy0"), backup=files.at("legacy2");
             RomGpioRtc bitflip;
             const auto status=load(bitflip);
-            const auto expected=(byte==5 || (byte==4 && bit!=0))
+            const auto expected=(byte==4 || byte==5)
                 ? LoadStatus::UnsupportedVersion : LoadStatus::Corrupt;
             check("v1 bitflip blocks without altering intact backup",
                   status==expected && files.at("legacy0")==damaged &&
@@ -569,12 +569,17 @@ int main(int argc,char** argv)
         {
             reset(); put("modern0",originalCurrent); put("modern2",originalCurrent);
             files["modern0"][byte]^=1u<<bit;
+            const auto damaged=files.at("modern0");
             RomGpioRtc bitflip;
             const auto status=load(bitflip);
-            const auto expected=(byte==4 || byte==5)
+            // Version2 xor1 is supported V3, but its unchanged checksum is invalid.
+            const auto expected=(byte==5 || (byte==4 && bit!=0))
                 ? LoadStatus::UnsupportedVersion : LoadStatus::Ready;
             check("bitflip classifies unknown version or uses intact backup",
-                  status==expected && files.at("modern2")==originalCurrent);
+                  status==expected && files.at("modern0")==damaged &&
+                  files.at("modern2")==originalCurrent && writes==0 &&
+                  (status!=LoadStatus::Ready ||
+                   std::memcmp(&bitflip._currentRecord,originalCurrent.data(),originalCurrent.size())==0));
         }
     for(unsigned length=0;length<originalCurrent.size();++length)
     {
