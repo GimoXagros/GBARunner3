@@ -88,7 +88,7 @@ failure scenarios, other devices and full playthrough coverage remain unverified
 Older title-specific checks do not establish additional v0.1.5 coverage; see
 [the release records](CUSTOM_BUILD.md) and [remaining work](TODO.md).
 
-A subsequent [hardware report for Pokémon Unbound v2.1.1.1](https://github.com/GimoXagros/GBARunner3/issues/28#issuecomment-7011919179) on **3DS + DSpico** confirmed that both the English and Korean versions passed the opening intro and saved in-game. In a follow-up test during gameplay, the in-game clock correctly reflected the time set on the 3DS. Loading the save and RTC persistence after a restart, later gameplay, and a direct comparison with upstream remain unverified for Unbound. The exact GBARunner3 binary hash was not recorded for this test.
+A subsequent [hardware report for Pokémon Unbound v2.1.1.1](https://github.com/GimoXagros/GBARunner3/issues/28#issuecomment-7011919179) on **3DS + DSpico** confirmed that both the English and Korean versions passed the opening intro and saved in-game. In follow-up testing, the in-game clock correctly reflected the time set on the 3DS. After restarting the game, the save loaded successfully and the RTC remained functional. Later gameplay and a direct comparison with upstream remain unverified for Unbound. The exact GBARunner3 binary hash was not recorded for this test.
 
 ## Configuration
 
