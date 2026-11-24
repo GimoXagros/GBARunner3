@@ -58,6 +58,18 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 .github/scripts/package-v015.py --mode published --out out --zip GBARunner3.zip
+      - name: Verify v0.1.6 binary and include RTC upgrade instructions
+        if: github.ref == 'refs/tags/custom-v0.1.6'
+        run: |
+          echo '8cca060c40205e149c511b001d810e942249964a1b5921b15ea19723ee34c965  out/GBARunner3.nds' | sha256sum -c -
+          python3 tools/validate_nds_banner.py out/GBARunner3.nds
+          mkdir -p out/tools
+          cp tools/rtc_migrate.py out/tools/
+          cp docs/releases/custom-v0.1.6.md out/README-v0.1.6.md
+          cp docs/releases/RTC-v0.1.5.md out/RTC-LEGACY-UPGRADE.md
+          cd out
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../v016-sums
+          mv ../v016-sums SHA256SUMS
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:
