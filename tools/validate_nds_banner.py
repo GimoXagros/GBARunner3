@@ -7,7 +7,7 @@ import struct
 
 
 TITLE = "GBARunner3 Custom\nA GBA Hypervisor for DS\nGimoXagros"
-ICON_SHA256 = "c73783e612cfcd5c94a4dff788ac966bfa3eeaae32e8ebb034ef08a059d3f33d"
+ICON_SHA256 = "00b3525a78b363485377faea28b21bdac5437b84edfd4a6d0e1267d4e7cf24aa"
 
 
 def require(condition, message):
