@@ -86,3 +86,15 @@ jobs:
           script: |
             const upload = require('./.github/scripts/upload-release.cjs');
             await upload({github, context});
+      - name: Publish the stable updater download
+        if: github.event.release.prerelease == false
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs/promises');
+            await github.rest.repos.uploadReleaseAsset({
+              ...context.repo,
+              release_id: context.payload.release.id,
+              name: 'GBARunner3-Custom.zip',
+              data: await fs.readFile('GBARunner3.zip'),
+            });
