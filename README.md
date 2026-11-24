@@ -10,27 +10,10 @@ by title, ROM revision, console mode, storage device and launcher.
 
 ## Current stable release
 
-[**Download custom-v0.1.5**](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.5)
-is the recommended stable release. It includes the RTC BCD correction, explicit
-legacy RTC compatibility and ARM946 L4 boot fix from PR #16, alongside the
-storage-result propagation, checked save I/O and logical 4 KiB save-signature
-search shipped in v0.1.4.
-
-The launcher banner displays:
-
-```text
-GBARunner3 Custom
-A GBA Hypervisor for DS
-GimoXagros
-```
-
-The existing icon and transparent background are preserved. The application
-NDS SHA-256 is
-`96b9db9efdc70aa43bb582078bf4dfc944826156e13365c8466119c6a507b7a4`.
-See the [release index](docs/releases/README.md),
-[v0.1.5 release record](docs/releases/custom-v0.1.5.md) and release page
-for source identity, checksums and verification evidence. Previous releases are
-preserved for rollback; pre-releases and old diagnostic builds are historical.
+Download [GBARunner3 Custom v0.1.6](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.6).
+The cartridge RTC now starts a new one-second interval after each complete time
+write and preserves fractional progress across save/reload. See the
+[release and upgrade notes](docs/releases/custom-v0.1.6.md) before using old RTC files.
 
 ## Installation
 
@@ -115,7 +98,7 @@ separate from the supported pinned build.
 ```sh
 git clone --recursive https://github.com/GimoXagros/GBARunner3.git
 cd GBARunner3
-git checkout custom-v0.1.5
+git checkout custom-v0.1.6
 git submodule update --init --recursive
 docker run --rm -v "$PWD:/src" -w /src devkitpro/devkitarm:20241104 make -C code debug
 ```

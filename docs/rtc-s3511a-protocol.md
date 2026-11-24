@@ -78,7 +78,11 @@ changes, reset, date rollover and canonical persistence. The pinned pre-fix
 source and an eager-clamp mutation must fail the immediate-read assertion.
 Century tests cover ordinary valid seconds as well as delayed correction,
 repeated reads and saving/restarting on either side of the boundary.
-Phase checks include the 750/525 ms vector, host-second crossings, preservation
+The host GPIO suite also writes 9 PM in 12-hour mode (0x89), switches to
+24-hour mode and reads back 21:00 with the PM bit set (0xA1). It writes
+08:20:30, waits 775 simulated milliseconds, writes 08:30:40 and confirms
+the same three bytes after another 550 milliseconds.
+Phase checks include the original 750/525 ms vector, host-second crossings, preservation
 across status/partial writes, same-second restart, metadata validation and an
 old reader's unsupported-version gate. The old integer-clock implementation
 must fail the write-phase assertion.

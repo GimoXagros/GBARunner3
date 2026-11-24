@@ -394,6 +394,22 @@ int main(int argc,char** argv)
     ++hostSeconds;
     check("restarted canonical anchor carries",restartedPending.read(0x67,3)==std::vector<u8>({0,1,0}));
 
+    reset(); hostSeconds=100; controlledTicks=0; Bus suiteTime;
+    suiteTime.write(0x62,{0x40});
+    suiteTime.write(0x66,{0x13,0,0});
+    check("13:00 carries PM bit in 24h mode",suiteTime.read(0x67,3)==std::vector<u8>({0x93,0,0}));
+    suiteTime.write(0x62,{0});
+    check("13:00 becomes 1 PM in 12h mode",suiteTime.read(0x67,3)==std::vector<u8>({0x81,0,0}));
+    suiteTime.write(0x66,{0x89,0,0});
+    suiteTime.write(0x62,{0x40});
+    check("9 PM write becomes 21:00",suiteTime.read(0x67,3)==std::vector<u8>({0xA1,0,0}));
+    suiteTime.write(0x66,{0x08,0x20,0x30});
+    controlledTicks=ticksForMilliseconds(775);
+    suiteTime.write(0x66,{0x08,0x30,0x40});
+    controlledTicks=ticksForMilliseconds(775+550); hostSeconds=101;
+    check("second time write restarts fraction at 775ms",
+          suiteTime.read(0x67,3)==std::vector<u8>({0x08,0x30,0x40}));
+
     reset(); hostSeconds=100; controlledTicks=0; Bus phase;
     phase.write(0x64,{0,1,1,0,0,0,0});
     controlledTicks=ticksForMilliseconds(750); phase.write(0x66,{0,0,0});
