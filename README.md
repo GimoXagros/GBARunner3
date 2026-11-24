@@ -11,6 +11,8 @@ by title, ROM revision, console mode, storage device and launcher.
 ## Current stable release
 
 Download [GBARunner3 Custom v0.1.6](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.6).
+For the redrawn launcher icon, choose `GBARunner3-v0.1.6-icon-r1.zip` on the release page. The blue handheld fills more of the 32×32 tile, with a light LCD and two gold buttons.
+
 The cartridge RTC now starts a new one-second interval after each complete time
 write and preserves fractional progress across save/reload. See the
 [release and upgrade notes](docs/releases/custom-v0.1.6.md) before using old RTC files.
