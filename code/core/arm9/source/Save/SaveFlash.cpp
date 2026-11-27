@@ -304,7 +304,7 @@ bool flash_patch512V130(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagR
     return false;
 }
 
-bool flash_patch1MV102(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRomAddress, u8* tempBuffer)
+[[gnu::section(".ewram"), gnu::noinline]] bool flash_patch1MV102(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRomAddress, u8* tempBuffer)
 {
     if (f_lseek(romFile, tagRomAddress + ((saveTypeInfo->tagLength + 3) & ~3)) != FR_OK)
     {
@@ -355,7 +355,7 @@ static u16 eraseFlashChip1M()
 
 // Recompiled V103 libraries select the operation table themselves. Replace
 // the chip ID query and the I/O operations together, keeping that selection.
-static bool patchRecompiledFlash1M()
+[[gnu::section(".ewram"), gnu::noinline]] static bool patchRecompiledFlash1M()
 {
     static const struct {
         u32 signature[4];
@@ -387,7 +387,7 @@ static bool patchRecompiledFlash1M()
     return true;
 }
 
-bool flash_patch1MV103(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRomAddress, u8* tempBuffer)
+[[gnu::section(".ewram"), gnu::noinline]] bool flash_patch1MV103(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRomAddress, u8* tempBuffer)
 {
     if (patchRecompiledFlash1M())
         return true;
