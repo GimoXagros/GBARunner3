@@ -10,12 +10,10 @@ by title, ROM revision, console mode, storage device and launcher.
 
 ## Current stable release
 
-Download [GBARunner3 Custom v0.1.6](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.6).
-For the redrawn launcher icon, choose `GBARunner3-v0.1.6-icon-r1.zip` on the release page. The blue handheld fills more of the 32×32 tile, with a light LCD and two gold buttons.
-
-The cartridge RTC now starts a new one-second interval after each complete time
-write and preserves fractional progress across save/reload. See the
-[release and upgrade notes](docs/releases/custom-v0.1.6.md) before using old RTC files.
+Download [GBARunner3 Custom v0.1.7](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.7).
+This release recognizes a recompiled FLASH1M V103 save driver. Pokémon Lazarus
+v2.0 reached the title and new-game dialogue in an instrumented melonDS run.
+See the [test conditions and upgrade notes](docs/releases/custom-v0.1.7.md).
 
 ## Installation
 
@@ -100,7 +98,7 @@ separate from the supported pinned build.
 ```sh
 git clone --recursive https://github.com/GimoXagros/GBARunner3.git
 cd GBARunner3
-git checkout custom-v0.1.6
+git checkout custom-v0.1.7
 git submodule update --init --recursive
 docker run --rm -v "$PWD:/src" -w /src devkitpro/devkitarm:20241104 make -C code debug
 ```

@@ -9,7 +9,7 @@ import json
 import struct
 from pathlib import Path
 from elftools.elf.elffile import ELFFile
-from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_CODE
+from unicorn import Uc, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_CODE, UC_HOOK_INTR
 from unicorn.arm_const import UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3
 from unicorn.arm_const import UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7
 from unicorn.arm_const import UC_ARM_REG_R8, UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11
@@ -51,13 +51,13 @@ def machine(image):
     for address,data in image: cpu.mem_write(address,data)
     return cpu
 
-def call(cpu,address,*values,expect_fault=False):
+def call(cpu,address,*values,expect_fault=False, budget=200000):
     cpu.reg_write(UC_ARM_REG_CPSR,0xD3)
     cpu.reg_write(UC_ARM_REG_SP,0x0300F000)
     cpu.reg_write(UC_ARM_REG_LR,0x07000000)
     for reg,value in zip(REGS,values): cpu.reg_write(reg,value)
     for i,reg in enumerate(SAVED): cpu.reg_write(reg,0xBEEF0000+i)
-    cpu.emu_start(address,0x07000000,count=200000)
+    cpu.emu_start(address,0x07000000,count=budget)
     if expect_fault:
         assert cpu.reg_read(UC_ARM_REG_PC)==symbols['sav_persistenceFault'] & ~1,'terminal hook not reached'
         assert cpu.mem_read(symbols['gGbaSaveShared'],1)==b'\4','error not published before terminal hook'
@@ -201,6 +201,73 @@ for operation in ('sav_writePendingFiles',):
     call(cpu,symbols[operation],0,0x79,expect_fault=True)
     assert events==['terminal'],'terminal state must block all subsequent filesystem I/O'
     passed(f'latched-no-io-{operation}')
+
+# Place only public driver fingerprints in synthetic ROM and discover them with
+# the linked matcher. With any missing operation, no guest or SWI slot may change.
+operation_table = symbols['_ZZL22patchRecompiledFlash1MvE10operations']
+discover = symbols['_ZL22patchRecompiledFlash1Mv']
+sites = [0x02200800 + index * 32 for index in range(8)]
+table = symbols['sav_swiTable']
+handlers = []
+for missing in [*range(8), None]:
+    cpu = machine(sections)
+    for index, site in enumerate(sites):
+        entry = bytes(cpu.mem_read(operation_table + index * 20, 20))
+        if missing is None:
+            handlers.append(struct.unpack_from('<I', entry, 16)[0])
+        if index != missing:
+            cpu.mem_write(site, entry[:16])
+    initial_rom = bytes(cpu.mem_read(sites[0], 256))
+    initial_table = bytes(cpu.mem_read(table, 64))
+    assert call(cpu, discover, budget=1500000) == int(missing is None)
+    if missing is not None:
+        assert cpu.mem_read(sites[0], 256) == initial_rom
+        assert cpu.mem_read(table, 64) == initial_table
+        passed(f'recompiled-flash-incomplete-{missing}')
+    else:
+        assert struct.unpack('<8I', cpu.mem_read(table, 32)) == tuple(handlers)
+        for i, site in enumerate(sites):
+            assert cpu.mem_read(site, 2) == struct.pack('<H', 0xdf80 + i)
+        passed('recompiled-flash-complete')
+
+# Exercise the installed guest ABI against a synthetic 128 KiB chip. The
+# nested byte-file SWIs are the seam; the handlers and guest buffers are real.
+media = bytearray([0xff]) * (128 * 1024)
+def file_swi(cpu, interrupt, _):
+    pc = cpu.reg_read(UC_ARM_REG_PC)
+    opcode = bytes(cpu.mem_read(pc - 2, 2))
+    address = cpu.reg_read(UC_ARM_REG_R0)
+    if opcode == bytes.fromhex('92df'):
+        cpu.reg_write(UC_ARM_REG_R0, media[address])
+    elif opcode == bytes.fromhex('93df'):
+        media[address] = cpu.reg_read(UC_ARM_REG_R1) & 255
+    else:
+        assert opcode == bytes.fromhex('94df'), opcode
+cpu.hook_add(UC_HOOK_INTR, file_swi)
+buffer = 0x03001000
+payload = bytes((i * 7 + 3) % 256 for i in range(4096))
+cpu.mem_write(buffer, payload)
+assert call(cpu, handlers[0]) == 0x09c2
+for sector in (0, 31):
+    assert call(cpu, handlers[5], sector, buffer) == 0
+    assert call(cpu, handlers[2], sector, buffer) == 0
+    assert call(cpu, handlers[3], sector, buffer, len(payload)) == 0
+    call(cpu, handlers[1], sector, 4, buffer + 4096, 32)
+    assert cpu.mem_read(buffer + 4096, 32) == payload[4:36]
+    assert call(cpu, handlers[4], sector, 4095, 0xaf) == 0
+    assert call(cpu, handlers[2], sector, buffer) == 0x0e000fff + ((sector & 15) << 12)
+    passed(f'recompiled-flash-roundtrip-sector-{sector}')
+assert call(cpu, handlers[7], 31) == 0
+assert media[-4096:] == b'\xff' * 4096 and media[:32] == payload[:32]
+before = bytes(media)
+assert call(cpu, handlers[5], 32, buffer) == 0x80ff
+assert call(cpu, handlers[7], 32) == 0x80ff
+assert call(cpu, handlers[4], 31, 4096, 1) == 0x8000
+assert media == before
+media[-1] = 0
+assert call(cpu, handlers[6], budget=3000000) == 0
+assert media == b'\xff' * len(media)
+passed('recompiled-flash-bounds-and-full-chip-erase')
 
 if args.arm7:
     arm7_symbols,arm7_sections=load_elf(args.arm7)
