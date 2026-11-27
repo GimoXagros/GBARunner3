@@ -70,6 +70,18 @@ jobs:
           cd out
           find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../v016-sums
           mv ../v016-sums SHA256SUMS
+      - name: Verify v0.1.7 binary and include RTC upgrade instructions
+        if: github.ref == 'refs/tags/custom-v0.1.7'
+        run: |
+          echo '6670db8c8fc1abbde35ab14a91055d43df7a3c26303868cbdeefc8b07ef50cfb  out/GBARunner3.nds' | sha256sum -c -
+          python3 tools/validate_nds_banner.py out/GBARunner3.nds
+          mkdir -p out/tools
+          cp tools/rtc_migrate.py out/tools/
+          cp docs/releases/custom-v0.1.7.md out/README-v0.1.7.md
+          cp docs/releases/RTC-v0.1.5.md out/RTC-LEGACY-UPGRADE.md
+          cd out
+          find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > ../v017-sums
+          mv ../v017-sums SHA256SUMS
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v7
         with:

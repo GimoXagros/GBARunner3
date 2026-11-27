@@ -1,18 +1,19 @@
 # Releases and tags
 
-Current recommended stable: [custom-v0.1.6](custom-v0.1.6.md).
-Download [GBARunner3.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.6/GBARunner3.zip).
+Current recommended stable: [custom-v0.1.7](custom-v0.1.7.md).
+Download [GBARunner3.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.7/GBARunner3.zip).
 
 ## Release history
 
 Historical releases retain their original assets, tag targets and stable/prerelease
 classification. Their original notes describe evidence at publication time, not
-current recommendations. Prefer v0.1.6; v0.1.5 remains the immediate rollback option.
+current recommendations. Prefer v0.1.7; v0.1.6 remains the immediate rollback option.
 
 | Release | Role |
 | --- | --- |
-| [custom-v0.1.6](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.6) | Current stable / recommended |
-| [custom-v0.1.5](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.5) | Previous stable / rollback |
+| [custom-v0.1.7](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.7) | Current stable / recommended |
+| [custom-v0.1.6](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.6) | Previous stable / rollback |
+| [custom-v0.1.5](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.5) | Historical release / rollback |
 | [custom-v0.1.4](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.4) | Historical release / rollback |
 | [custom-v0.1.3-rc3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3-rc3) | Historical prerelease / superseded |
 | [custom-v0.1.3](https://github.com/GimoXagros/GBARunner3/releases/tag/custom-v0.1.3) | Historical release / rollback |
