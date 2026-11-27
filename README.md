@@ -17,7 +17,7 @@ See the [test conditions and upgrade notes](docs/releases/custom-v0.1.7.md).
 
 ## Installation
 
-1. Download `GBARunner3.zip` from the stable release page and check its hashes.
+1. Download [GBARunner3-Custom.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.7/GBARunner3-Custom.zip) from the stable release page and check its hashes.
    Back up existing `.sav`, `.g3rtc*` files and personal settings.
 2. Copy `GBARunner3.nds` to the location expected by your launcher.
 3. Compare and merge the included 304 `_gba/configs` files into `/_gba/configs`

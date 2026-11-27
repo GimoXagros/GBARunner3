@@ -15,7 +15,7 @@ A recompiled FLASH1M V103 driver uses different function prologues and installs 
 
 ## Installation
 
-Back up the current NDS, saves and matching RTC sidecars. Install GBARunner3.nds and merge the supplied _gba/configs into /_gba/configs on the SD card. Keep your own BIOS in /_gba/bios.bin. The package retains the redrawn launcher icon. The updater download and GBARunner3.zip contain the same files.
+Back up the current NDS, saves and matching RTC sidecars. Install GBARunner3.nds and merge the supplied _gba/configs into /_gba/configs on the SD card. Keep your own BIOS in /_gba/bios.bin. The package retains the redrawn launcher icon. Download [GBARunner3-Custom.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.7/GBARunner3-Custom.zip).
 
 The RTC format is unchanged from v0.1.6. See RTC-LEGACY-UPGRADE.md for original v1 sidecars. To roll back, restore the v0.1.6 NDS and your matching backup.
 

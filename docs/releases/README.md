@@ -1,7 +1,7 @@
 # Releases and tags
 
 Current recommended stable: [custom-v0.1.7](custom-v0.1.7.md).
-Download [GBARunner3.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.7/GBARunner3.zip).
+Download [GBARunner3-Custom.zip](https://github.com/GimoXagros/GBARunner3/releases/download/custom-v0.1.7/GBARunner3-Custom.zip).
 
 ## Release history
 
