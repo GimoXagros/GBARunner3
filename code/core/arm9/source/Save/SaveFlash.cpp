@@ -353,6 +353,27 @@ static u16 eraseFlashChip1M()
     return 0;
 }
 
+static u16 programByteV103(u16 sector, u32 offset, u8 data)
+{
+    if (offset >= 0x1000)
+        return 0x8000;
+    return programFlashByte1M(sector & 31, offset, data);
+}
+
+static u16 programSectorV103(u16 sector, const u8* data)
+{
+    if (sector >= 32)
+        return 0x80FF;
+    return programFlashSector(sector, data);
+}
+
+static u16 eraseSectorV103(u16 sector)
+{
+    if (sector >= 32)
+        return 0x80FF;
+    return eraseFlashSector(sector);
+}
+
 // Recompiled V103 libraries select the operation table themselves. Replace
 // the chip ID query and the I/O operations together, keeping that selection.
 [[gnu::section(".ewram"), gnu::noinline]] static bool patchRecompiledFlash1M()
@@ -365,10 +386,10 @@ static u16 eraseFlashChip1M()
         {{0x2503B5F0u, 0x4C2446C6u, 0x001A4694u, 0x432B8823u}, (void*)readFlash},
         {{0x2503B5F0u, 0x88224C21u, 0x432A0003u, 0x8022B0C0u}, (void*)verifyFlashSector},
         {{0x4C23B5F0u, 0x46AC6825u, 0x00034666u, 0x68362580u}, (void*)verifyFlash},
-        {{0x46C6B5F0u, 0x04004E1Fu, 0xB5000C03u, 0x68334698u}, (void*)programFlashByte1M},
-        {{0x4657B5F0u, 0x4645464Eu, 0xB5E046DEu, 0x68234C2Fu}, (void*)programFlashSector},
+        {{0x46C6B5F0u, 0x04004E1Fu, 0xB5000C03u, 0x68334698u}, (void*)programByteV103},
+        {{0x4657B5F0u, 0x4645464Eu, 0xB5E046DEu, 0x68234C2Fu}, (void*)programSectorV103},
         {{0xB5302103u, 0x258020AAu, 0x4C134B12u, 0x8822681Bu}, (void*)eraseFlashChip1M},
-        {{0x464FB5F0u, 0x464646D6u, 0x4F29B5C0u, 0x895B683Bu}, (void*)eraseFlashSector},
+        {{0x464FB5F0u, 0x464646D6u, 0x4F29B5C0u, 0x895B683Bu}, (void*)eraseSectorV103},
     };
     constexpr u32 count = sizeof(operations) / sizeof(operations[0]);
     u16* sites[count];
