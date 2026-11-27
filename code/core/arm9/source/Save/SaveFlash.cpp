@@ -340,8 +340,58 @@ bool flash_patch1MV102(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRo
     return false;
 }
 
+static u16 flashChipId()
+{
+    return (DEVICE_ID_MACRONIX_1M << 8) | MAKER_ID_MACRONIX;
+}
+
+static u16 eraseFlashChip1M()
+{
+    for (u32 offset = 0; offset < 128 * 1024; ++offset)
+        sav_writeSaveByteToFileFromUserMode(offset, 0xFF);
+    sav_flushSaveFileFromUserMode();
+    return 0;
+}
+
+// Recompiled V103 libraries select the operation table themselves. Replace
+// the chip ID query and the I/O operations together, keeping that selection.
+static bool patchRecompiledFlash1M()
+{
+    static const struct {
+        u32 signature[4];
+        void* handler;
+    } operations[] = {
+        {{0xB091B530u, 0x2201466Bu, 0x4B291D5Cu, 0x601C4929u}, (void*)flashChipId},
+        {{0x2503B5F0u, 0x4C2446C6u, 0x001A4694u, 0x432B8823u}, (void*)readFlash},
+        {{0x2503B5F0u, 0x88224C21u, 0x432A0003u, 0x8022B0C0u}, (void*)verifyFlashSector},
+        {{0x4C23B5F0u, 0x46AC6825u, 0x00034666u, 0x68362580u}, (void*)verifyFlash},
+        {{0x46C6B5F0u, 0x04004E1Fu, 0xB5000C03u, 0x68334698u}, (void*)programFlashByte1M},
+        {{0x4657B5F0u, 0x4645464Eu, 0xB5E046DEu, 0x68234C2Fu}, (void*)programFlashSector},
+        {{0xB5302103u, 0x258020AAu, 0x4C134B12u, 0x8822681Bu}, (void*)eraseFlashChip1M},
+        {{0x464FB5F0u, 0x464646D6u, 0x4F29B5C0u, 0x895B683Bu}, (void*)eraseFlashSector},
+    };
+    constexpr u32 count = sizeof(operations) / sizeof(operations[0]);
+    u16* sites[count];
+    for (u32 i = 0; i < count; ++i)
+    {
+        sites[i] = (u16*)mem_fastSearch16((const u32*)ROM_LINEAR_DS_ADDRESS,
+            ROM_LINEAR_SIZE, operations[i].signature);
+        if (!sites[i])
+            return false;
+    }
+    for (u32 i = 0; i < count; ++i)
+    {
+        sav_swiTable[i] = operations[i].handler;
+        *sites[i] = SAVE_THUMB_SWI(i);
+    }
+    return true;
+}
+
 bool flash_patch1MV103(const SaveTypeInfo* saveTypeInfo, FIL* romFile, u32 tagRomAddress, u8* tempBuffer)
 {
+    if (patchRecompiledFlash1M())
+        return true;
+
     if (f_lseek(romFile, tagRomAddress + ((saveTypeInfo->tagLength + 3) & ~3)) != FR_OK)
     {
         return false;
